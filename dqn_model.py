@@ -39,5 +39,6 @@ class DQN_RNN(nn.Module):
 
     def forward(self, x, hn):
         x = F.relu(self.fc1(x))
-        out, hn = self.rnn(x, hn)
-        return F.relu(self.fc2(x)), hn
+        x, hn = self.rnn(x, hn)
+        x = self.fc2(x)
+        return x, hn

@@ -113,12 +113,12 @@ def dqn_learing(
             with torch.no_grad():
                 obs = torch.tensor(obs).type(dtype).unsqueeze(0).unsqueeze(0).unsqueeze(0)
                 # Use volatile = True if variable is only used in inference mode, i.e. don’t save the history
-                out, hn = model(Variable(obs), hn)
+                out, hn = model(obs.cuda(), hn)
                 return out.squeeze().max(-1)[1].item(), hn
         else:
             with torch.no_grad():
                 obs = torch.tensor(obs).type(dtype).unsqueeze(0).unsqueeze(0).unsqueeze(0)
-                _, hn = model(Variable(obs), hn)
+                _, hn = model(obs.cuda(), hn)
                 return random.randrange(num_actions), hn
 
     # Initialize target q function and q function
@@ -137,10 +137,10 @@ def dqn_learing(
     num_param_updates = 0
     mean_episode_reward = -float('nan')
     best_mean_episode_reward = -float('inf')
-    avg_reward = 0
+    avg_reward = []
     ep_trajectory = []
     last_obs = env.reset()
-    hn = torch.zeros(size=(1, 1, 256))
+    hn = torch.zeros(size=(1, 1, 256)).cuda()
     LOG_EVERY_N_STEPS = 10000
 
     for t in count():
@@ -151,9 +151,9 @@ def dqn_learing(
         else:
             action = random.randrange(num_actions)
         # Advance one step
-        obs, reward, done, _ = env.step(action)
-        if reward == 1:
-            print('completed!')
+        obs, reward, done, _ = env.step(t%env.max_timesteps, action)
+        avg_reward.append(reward)
+        print(np.mean(np.array(avg_reward)))
         # Store other info in replay memory
         ep_trajectory.append([last_obs, action, reward, obs, done])
         # Resets the environment when reaching an episode boundary.
@@ -161,7 +161,7 @@ def dqn_learing(
             obs = env.reset()
             replay_buffer.push(ep_trajectory)
             ep_trajectory = []
-            hn = torch.zeros(size=(1, 1, 256))
+            hn = torch.zeros(size=(1, 1, 256)).cuda()
         last_obs = obs
 
         ### Perform experience replay and train the network.
@@ -184,17 +184,20 @@ def dqn_learing(
             not_done_mask = 1 - pad_sequence(done_mask, batch_first=True).unsqueeze(-1)
 
             if USE_CUDA:
+                next_obs_batch = next_obs_batch.cuda()
+                obs_batch = obs_batch.cuda()
                 act_batch = act_batch.cuda()
                 rew_batch = rew_batch.cuda()
+                not_done_mask = not_done_mask.cuda()
 
             # Compute current Q value, q_func takes only state and output value for every state-action pair
             # We choose Q based on action taken.
-            h_train = torch.zeros(size=(1, batch_size, 256))
+            h_train = torch.zeros(size=(1, batch_size, 256)).cuda()
             current_Q_values, _ = Q(obs_batch, h_train)
             current_Q_values = current_Q_values.gather(2, act_batch)
             # Compute next Q value based on which action gives max Q values
             # Detach variable from the current graph since we don't want gradients for next Q to propagated
-            h_train = torch.zeros(size=(1, batch_size, 256))
+            h_train = torch.zeros(size=(1, batch_size, 256)).cuda()
             next_max_q, _ = target_Q(next_obs_batch, h_train)
             next_max_q = next_max_q.detach().max(2)[0].unsqueeze(-1)
             next_Q_values = not_done_mask * next_max_q
