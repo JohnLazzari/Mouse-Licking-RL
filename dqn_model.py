@@ -26,7 +26,7 @@ class DQN(nn.Module):
         return self.fc5(x)
 
 class DQN_RNN(nn.Module):
-    def __init__(self, in_features=2, num_actions=2):
+    def __init__(self, in_features=1, num_actions=2):
         """
         Initialize a deep Q-learning network for testing algorithm
             in_features: number of features of input.
@@ -34,10 +34,10 @@ class DQN_RNN(nn.Module):
         """
         super(DQN_RNN, self).__init__()
         self.fc1 = nn.Linear(in_features, 256)
-        self.rnn = nn.RNN(256, 256)
+        self.rnn = nn.GRU(256, 256, batch_first=True)
         self.fc2 = nn.Linear(256, num_actions)
 
-    def forward(self, x):
+    def forward(self, x, hn):
         x = F.relu(self.fc1(x))
-        out, hn = F.relu(self.rnn(x, hn))
-        return F.relu(self.fc2(x))
+        out, hn = self.rnn(x, hn)
+        return F.relu(self.fc2(x)), hn

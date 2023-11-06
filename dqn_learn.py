@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
+from torch.nn.utils.rnn import pad_sequence
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
@@ -101,24 +102,24 @@ def dqn_learing(
     # BUILD MODEL #
     ###############
 
-    if len(env.observation_space.shape) == 1:
-        # This means we are running on low-dimensional observations (e.g. RAM)
-        input_arg = env.observation_space.shape[0]
-    else:
-        img_h, img_w, img_c = env.observation_space.shape
-        input_arg = frame_history_len * img_c
+    input_arg = env.observation_space.shape[0]
     num_actions = env.action_space.n
 
     # Construct an epilson greedy policy with given exploration schedule
-    def select_epilson_greedy_action(model, obs, t):
+    def select_epilson_greedy_action(model, obs, t, hn):
         sample = random.random()
         eps_threshold = exploration.value(t)
         if sample > eps_threshold:
-            obs = torch.from_numpy(obs).type(dtype).unsqueeze(0)
-            # Use volatile = True if variable is only used in inference mode, i.e. don’t save the history
-            return model(Variable(obs, volatile=True)).data.max(1)[1].cpu()
+            with torch.no_grad():
+                obs = torch.tensor(obs).type(dtype).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+                # Use volatile = True if variable is only used in inference mode, i.e. don’t save the history
+                out, hn = model(Variable(obs), hn)
+                return out.squeeze().max(-1)[1].item(), hn
         else:
-            return torch.IntTensor([[random.randrange(num_actions)]])
+            with torch.no_grad():
+                obs = torch.tensor(obs).type(dtype).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+                _, hn = model(Variable(obs), hn)
+                return random.randrange(num_actions), hn
 
     # Initialize target q function and q function
     Q = q_func(input_arg, num_actions).type(dtype)
@@ -136,19 +137,23 @@ def dqn_learing(
     num_param_updates = 0
     mean_episode_reward = -float('nan')
     best_mean_episode_reward = -float('inf')
+    avg_reward = 0
     ep_trajectory = []
     last_obs = env.reset()
+    hn = torch.zeros(size=(1, 1, 256))
     LOG_EVERY_N_STEPS = 10000
 
     for t in count():
 
         # Choose random action if not yet start learning
         if t > learning_starts:
-            action = select_epilson_greedy_action(Q, recent_observations, t)[0, 0]
+            action, hn = select_epilson_greedy_action(Q, last_obs, t, hn)
         else:
             action = random.randrange(num_actions)
         # Advance one step
         obs, reward, done, _ = env.step(action)
+        if reward == 1:
+            print('completed!')
         # Store other info in replay memory
         ep_trajectory.append([last_obs, action, reward, obs, done])
         # Resets the environment when reaching an episode boundary.
@@ -156,6 +161,7 @@ def dqn_learing(
             obs = env.reset()
             replay_buffer.push(ep_trajectory)
             ep_trajectory = []
+            hn = torch.zeros(size=(1, 1, 256))
         last_obs = obs
 
         ### Perform experience replay and train the network.
@@ -170,12 +176,12 @@ def dqn_learing(
             # in which case there is no Q-value at the next state; at the end of an
             # episode, only the current state reward contributes to the target
             obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
-            # Convert numpy nd_array to torch variables for calculation
-            obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype))
-            act_batch = Variable(torch.from_numpy(act_batch).long())
-            rew_batch = Variable(torch.from_numpy(rew_batch))
-            next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype))
-            not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
+
+            obs_batch = pad_sequence(obs_batch, batch_first=True).unsqueeze(-1)
+            act_batch = pad_sequence(act_batch, batch_first=True).unsqueeze(-1).type(torch.int64)
+            rew_batch = pad_sequence(rew_batch, batch_first=True).unsqueeze(-1)
+            next_obs_batch = pad_sequence(next_obs_batch, batch_first=True).unsqueeze(-1)
+            not_done_mask = 1 - pad_sequence(done_mask, batch_first=True).unsqueeze(-1)
 
             if USE_CUDA:
                 act_batch = act_batch.cuda()
@@ -183,10 +189,14 @@ def dqn_learing(
 
             # Compute current Q value, q_func takes only state and output value for every state-action pair
             # We choose Q based on action taken.
-            current_Q_values = Q(obs_batch).gather(1, act_batch.unsqueeze(1))
+            h_train = torch.zeros(size=(1, batch_size, 256))
+            current_Q_values, _ = Q(obs_batch, h_train)
+            current_Q_values = current_Q_values.gather(2, act_batch)
             # Compute next Q value based on which action gives max Q values
             # Detach variable from the current graph since we don't want gradients for next Q to propagated
-            next_max_q = target_Q(next_obs_batch).detach().max(1)[0]
+            h_train = torch.zeros(size=(1, batch_size, 256))
+            next_max_q, _ = target_Q(next_obs_batch, h_train)
+            next_max_q = next_max_q.detach().max(2)[0].unsqueeze(-1)
             next_Q_values = not_done_mask * next_max_q
             # Compute the target of the current Q values
             target_Q_values = rew_batch + (gamma * next_Q_values)
@@ -199,7 +209,7 @@ def dqn_learing(
             # Clear previous gradients before backward pass
             optimizer.zero_grad()
             # run backward pass
-            current_Q_values.backward(d_error.data.unsqueeze(1))
+            current_Q_values.backward(d_error.data)
 
             # Perfom the update
             optimizer.step()

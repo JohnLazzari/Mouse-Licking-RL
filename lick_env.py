@@ -1,10 +1,10 @@
-import gymnasium as gym
+import gym
 import numpy as np
 
 class Lick_Env(gym.Env):
     def __init__(self, seed, dt, target_time):
-        self.action_space = gym.spaces.Discrete(2, seed=seed)
-        self.observation_space = gym.spaces.Discrete(low=0, high=1, shape=(1), dtype=np.float32)
+        self.action_space = gym.spaces.Discrete(2)
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.dt = dt
         self.target_time = target_time
         self.max_timesteps = int(target_time / dt)
@@ -14,7 +14,7 @@ class Lick_Env(gym.Env):
         return self.state
     
     def _get_reward_done(self, s_t, a_t):
-        if s_t[1] == self.target_time:
+        if s_t == self.target_time:
             if a_t == 1:
                 return 1, True
             elif a_t == 0:

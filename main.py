@@ -14,7 +14,7 @@ LEARNING_STARTS = 50000
 LEARNING_FREQ = 4
 FRAME_HISTORY_LEN = 4
 TARGER_UPDATE_FREQ = 10000
-LEARNING_RATE = 0.00025
+LEARNING_RATE = 0.003
 ALPHA = 0.95
 EPS = 0.01
 DT = 0.01
@@ -46,10 +46,10 @@ def main(env, seed):
 
 if __name__ == '__main__':
     # Get Atari games.
-    env = Lick_Env(DT, TARGET_TIME)
+    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
+    env = Lick_Env(seed, DT, TARGET_TIME)
 
     # Run training
-    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(env, seed)
 
     main(env, seed)
