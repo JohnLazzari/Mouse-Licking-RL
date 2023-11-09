@@ -2,6 +2,7 @@ import gym
 import torch.optim as optim
 import numpy as np
 import scipy.io
+import matplotlib.pyplot as plt
 
 from sac_model import Actor, Critic
 from sac_learn import OptimizerSpec, sac_learn
@@ -32,7 +33,7 @@ DT = 0.01
 TARGET_TIME = 2.0
 # skipping by 10 because we are simulating 10 millisecond timesteps
 TARGET_DYNAMICS = alm_activity_arr[:, 0:-1:10]
-THRESH = 0.05
+THRESH = 0.01
 ALM_HID = 256
 
 def main(env, seed):

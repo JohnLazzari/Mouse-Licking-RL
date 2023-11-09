@@ -54,9 +54,9 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_reward(self, t, action):
         with torch.no_grad():
-            action, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
-            action = F.relu(self._alm_out(action))
-        mse = torch.mean((action-torch.from_numpy(self._target_dynamics[:,t]))**2).item()
+            activity, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
+            activity = F.relu(self._alm_out(activity))
+        mse = torch.mean((activity-torch.tensor(self._target_dynamics[:,t]))**2).item()
         reward = .05 * (1 / mse)
         return reward, mse
     
@@ -68,6 +68,7 @@ class Lick_Env_Cont(gym.Env):
         return done
     
     def _get_next_state(self):
+        # TODO make the state more than just time, but also hidden state of alm GRU
         self.state += self._dt
     
     def reset(self):

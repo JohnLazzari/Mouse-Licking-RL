@@ -112,53 +112,53 @@ def sac_learn(
             episode_steps = 0
             episode_reward = 0
 
-        if len(policy_memory.buffer) > batch_size:
-            # Sample a batch from memory
-            state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
+            if len(policy_memory.buffer) > batch_size:
+                # Sample a batch from memory
+                state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
 
-            state_batch = pad_sequence(state_batch, batch_first=True).unsqueeze(-1).cuda()
-            action_batch = pad_sequence(action_batch, batch_first=True).type(torch.int64).cuda()
-            reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
-            next_state_batch = pad_sequence(next_state_batch, batch_first=True).unsqueeze(-1).cuda()
-            mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
+                state_batch = pad_sequence(state_batch, batch_first=True).unsqueeze(-1).cuda()
+                action_batch = pad_sequence(action_batch, batch_first=True).type(torch.int64).cuda()
+                reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
+                next_state_batch = pad_sequence(next_state_batch, batch_first=True).unsqueeze(-1).cuda()
+                mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
-            h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
-            with torch.no_grad():
-                next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
-                qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
+                h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+                with torch.no_grad():
+                    next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
+                    qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
+                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                    next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
-            qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
-            qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
-            qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
-            qf_loss = qf1_loss + qf2_loss
+                qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
+                qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
+                qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
+                qf_loss = qf1_loss + qf2_loss
 
-            critic_optimizer.zero_grad()
-            qf_loss.backward()
-            critic_optimizer.step()
+                critic_optimizer.zero_grad()
+                qf_loss.backward()
+                critic_optimizer.step()
 
-            pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
+                pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
 
-            qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
-            min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
+                min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
-            policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
+                policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
 
-            actor_optimizer.zero_grad()
-            policy_loss.backward()
-            actor_optimizer.step()
+                actor_optimizer.zero_grad()
+                policy_loss.backward()
+                actor_optimizer.step()
 
-            if automatic_entropy_tuning:
-                alpha_loss = -(log_alpha * (log_prob_bat + target_entropy).detach()).mean()
+                if automatic_entropy_tuning:
+                    alpha_loss = -(log_alpha * (log_prob_bat + target_entropy).detach()).mean()
 
-                self.alpha_optim.zero_grad()
-                alpha_loss.backward()
-                self.alpha_optim.step()
+                    self.alpha_optim.zero_grad()
+                    alpha_loss.backward()
+                    self.alpha_optim.step()
 
-                self.alpha = self.log_alpha.exp()
+                    self.alpha = self.log_alpha.exp()
 
-            soft_update(_critic_target, _critic, .005)
+                soft_update(_critic_target, _critic, .005)
 
 
     

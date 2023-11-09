@@ -58,7 +58,7 @@ class Actor(nn.Module):
 
         # Enforce the action_bounds
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
-        log_prob = log_prob.sum(1, keepdim=True)
+        log_prob = log_prob.sum(-1, keepdim=True)
 
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
 
