@@ -1,11 +1,18 @@
 import gym
 import torch.optim as optim
 import numpy as np
+import scipy.io
 
 from sac_model import Actor, Critic
 from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
+
+alm_activity = scipy.io.loadmat("warped_activity_time1s.mat")
+alm_activity_arr = alm_activity["warped_trial_activity_1s"]
+seconds = 2.
+ms = seconds * 1000.
+alm_activity_arr = alm_activity_arr[:, int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms)]
 
 BATCH_SIZE = 32
 INP_DIM = 1
@@ -22,9 +29,9 @@ LEARNING_RATE = 0.003
 ALPHA_OPT = 0.95
 EPS = 0.01
 DT = 0.01
-TARGET_TIME = 1.0
-# Use an example for now to test script, put real alm firing rates later
-TARGET_DYNAMICS = np.random.normal(.2, .1, size=(100,))
+TARGET_TIME = 2.0
+# skipping by 10 because we are simulating 10 millisecond timesteps
+TARGET_DYNAMICS = alm_activity_arr[:, 0:-1:10]
 THRESH = 0.05
 ALM_HID = 256
 

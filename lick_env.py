@@ -50,14 +50,14 @@ class Lick_Env_Cont(gym.Env):
         self._target_dynamics = target_dynamics
         self._alm_hid = alm_hid
         self._alm = nn.GRU(action_dim, alm_hid, batch_first=True)
-        self._alm_out = nn.Linear(alm_hid, 1)
+        self._alm_out = nn.Linear(alm_hid, 30)
     
     def _get_reward(self, t, action):
         with torch.no_grad():
             action, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
             action = F.relu(self._alm_out(action))
-        mse = (action-self._target_dynamics[t])**2
-        reward = 1 / mse
+        mse = torch.mean((action-torch.from_numpy(self._target_dynamics[:,t]))**2).item()
+        reward = .05 * (1 / mse)
         return reward, mse
     
     def _get_done(self, t, error):
