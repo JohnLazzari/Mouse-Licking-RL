@@ -16,7 +16,7 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True)
+        self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
         self.fc2 = nn.Linear(hid_dim, hid_dim)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
@@ -26,9 +26,9 @@ class Actor(nn.Module):
         self.action_bias = 0
 
     def forward(self, x, hn, sampling=True):
-        x = F.leaky_relu(self.fc1(x))
+        x = F.relu(self.fc1(x))
         gru_x, hn = self.gru(x, hn)
-        x = F.leaky_relu(self.fc2(gru_x))
+        x = F.relu(self.fc2(gru_x))
 
         mean = self.mean_linear(x)
         std = self.std_linear(x)
@@ -76,21 +76,21 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True)
+        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True)
+        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state, action, hn):
         x = torch.cat((state, action), dim=-1)
 
-        x1 = F.leaky_relu(self.fc11(x))
+        x1 = F.relu(self.fc11(x))
         x1, hn1 = self.gru1(x1, hn)
         x1 = self.fc12(x1)
 
-        x2 = F.leaky_relu(self.fc21(x))
+        x2 = F.relu(self.fc21(x))
         x2, hn2 = self.gru2(x2, hn)
         x2 = self.fc22(x2)
 

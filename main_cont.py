@@ -15,32 +15,33 @@ seconds = 2.
 ms = seconds * 1000.
 alm_activity_arr = alm_activity_arr[:, int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms)]
 
-BATCH_SIZE = 32
-INP_DIM = 1
+BATCH_SIZE = 128
+INP_DIM = 1+256
 HID_DIM = 256
 ACTION_DIM = 256
 ALPHA = 0.20
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 1000000
-LEARNING_STARTS = 100
+LEARNING_STARTS = 1000
 LEARNING_FREQ = 4
 FRAME_HISTORY_LEN = 4
 TARGER_UPDATE_FREQ = 10000
-LEARNING_RATE = 0.003
+LEARNING_RATE = 0.0003
 ALPHA_OPT = 0.95
 EPS = 0.01
 DT = 0.01
 TARGET_TIME = 2.0
 # skipping by 10 because we are simulating 10 millisecond timesteps
-TARGET_DYNAMICS = alm_activity_arr[:, 0:-1:10]
-THRESH = 0.01
+TARGET_DYNAMICS = 100*alm_activity_arr[:, 0:-1:10]
+THRESH = 0.1
 ALM_HID = 256
+ENTROPY_TUNING = True
 
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
-        constructor=optim.RMSprop,
-        kwargs=dict(lr=LEARNING_RATE, alpha=ALPHA_OPT, eps=EPS),
+        constructor=optim.Adam,
+        kwargs=dict(lr=LEARNING_RATE, eps=EPS),
     )
 
     sac_learn(
@@ -56,6 +57,7 @@ def main(env, seed):
         batch_size=BATCH_SIZE,
         alpha=ALPHA,
         gamma=GAMMA,
+        automatic_entropy_tuning=ENTROPY_TUNING,
         learning_starts=LEARNING_STARTS,
         learning_freq=LEARNING_FREQ,
         target_update_freq=TARGER_UPDATE_FREQ,

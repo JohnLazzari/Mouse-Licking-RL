@@ -52,12 +52,9 @@ class Lick_Env_Cont(gym.Env):
         self._alm = nn.GRU(action_dim, alm_hid, batch_first=True)
         self._alm_out = nn.Linear(alm_hid, 30)
     
-    def _get_reward(self, t, action):
-        with torch.no_grad():
-            activity, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
-            activity = F.relu(self._alm_out(activity))
+    def _get_reward(self, t, activity):
         mse = torch.mean((activity-torch.tensor(self._target_dynamics[:,t]))**2).item()
-        reward = .05 * (1 / mse)
+        reward = 0.5*(1 / (mse+1e-6))
         return reward, mse
     
     def _get_done(self, t, error):
@@ -68,19 +65,28 @@ class Lick_Env_Cont(gym.Env):
         return done
     
     def _get_next_state(self):
-        # TODO make the state more than just time, but also hidden state of alm GRU
-        self.state += self._dt
+        self.time += self._dt
+        state = torch.cat((self._alm_hn.squeeze(), torch.tensor(self.time).unsqueeze(0)))
+        return state
+    
+    def _get_activity_hid(self, action):
+        with torch.no_grad():
+            activity, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
+            activity = F.relu(self._alm_out(activity))
+        return activity
     
     def reset(self):
         self._alm_hn = torch.zeros(size=(1, self._alm_hid))
-        self.state = 0.
-        return self.state
+        self.time = 0.
+        state = torch.cat((self._alm_hn.squeeze(), torch.tensor(self.time).unsqueeze(0)))
+        return state.tolist()
 
     def step(self, t, action):
-        reward, error = self._get_reward(t, action)
+        activity = self._get_activity_hid(action)
+        state = self._get_next_state()
+        reward, error = self._get_reward(t, activity)
         done = self._get_done(t, error)
-        self._get_next_state()
-        return self.state, reward, done, None
+        return state.tolist(), reward, done
     
     
 
