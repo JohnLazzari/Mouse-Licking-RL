@@ -49,9 +49,11 @@ class Lick_Env_Cont(gym.Env):
         self._target_time = target_time
         self._target_dynamics = target_dynamics
         self._alm_hid = alm_hid
-        self._alm = nn.RNN(action_dim, alm_hid, batch_first=True)
+        self._alm = nn.GRU(action_dim, alm_hid, batch_first=True)
+        #nn.init.uniform_(self._alm.weight_ih_l0, -np.sqrt(6 / (alm_hid+action_dim)), np.sqrt(6 / (alm_hid+action_dim)))
+        #nn.init.uniform_(self._alm.weight_ih_l0, -np.sqrt(6 / (alm_hid+action_dim)), np.sqrt(6 / (alm_hid+action_dim)))
         self._alm_out = nn.Linear(alm_hid, 2)
-        nn.init.uniform_(self._alm_out.weight, 0, np.sqrt(6 / (alm_hid+2)))
+        #nn.init.uniform_(self._alm_out.weight, 0, np.sqrt(6 / (alm_hid+2)))
     
     def _get_reward(self, t, activity):
         mse = torch.abs(activity-torch.tensor(self._target_dynamics[t,:]))
@@ -59,7 +61,7 @@ class Lick_Env_Cont(gym.Env):
         if range:
             reward = -1
         else:
-            reward = torch.sum(1 / (1000**mse+1e-6)).item()
+            reward = 5*torch.sum(1 / (1000**mse+1e-6)).item()
         return reward, mse
     
     def _get_done(self, t, error):
@@ -78,7 +80,7 @@ class Lick_Env_Cont(gym.Env):
     def _get_activity_hid(self, action):
         with torch.no_grad():
             activity, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
-            activity = F.relu(self._alm_out(activity))
+            activity = F.hardtanh(self._alm_out(activity), min_val=-.1, max_val=.2)
         return activity
     
     def reset(self):

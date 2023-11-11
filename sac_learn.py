@@ -75,10 +75,18 @@ def sac_learn(
 
     policy_memory = ReplayBuffer(replay_buffer_size, seed)
 
+    Statistics = {
+        "mean_episode_rewards": [],
+        "mean_episode_steps": [],
+        "best_mean_episode_rewards": []
+    }
+
     episode_reward = 0
+    best_mean_episode_reward = -float("inf")
     episode_steps = 0
     avg_reward = [0]
     avg_steps = [0]
+    LOG_EVERY_N_STEPS = 1000
 
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset()
@@ -105,11 +113,9 @@ def sac_learn(
         state = next_state
         h_prev = h_current
 
-        if t % 1000 == 0:
-            print(t, np.mean(np.array(avg_steps)[-100:]), np.mean(np.array(avg_reward)[-100:]))
-
         ### EARLY TERMINATION OF EPISODE
         if done:
+            # Add stats to lists
             avg_steps.append(episode_steps)
             avg_reward.append(episode_reward)
             # Push the episode to replay
@@ -172,6 +178,30 @@ def sac_learn(
                 alpha = log_alpha.exp()
 
             soft_update(_critic_target, _critic, .005)
+        
+        ### 4. Log progress and keep track of statistics
+        if len(avg_reward) > 0:
+            mean_episode_reward = np.mean(np.array(avg_reward)[-100:])
+        if len(avg_steps) > 0:
+            mean_episode_steps = np.mean(np.array(avg_steps)[-100:])
+        if len(avg_reward) > 100:
+            best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
+
+        Statistics["mean_episode_rewards"].append(mean_episode_reward)
+        Statistics["mean_episode_steps"].append(mean_episode_steps)
+        Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
+
+        if t % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
+            print("Timestep %d" % (t,))
+            print("mean reward (100 episodes): %f" % mean_episode_reward)
+            print("mean steps (100 episodes): %f" % mean_episode_steps)
+            print("best mean reward: %f" % best_mean_episode_reward)
+            sys.stdout.flush()
+
+            # Dump statistics to pickle
+            with open('statistics.pkl', 'wb') as f:
+                pickle.dump(Statistics, f)
+                print("Saved to %s" % 'statistics.pkl')
 
 
     
