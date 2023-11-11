@@ -16,14 +16,14 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
+        self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc2 = nn.Linear(hid_dim, hid_dim)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        self.action_scale = 1
-        self.action_bias = 0
+        self.action_scale = .5
+        self.action_bias = .5
 
     def forward(self, x, hn, sampling=True):
         x = F.relu(self.fc1(x))
@@ -76,11 +76,11 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
+        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=2)
+        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state, action, hn):

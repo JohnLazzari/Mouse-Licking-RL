@@ -49,16 +49,22 @@ class Lick_Env_Cont(gym.Env):
         self._target_time = target_time
         self._target_dynamics = target_dynamics
         self._alm_hid = alm_hid
-        self._alm = nn.GRU(action_dim, alm_hid, batch_first=True)
-        self._alm_out = nn.Linear(alm_hid, 30)
+        self._alm = nn.RNN(action_dim, alm_hid, batch_first=True)
+        self._alm_out = nn.Linear(alm_hid, 2)
+        nn.init.uniform_(self._alm_out.weight, 0, np.sqrt(6 / (alm_hid+2)))
     
     def _get_reward(self, t, activity):
-        mse = torch.mean((activity-torch.tensor(self._target_dynamics[:,t]))**2).item()
-        reward = 0.5*(1 / (mse+1e-6))
+        mse = torch.abs(activity-torch.tensor(self._target_dynamics[t,:]))
+        range = torch.any(mse > self._thresh).item()
+        if range:
+            reward = -1
+        else:
+            reward = torch.sum(1 / (1000**mse+1e-6)).item()
         return reward, mse
     
     def _get_done(self, t, error):
-        if error > self._thresh or t == self.max_timesteps-1:
+        range = torch.any(error > self._thresh).item()
+        if range or t == self.max_timesteps-1:
             done = True
         else:
             done = False

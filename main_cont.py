@@ -9,13 +9,13 @@ from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
 
-alm_activity = scipy.io.loadmat("warped_activity_time1s.mat")
-alm_activity_arr = alm_activity["warped_trial_activity_1s"]
+alm_activity = scipy.io.loadmat("warped_activity_2pcs.mat")
+alm_activity_arr = alm_activity["warped_activity_2pcs"]
 seconds = 2.
 ms = seconds * 1000.
-alm_activity_arr = alm_activity_arr[:, int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms)]
+alm_activity_arr = alm_activity_arr[int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms),:]
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 INP_DIM = 1+256
 HID_DIM = 256
 ACTION_DIM = 256
@@ -24,16 +24,14 @@ GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 1000000
 LEARNING_STARTS = 1000
 LEARNING_FREQ = 4
-FRAME_HISTORY_LEN = 4
-TARGER_UPDATE_FREQ = 10000
-LEARNING_RATE = 0.0003
+LEARNING_RATE = 0.001
 ALPHA_OPT = 0.95
 EPS = 0.01
 DT = 0.01
 TARGET_TIME = 2.0
 # skipping by 10 because we are simulating 10 millisecond timesteps
-TARGET_DYNAMICS = 100*alm_activity_arr[:, 0:-1:10]
-THRESH = 0.1
+TARGET_DYNAMICS = 50 * alm_activity_arr[0:-1:10,:]
+THRESH = 0.5
 ALM_HID = 256
 ENTROPY_TUNING = True
 
@@ -59,8 +57,7 @@ def main(env, seed):
         gamma=GAMMA,
         automatic_entropy_tuning=ENTROPY_TUNING,
         learning_starts=LEARNING_STARTS,
-        learning_freq=LEARNING_FREQ,
-        target_update_freq=TARGER_UPDATE_FREQ,
+        learning_freq=LEARNING_FREQ
     )
 
 if __name__ == '__main__':
