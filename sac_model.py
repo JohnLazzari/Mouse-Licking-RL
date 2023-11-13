@@ -8,6 +8,13 @@ LOG_SIG_MIN = -20
 LOG_SIG_MAX = 2
 epsilon = 1e-6
 
+# Initialize Policy weights
+def weights_init_(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_normal_(m.weight, gain=1)
+        torch.nn.init.constant_(m.bias, 0)
+
+# Actor RNN
 class Actor(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
         super(Actor, self).__init__()
@@ -24,10 +31,12 @@ class Actor(nn.Module):
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        self.action_scale = .5
-        self.action_bias = .5
+        self.apply(weights_init_)
 
-    def forward(self, x, hn, sampling=True):
+        self.action_scale = 1
+        self.action_bias = 0
+
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         gru_x, hn = self.gru(x, hn)
@@ -40,7 +49,7 @@ class Actor(nn.Module):
         
         return mean, std, hn, gru_x
     
-    def sample(self, state, hn, sampling=True):
+    def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
         
         mean, log_std, h_current, gru_out = self.forward(state, hn, sampling)
         #if sampling == False; then reshape mean and log_std from (B, L_max, A) to (B*Lmax, A)
@@ -73,8 +82,9 @@ class Actor(nn.Module):
 
         return action, log_prob, mean, h_current, gru_out
 
+# Critic RNN
 class Critic(nn.Module):
-    def __init__(self, inp_dim, hid_dim):
+    def __init__(self, inp_dim: int, hid_dim: int):
         super(Critic, self).__init__()
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
@@ -90,8 +100,10 @@ class Critic(nn.Module):
         self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc23 = nn.Linear(hid_dim, hid_dim)
         self.fc24 = nn.Linear(hid_dim, 1)
+
+        self.apply(weights_init_)
     
-    def forward(self, state, action, hn):
+    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor) -> (int, int):
         x = torch.cat((state, action), dim=-1)
 
         x1 = F.relu(self.fc11(x))

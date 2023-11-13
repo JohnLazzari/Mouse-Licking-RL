@@ -49,22 +49,20 @@ class Lick_Env_Cont(gym.Env):
         self._target_time = target_time
         self._target_dynamics = target_dynamics
         self._alm_hid = alm_hid
-        self._alm = nn.GRU(action_dim, alm_hid, batch_first=True)
-        #nn.init.uniform_(self._alm.weight_ih_l0, -np.sqrt(6 / (alm_hid+action_dim)), np.sqrt(6 / (alm_hid+action_dim)))
-        #nn.init.uniform_(self._alm.weight_ih_l0, -np.sqrt(6 / (alm_hid+action_dim)), np.sqrt(6 / (alm_hid+action_dim)))
+        self._alm_in = nn.Linear(action_dim, alm_hid)
+        self._alm = nn.RNN(alm_hid, alm_hid, batch_first=True, nonlinearity='relu')
         self._alm_out = nn.Linear(alm_hid, 2)
-        #nn.init.uniform_(self._alm_out.weight, 0, np.sqrt(6 / (alm_hid+2)))
     
-    def _get_reward(self, t, activity):
+    def _get_reward(self, t: int, activity: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-torch.tensor(self._target_dynamics[t,:]))
         range = torch.any(mse > self._thresh).item()
         if range:
-            reward = -1
+            reward = -10
         else:
             reward = 5*torch.sum(1 / (1000**mse+1e-6)).item()
         return reward, mse
     
-    def _get_done(self, t, error):
+    def _get_done(self, t: int, error: torch.Tensor) -> bool:
         range = torch.any(error > self._thresh).item()
         if range or t == self.max_timesteps-1:
             done = True
@@ -72,24 +70,25 @@ class Lick_Env_Cont(gym.Env):
             done = False
         return done
     
-    def _get_next_state(self):
+    def _get_next_state(self) -> torch.Tensor:
         self.time += self._dt
         state = torch.cat((self._alm_hn.squeeze(), torch.tensor(self.time).unsqueeze(0)))
         return state
     
-    def _get_activity_hid(self, action):
+    def _get_activity_hid(self, action: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            activity, self._alm_hn = self._alm(torch.tensor(action).unsqueeze(0), self._alm_hn)
-            activity = F.hardtanh(self._alm_out(activity), min_val=-.1, max_val=.2)
+            action = torch.tensor(action).unsqueeze(0)
+            activity, self._alm_hn = self._alm(action, self._alm_hn)
+            activity = F.hardtanh(self._alm_out(activity), min_val=-.2, max_val=.2)
         return activity
     
-    def reset(self):
+    def reset(self) -> list:
         self._alm_hn = torch.zeros(size=(1, self._alm_hid))
         self.time = 0.
         state = torch.cat((self._alm_hn.squeeze(), torch.tensor(self.time).unsqueeze(0)))
         return state.tolist()
 
-    def step(self, t, action):
+    def step(self, t: int, action: torch.Tensor) -> (list, int, bool):
         activity = self._get_activity_hid(action)
         state = self._get_next_state()
         reward, error = self._get_reward(t, activity)
