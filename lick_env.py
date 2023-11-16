@@ -39,13 +39,11 @@ class Lick_Env_Discrete(gym.Env):
     
 
 class Lick_Env_Cont(gym.Env):
-    def __init__(self, action_dim, dt, target_time, target_dynamics, thresh, alm_hid):
+    def __init__(self, action_dim, target_dynamics, thresh, alm_hid):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # might change this to length of targ_dynamics but good to know the timescale
         self._thresh = thresh
-        self._dt = dt
-        self._target_time = target_time
         self._target_dynamics = torch.tensor(target_dynamics)
         self.max_timesteps = self._target_dynamics.shape[0]
         self._alm_hid = alm_hid

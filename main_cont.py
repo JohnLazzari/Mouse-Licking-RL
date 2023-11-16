@@ -9,23 +9,8 @@ from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
 
-'''
-alm_activity = scipy.io.loadmat("warped_activity_time1s.mat")
-alm_activity_arr = alm_activity["warped_trial_activity_1s"]
-seconds = 2.
-ms = seconds * 1000.
-alm_activity_arr = alm_activity_arr[:, int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms)]
-dynamics = alm_activity_arr[:, 0:-1:10]
-for i in range(30):
-    plt.plot(dynamics[i,:])
-    plt.show()
-'''
-
-alm_activity = scipy.io.loadmat("warped_activity_2pcs.mat")
-alm_activity_arr = alm_activity["warped_activity_2pcs"]
-seconds = 2.
-ms = seconds * 1000.
-alm_activity_arr = alm_activity_arr[int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms),:]
+alm_activity = scipy.io.loadmat("alm_warped_activity_2pcs_1slick.mat")
+alm_activity_arr = alm_activity["warped_activity_2pcs_1slick"]
 
 BATCH_SIZE = 8
 INP_DIM = 4+256
@@ -40,10 +25,7 @@ LEARNING_FREQ = 1
 LEARNING_RATE = 0.0003
 ALPHA_OPT = 0.95
 EPS = 0.01
-DT = 0.01
-TARGET_TIME = 2.0
-# skipping by 10 because we are simulating 10 millisecond timesteps
-TARGET_DYNAMICS = 10 * alm_activity_arr[0:-1:10,:]
+TARGET_DYNAMICS = alm_activity_arr
 THRESH = 0.01
 ALM_HID = 256
 ENTROPY_TUNING = True
@@ -77,7 +59,7 @@ def main(env, seed):
 if __name__ == '__main__':
     # Get Atari games.
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
-    env = Lick_Env_Cont(ACTION_DIM, DT, TARGET_TIME, TARGET_DYNAMICS, THRESH, ALM_HID)
+    env = Lick_Env_Cont(ACTION_DIM, TARGET_DYNAMICS, THRESH, ALM_HID)
 
     # Run training
     env = get_env(env, seed)
