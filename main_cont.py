@@ -28,14 +28,14 @@ ms = seconds * 1000.
 alm_activity_arr = alm_activity_arr[int(alm_activity_arr.shape[1]/2):int(alm_activity_arr.shape[1]/2)+int(ms),:]
 
 BATCH_SIZE = 8
-INP_DIM = 1+256
+INP_DIM = 4+256
 HID_DIM = 256
-ACTION_DIM = 256
+ACTION_DIM = 32
 ALPHA = 0.20
 GAMMA = 0.99
-REPLAY_BUFFER_SIZE = 1000000
-LEARNING_STARTS = 1000
-SAVE_ITER = 100000
+REPLAY_BUFFER_SIZE = 10_000
+LEARNING_STARTS = 1_000
+SAVE_ITER = 100_000
 LEARNING_FREQ = 1
 LEARNING_RATE = 0.0003
 ALPHA_OPT = 0.95
@@ -44,7 +44,7 @@ DT = 0.01
 TARGET_TIME = 2.0
 # skipping by 10 because we are simulating 10 millisecond timesteps
 TARGET_DYNAMICS = 10 * alm_activity_arr[0:-1:10,:]
-THRESH = 0.15
+THRESH = 0.01
 ALM_HID = 256
 ENTROPY_TUNING = True
 

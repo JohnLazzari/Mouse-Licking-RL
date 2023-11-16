@@ -24,6 +24,7 @@ OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
 def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
     state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
+    hn = hn.cuda()
 
     if evaluate == False: 
         action, _, _, hn, _ = policy.sample(state, hn, sampling=True)
@@ -50,12 +51,12 @@ def sac_learn(
     critic,
     optimizer_spec,
     replay_buffer_size=1000000,
-    batch_size=128,
+    batch_size=8,
     alpha=0.20,
     gamma=0.99,
     automatic_entropy_tuning=False, 
     learning_starts=50000,
-    learning_freq=2,
+    learning_freq=1,
     save_iter=100000,
     save_path="checkpoints/cont_lick_check",
 ):
@@ -96,7 +97,7 @@ def sac_learn(
     ep_trajectory = []
 
     #num_layers specified in the policy model 
-    h_prev = torch.zeros(size=(1, 1, hid_dim)).cuda()
+    h_prev = torch.zeros(size=(1, 1, hid_dim))
 
     ### STEPS PER EPISODE ###
     for t in count():
@@ -124,7 +125,7 @@ def sac_learn(
             # Push the episode to replay
             policy_memory.push(ep_trajectory)
             # reset training conditions
-            h_prev = torch.zeros(size=(1, 1, hid_dim)).cuda()
+            h_prev = torch.zeros(size=(1, 1, hid_dim))
             state = env.reset()
             ep_trajectory = []
             # reset tracking variables
@@ -142,15 +143,14 @@ def sac_learn(
             mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
             with torch.no_grad():
-                h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+                h_train = torch.zeros(size=(1, batch_size, hid_dim))
                 next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
-                h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+                h_train = torch.zeros(size=(1, batch_size, hid_dim))
                 qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
-                # torch min or torch minimum?
                 min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
                 next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
-            h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+            h_train = torch.zeros(size=(1, batch_size, hid_dim))
             qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
             qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
             qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
@@ -160,10 +160,10 @@ def sac_learn(
             qf_loss.backward()
             critic_optimizer.step()
 
-            h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+            h_train = torch.zeros(size=(1, batch_size, hid_dim))
             pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
 
-            h_train = torch.zeros(size=(1, batch_size, hid_dim)).cuda()
+            h_train = torch.zeros(size=(1, batch_size, hid_dim))
             qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
             min_qf_pi = torch.minimum(qf1_pi, qf2_pi)
 
@@ -183,6 +183,7 @@ def sac_learn(
                 alpha = log_alpha.exp()
 
             soft_update(_critic_target, _critic, .005)
+            h_train = h_train.detach()
         
         ### 4. Log progress and keep track of statistics
         if len(avg_reward) > 0:

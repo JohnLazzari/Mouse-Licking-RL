@@ -50,6 +50,7 @@ class Actor(nn.Module):
         return mean, std, hn, gru_x
     
     def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+        hn = hn.cuda()
         
         mean, log_std, h_current, gru_out = self.forward(state, hn, sampling)
         #if sampling == False; then reshape mean and log_std from (B, L_max, A) to (B*Lmax, A)
@@ -105,6 +106,7 @@ class Critic(nn.Module):
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor) -> (int, int):
         x = torch.cat((state, action), dim=-1)
+        hn = hn.cuda()
 
         x1 = F.relu(self.fc11(x))
         x1 = F.relu(self.fc12(x1))
