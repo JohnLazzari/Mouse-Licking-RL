@@ -102,6 +102,11 @@ def sac_learn(
     ### STEPS PER EPISODE ###
     for t in count():
 
+        # slightly bring the threshold down during training
+        if t % 25_000 == 0 and env.thresh > .01:
+            env.thresh -= .01
+            print(env.thresh)
+
         with torch.no_grad():
             action, h_current =  select_action(_actor, state, h_prev, evaluate=False)  # Sample action from policy
 

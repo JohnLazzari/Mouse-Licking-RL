@@ -8,14 +8,18 @@ from sac_model import Actor, Critic
 from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
+import torch
 
-alm_activity = scipy.io.loadmat("alm_warped_activity_2pcs_1slick.mat")
-alm_activity_arr = alm_activity["warped_activity_2pcs_1slick"]
+def NormalizeData(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
+alm_activity_arr = alm_activity["warped_activity_3pcs_1slick"]
 
 BATCH_SIZE = 8
-INP_DIM = 4+256
+INP_DIM = 6+64
 HID_DIM = 256
-ACTION_DIM = 32
+ACTION_DIM = 8
 ALPHA = 0.20
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 10_000
@@ -25,9 +29,9 @@ LEARNING_FREQ = 1
 LEARNING_RATE = 0.0003
 ALPHA_OPT = 0.95
 EPS = 0.01
-TARGET_DYNAMICS = alm_activity_arr
-THRESH = 0.01
-ALM_HID = 256
+TARGET_DYNAMICS = NormalizeData(alm_activity_arr)
+THRESH = 0.7
+ALM_HID = 64
 ENTROPY_TUNING = True
 
 def main(env, seed):
@@ -57,8 +61,8 @@ def main(env, seed):
     )
 
 if __name__ == '__main__':
-    # Get Atari games.
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
+    torch.manual_seed(seed)
     env = Lick_Env_Cont(ACTION_DIM, TARGET_DYNAMICS, THRESH, ALM_HID)
 
     # Run training

@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sac_model import weights_init_
 
 class Lick_Env_Discrete(gym.Env):
     def __init__(self, seed, dt, target_time):
@@ -43,16 +44,16 @@ class Lick_Env_Cont(gym.Env):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # might change this to length of targ_dynamics but good to know the timescale
-        self._thresh = thresh
+        self.thresh = thresh
         self._target_dynamics = torch.tensor(target_dynamics)
         self.max_timesteps = self._target_dynamics.shape[0]
         self._alm_hid = alm_hid
         self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
-        self._alm_out = nn.Linear(alm_hid, 2)
+        self._alm_out = nn.Linear(alm_hid, 3)
     
     def _get_reward(self, t: int, activity: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-self._target_dynamics[t,:])
-        range = torch.any(mse > self._thresh).item()
+        range = torch.any(mse > self.thresh).item()
         if range:
             reward = -10
         else:
@@ -60,7 +61,7 @@ class Lick_Env_Cont(gym.Env):
         return reward, mse
     
     def _get_done(self, t: int, error: torch.Tensor) -> bool:
-        range = torch.any(error > self._thresh).item()
+        range = torch.any(error > self.thresh).item()
         if range or t == self.max_timesteps-1:
             done = True
         else:
@@ -75,18 +76,20 @@ class Lick_Env_Cont(gym.Env):
         with torch.no_grad():
             action = torch.tensor(action).unsqueeze(0)
             activity, self._alm_hn = self._alm(action, self._alm_hn)
-            activity = F.hardtanh(self._alm_out(activity), min_val=-.1, max_val=.1)
+            activity = F.hardtanh(self._alm_out(activity), min_val=0, max_val=1)
         return activity
     
     def reset(self) -> list:
         self._alm_hn = torch.zeros(size=(1, self._alm_hid))
-        activity = torch.zeros(size=(2,))
+        activity = torch.zeros(size=(3,))
         state = torch.cat((self._alm_hn.squeeze(), activity, self._target_dynamics[0,:]))
         return state.tolist()
 
     def step(self, t: int, action: torch.Tensor) -> (list, int, bool):
         if t < self.max_timesteps-1:
             next_t = t+1
+        else:
+            next_t = t
         activity = self._get_activity_hid(action)
         state = self._get_next_state(activity, next_t)
         reward, error = self._get_reward(t, activity)

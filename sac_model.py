@@ -11,7 +11,7 @@ epsilon = 1e-6
 # Initialize Policy weights
 def weights_init_(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_normal_(m.weight, gain=1)
+        torch.nn.init.xavier_normal_(m.weight, gain=.5)
         torch.nn.init.constant_(m.bias, 0)
 
 # Actor RNN
@@ -30,8 +30,6 @@ class Actor(nn.Module):
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
-
-        self.apply(weights_init_)
 
         self.action_scale = 1
         self.action_bias = 0
@@ -101,8 +99,6 @@ class Critic(nn.Module):
         self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc23 = nn.Linear(hid_dim, hid_dim)
         self.fc24 = nn.Linear(hid_dim, 1)
-
-        self.apply(weights_init_)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor) -> (int, int):
         x = torch.cat((state, action), dim=-1)
