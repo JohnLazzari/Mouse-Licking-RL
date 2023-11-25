@@ -5,6 +5,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sac_model import weights_init_
 
+class ALM(nn.Module):
+    def __init__(self, action_dim, alm_hid):
+        super(ALM, self).__init__()
+        self.action_dim = action_dim
+        self.alm_hid = alm_hid
+        self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
+        self._alm_out = nn.Linear(alm_hid, 3)
+    
+    def forward(self, x, hn):
+        activity, hn = self._alm(x, hn)
+        activity = F.hardtanh(self._alm_out(activity), min_val=0, max_val=1)
+        return activity, hn
+
+
 class Lick_Env_Discrete(gym.Env):
     def __init__(self, seed, dt, target_time):
         super(Lick_Env_Discrete, self).__init__()
@@ -45,11 +59,13 @@ class Lick_Env_Cont(gym.Env):
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # might change this to length of targ_dynamics but good to know the timescale
         self.thresh = thresh
-        self._target_dynamics = torch.tensor(target_dynamics)
+        self._target_dynamics = torch.tensor(target_dynamics).to(torch.float32)
         self.max_timesteps = self._target_dynamics.shape[0]
         self._alm_hid = alm_hid
-        self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
-        self._alm_out = nn.Linear(alm_hid, 3)
+
+        self.alm = ALM(action_dim, alm_hid)
+        checkpoint = torch.load("checkpoints/alm_init.pth")
+        self.alm.load_state_dict(checkpoint["agent_state_dict"])
     
     def _get_reward(self, t: int, activity: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-self._target_dynamics[t,:])
@@ -75,8 +91,7 @@ class Lick_Env_Cont(gym.Env):
     def _get_activity_hid(self, action: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             action = torch.tensor(action).unsqueeze(0)
-            activity, self._alm_hn = self._alm(action, self._alm_hn)
-            activity = F.hardtanh(self._alm_out(activity), min_val=0, max_val=1)
+            activity, self._alm_hn = self.alm(action, self._alm_hn)
         return activity
     
     def reset(self) -> list:

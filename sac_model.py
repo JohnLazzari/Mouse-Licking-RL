@@ -48,6 +48,7 @@ class Actor(nn.Module):
         return mean, std, hn, gru_x
     
     def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+
         hn = hn.cuda()
         
         mean, log_std, h_current, gru_out = self.forward(state, hn, sampling)
