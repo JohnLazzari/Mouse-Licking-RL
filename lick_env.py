@@ -12,10 +12,13 @@ class ALM(nn.Module):
         self.alm_hid = alm_hid
         self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
         self._alm_out = nn.Linear(alm_hid, 3)
+
+        for param in self.parameters():
+            param.requires_grad = False
     
     def forward(self, x, hn):
         activity, hn = self._alm(x, hn)
-        activity = F.hardtanh(self._alm_out(activity), min_val=0, max_val=1)
+        activity = F.relu(self._alm_out(activity))
         return activity, hn
 
 
@@ -59,13 +62,13 @@ class Lick_Env_Cont(gym.Env):
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         # might change this to length of targ_dynamics but good to know the timescale
         self.thresh = thresh
-        self._target_dynamics = torch.tensor(target_dynamics).to(torch.float32)
+        self._target_dynamics = torch.tensor(target_dynamics, dtype=torch.float32)
         self.max_timesteps = self._target_dynamics.shape[0]
         self._alm_hid = alm_hid
 
         self.alm = ALM(action_dim, alm_hid)
-        checkpoint = torch.load("checkpoints/alm_init.pth")
-        self.alm.load_state_dict(checkpoint["agent_state_dict"])
+        self.checkpoint = torch.load("checkpoints/alm_init.pth")
+        self.alm.load_state_dict(self.checkpoint["alm_state_dict"])
     
     def _get_reward(self, t: int, activity: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-self._target_dynamics[t,:])
@@ -94,8 +97,9 @@ class Lick_Env_Cont(gym.Env):
             activity, self._alm_hn = self.alm(action, self._alm_hn)
         return activity
     
+    # TODO learn an initial hidden state
     def reset(self) -> list:
-        self._alm_hn = torch.zeros(size=(1, self._alm_hid))
+        self._alm_hn = self.checkpoint["hidden_state"]
         activity = torch.zeros(size=(3,))
         state = torch.cat((self._alm_hn.squeeze(), activity, self._target_dynamics[0,:]))
         return state.tolist()

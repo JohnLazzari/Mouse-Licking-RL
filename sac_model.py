@@ -18,6 +18,7 @@ def weights_init_(m):
 class Actor(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
         super(Actor, self).__init__()
+
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         self.action_dim = action_dim
@@ -31,10 +32,11 @@ class Actor(nn.Module):
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        self.action_scale = 1
-        self.action_bias = 0
+        self.action_scale = .5
+        self.action_bias = .5
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         gru_x, hn = self.gru(x, hn)

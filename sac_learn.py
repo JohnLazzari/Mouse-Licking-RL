@@ -90,7 +90,7 @@ def sac_learn(
     episode_steps = 0
     avg_reward = [0]
     avg_steps = [0]
-    LOG_EVERY_N_STEPS = 1000
+    LOG_EVERY_N_STEPS = 10
 
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset()
@@ -103,9 +103,8 @@ def sac_learn(
     for t in count():
 
         # slightly bring the threshold down during training
-        if t % 250_000 == 0 and env.thresh > .005:
-            env.thresh -= .001
-            print(env.thresh)
+        #if t % 250_000 == 0 and env.thresh > .005:
+        #    env.thresh -= .001
 
         with torch.no_grad():
             action, h_current = select_action(_actor, state, h_prev, evaluate=False)  # Sample action from policy
@@ -188,10 +187,10 @@ def sac_learn(
         
         ### 4. Log progress and keep track of statistics
         if len(avg_reward) > 0:
-            mean_episode_reward = np.mean(np.array(avg_reward)[-100:])
+            mean_episode_reward = np.mean(np.array(avg_reward)[-10:])
         if len(avg_steps) > 0:
-            mean_episode_steps = np.mean(np.array(avg_steps)[-100:])
-        if len(avg_reward) > 100:
+            mean_episode_steps = np.mean(np.array(avg_steps)[-10:])
+        if len(avg_reward) > 10:
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
 
         Statistics["mean_episode_rewards"].append(mean_episode_reward)

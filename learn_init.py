@@ -13,11 +13,15 @@ class ALM(nn.Module):
         self.alm_hid = alm_hid
         self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
         self._alm_out = nn.Linear(alm_hid, 3)
+
+        for param in self.parameters():
+            param.requires_grad = False
     
     def forward(self, x, hn):
-        activity, hn = self._alm(x, hn)
-        activity = F.hardtanh(self._alm_out(activity), min_val=0, max_val=1)
-        return activity, hn
+        activity, _ = self._alm(x, hn)
+        activity = F.relu(self._alm_out(activity))
+        return activity
+
 
 def NormalizeData(data):
     return (data - np.min(data)) / (np.max(data) - np.min(data))
@@ -39,39 +43,42 @@ def main():
     HID_DIM = 256
     ACTION_DIM = 8
     ALM_HID = 64
-    EPOCHS = 1000
+    EPOCHS = 2500
     LR = 0.001
-    TIMESTEPS = 10
+
+    criterion = nn.MSELoss()
+
+    state = torch.cat((torch.zeros(size=(67,)), alm_activity_arr[0,:])).unsqueeze(0).cuda().to(torch.float32)
 
     alm = ALM(ACTION_DIM, ALM_HID).cuda()
-
-    optimizer = optim.Adam(alm.parameters(), lr=LR)
-    criterion = nn.MSELoss()
+    alm_hn = torch.ones(size=(1, ALM_HID), requires_grad=True, device="cuda")
+    optimizer = optim.Adam([alm_hn], lr=LR)
 
     for epoch in range(EPOCHS):
 
-        state = torch.cat((torch.zeros(size=(67,)), alm_activity_arr[0,:])).unsqueeze(0).cuda().to(torch.float32)
         hn = torch.zeros(size=(1, HID_DIM)).cuda()
-        alm_hn = torch.zeros(size=(1, ALM_HID)).cuda()
 
         with torch.no_grad():
-            all_actions = []
             rand_actor = Actor(INP_DIM, HID_DIM, ACTION_DIM).cuda()
+            action, _, _, _, _ = rand_actor.sample(state, hn, sampling=True)
+
+            '''
             for t in range(1, TIMESTEPS+1):
                 action, hn, alm_hn, state = get_next_act(rand_actor, alm, state, hn, alm_hn, alm_activity_arr[t,:].cuda().unsqueeze(0))
                 all_actions.append(action)
             all_actions = torch.cat(all_actions)
+            '''
 
-        alm_hn = torch.zeros(size=(1, ALM_HID)).cuda()
-        alm_out, alm_hn = alm(all_actions, alm_hn)
-        loss = criterion(alm_out, alm_activity_arr[:TIMESTEPS,:].cuda().unsqueeze(0))
+        alm_out = alm(action, alm_hn)
+        loss = criterion(alm_out, alm_activity_arr[0,:].cuda().unsqueeze(0))
         print(loss.item())
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
     torch.save({
-        'agent_state_dict': alm.state_dict(),
+        'hidden_state': alm_hn.cpu(),
+        'alm_state_dict': alm.state_dict()
     }, 'checkpoints/alm_init.pth')
 
 if __name__ == "__main__":

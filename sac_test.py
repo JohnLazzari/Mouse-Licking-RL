@@ -25,8 +25,11 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
+def NormalizeData(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
 alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
-alm_activity_arr = alm_activity["warped_activity_3pcs_1slick"]
+alm_activity_arr = NormalizeData(alm_activity["warped_activity_3pcs_1slick"])
 
 INP_DIM = 6+64
 HID_DIM = 256
@@ -34,7 +37,7 @@ ACTION_DIM = 8
 TARGET_DYNAMICS = alm_activity_arr
 THRESH = 0.16
 ALM_HID = 64
-CHECK_PATH = "checkpoints/cont_lick_check1300000.pth"
+CHECK_PATH = "checkpoints/cont_lick_check100000.pth"
 SAVE_PATH = "learned_trajectories/trajectory.npy"
 
 def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
@@ -85,12 +88,8 @@ def test(
         trajectory.append(state[-3:])
         actor_trajectory.append(state[-6:-3])
 
-        # slightly bring the threshold down during training
-        if t % 150_000 == 0 and env.thresh > .01:
-            env.thresh -= .01
-
         with torch.no_grad():
-            action, h_current =  select_action(_actor, state, h_prev, evaluate=True)  # Sample action from policy
+            action, h_current = select_action(_actor, state, h_prev, evaluate=True)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
