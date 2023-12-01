@@ -29,8 +29,8 @@ class Actor(nn.Module):
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        self.action_scale = 1
-        self.action_bias = 0
+        self.action_scale = .5
+        self.action_bias = .5
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 

@@ -95,6 +95,7 @@ def sac_learn(
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset()
     ep_trajectory = []
+    action_list = []
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
@@ -108,6 +109,7 @@ def sac_learn(
 
         with torch.no_grad():
             action, h_current = select_action(_actor, state, h_prev, evaluate=False)  # Sample action from policy
+            action_list.append(torch.tensor(action).unsqueeze(0))
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
@@ -123,67 +125,80 @@ def sac_learn(
 
         ### EARLY TERMINATION OF EPISODE
         if done:
+            
+            # Update ALM
+            action_list = torch.cat(action_list, dim=0)
+            env.update_alm_parameters(action_list)
+
             # Add stats to lists
             avg_steps.append(episode_steps)
             avg_reward.append(episode_reward)
+
             # Push the episode to replay
             policy_memory.push(ep_trajectory)
+
             # reset training conditions
             h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
             state = env.reset()
+
+            # resest lists
             ep_trajectory = []
+            action_list = []
+
             # reset tracking variables
             episode_steps = 0
             episode_reward = 0
 
-        if len(policy_memory.buffer) > batch_size and t > learning_starts and t % learning_freq == 0:
-            # Sample a batch from memory
-            state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
+            # Train the actor and critic
+            if len(policy_memory.buffer) > batch_size and t > learning_starts and t % learning_freq == 0:
 
-            state_batch = pad_sequence(state_batch, batch_first=True).cuda()
-            action_batch = pad_sequence(action_batch, batch_first=True).cuda()
-            reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
-            next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
-            mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
+                # Sample a batch from memory
+                state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
 
-            h_train = torch.zeros(size=(1, batch_size, hid_dim))
-            with torch.no_grad():
-                next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
-                qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
+                state_batch = pad_sequence(state_batch, batch_first=True).cuda()
+                action_batch = pad_sequence(action_batch, batch_first=True).cuda()
+                reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
+                next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
+                mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
-            qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
-            qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
-            qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
-            qf_loss = qf1_loss + qf2_loss
+                h_train = torch.zeros(size=(1, batch_size, hid_dim))
+                with torch.no_grad():
+                    next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
+                    qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
+                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                    next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
-            critic_optimizer.zero_grad()
-            qf_loss.backward()
-            critic_optimizer.step()
+                qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
+                qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
+                qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
+                qf_loss = qf1_loss + qf2_loss
 
-            pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
+                critic_optimizer.zero_grad()
+                qf_loss.backward()
+                critic_optimizer.step()
 
-            qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
-            min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
 
-            policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
+                qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
+                min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
-            actor_optimizer.zero_grad()
-            policy_loss.backward()
-            actor_optimizer.step()
+                policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
 
-            if automatic_entropy_tuning:
-                alpha_loss = -(log_alpha * (log_prob_bat + target_entropy).detach()).mean()
+                actor_optimizer.zero_grad()
+                policy_loss.backward()
+                actor_optimizer.step()
 
-                alpha_optim.zero_grad()
-                alpha_loss.backward()
-                alpha_optim.step()
+                if automatic_entropy_tuning:
+                    alpha_loss = -(log_alpha * (log_prob_bat + target_entropy).detach()).mean()
 
-                alpha = log_alpha.exp()
+                    alpha_optim.zero_grad()
+                    alpha_loss.backward()
+                    alpha_optim.step()
 
-            soft_update(_critic_target, _critic, .005)
-            h_train = h_train.detach()
+                    alpha = log_alpha.exp()
+
+                soft_update(_critic_target, _critic, .005)
+                h_train = h_train.detach()
         
         ### 4. Log progress and keep track of statistics
         if len(avg_reward) > 0:
@@ -218,6 +233,7 @@ def sac_learn(
                 'critic_target_state_dict': _critic_target.state_dict(),
                 'agent_optimizer_state_dict': actor_optimizer.state_dict(),
                 'critic_optimizer_state_dict': critic_optimizer.state_dict(),
+                'alm_network_state_dict': env.alm.state_dict()
             }, save_path + str(t) + '.pth')
 
 

@@ -2,6 +2,7 @@ import gym
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
 import torch.nn.functional as F
 from sac_model import weights_init_
 
@@ -14,9 +15,6 @@ class ALM(nn.Module):
         self._alm_in = nn.Linear(action_dim, alm_hid)
         self._alm = nn.RNN(alm_hid, alm_hid, batch_first=True, nonlinearity='tanh')
         self._alm_out = nn.Linear(alm_hid, 3)
-
-        for param in self.parameters():
-            param.requires_grad = False
 
     def forward(self, x, hn):
         x = F.relu(self._alm_in(x))
@@ -70,8 +68,10 @@ class Lick_Env_Cont(gym.Env):
         self._alm_hid = alm_hid
 
         self.alm = ALM(action_dim, alm_hid)
-        self.checkpoint = torch.load("checkpoints/alm_init.pth")
-        self.alm.load_state_dict(self.checkpoint["alm_state_dict"])
+        self.alm_optim = optim.RMSprop(self.alm.parameters(), lr=.0008)
+        self.criterion = nn.MSELoss()
+        #self.checkpoint = torch.load("checkpoints/alm_init.pth")
+        #self.alm.load_state_dict(self.checkpoint["alm_state_dict"])
     
     def _get_reward(self, t: int, activity: torch.Tensor, action: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-self._target_dynamics[t,:])
@@ -97,7 +97,15 @@ class Lick_Env_Cont(gym.Env):
     def _get_activity_hid(self, action: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             activity, self._alm_hn = self.alm(action, self._alm_hn)
-        return activity
+        return activity.detach()
+    
+    def update_alm_parameters(self, action_sequence):
+        temp_hn = torch.zeros(size=(1, self._alm_hid))
+        seq_activity, _ = self.alm(action_sequence, temp_hn)
+        loss = self.criterion(seq_activity, self._target_dynamics[:action_sequence.shape[0],:])
+        self.alm_optim.zero_grad()
+        loss.backward()
+        self.alm_optim.step()
     
     def reset(self) -> list:
         self._alm_hn = torch.zeros(size=(1, self._alm_hid))

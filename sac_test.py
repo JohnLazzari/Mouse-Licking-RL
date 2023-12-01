@@ -26,7 +26,7 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
 def NormalizeData(data):
-    return 2 * (data - np.min(data)) / (np.max(data) - np.min(data)) - 1
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
 alm_activity_arr = NormalizeData(alm_activity["warped_activity_3pcs_1slick"])
@@ -37,7 +37,7 @@ ACTION_DIM = 8
 TARGET_DYNAMICS = alm_activity_arr
 THRESH = 0.16
 ALM_HID = 256
-CHECK_PATH = "checkpoints/cont_lick_check2000.pth"
+CHECK_PATH = "checkpoints/cont_lick_check10000.pth"
 SAVE_PATH = "learned_trajectories/trajectory.npy"
 
 def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
@@ -70,6 +70,8 @@ def test(
     _actor.load_state_dict(checkpoint['agent_state_dict'])
     _critic.load_state_dict(checkpoint['critic_state_dict'])
     _critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
+
+    env.alm.load_state_dict(checkpoint['alm_network_state_dict'])
     
     episode_reward = 0
     episode_steps = 0
@@ -99,22 +101,18 @@ def test(
         state = next_state
         h_prev = h_current
 
-    # reset training conditions
-    h_prev = torch.zeros(size=(1, 1, hid_dim))
-    state = env.reset()
     # reset tracking variables
-    episode_steps = 0
-    episode_reward = 0
     trajectory = np.array(trajectory)
     actor_trajectory = np.array(actor_trajectory)
+
+    # plot trajectories
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     ax.scatter(trajectory[:,0], trajectory[:,1], trajectory[:,2])
     ax.scatter(actor_trajectory[:,0], actor_trajectory[:,1], actor_trajectory[:,2])
     plt.show()
-    trajectory = []
-    actor_trajectory = []
-    np.save(save_path, np.array(trajectory))
+
+    np.save(save_path, trajectory)
 
 if __name__ == "__main__":
     env = Lick_Env_Cont(ACTION_DIM, TARGET_DYNAMICS, THRESH, ALM_HID)
