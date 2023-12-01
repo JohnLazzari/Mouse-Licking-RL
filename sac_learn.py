@@ -97,7 +97,7 @@ def sac_learn(
     ep_trajectory = []
 
     #num_layers specified in the policy model 
-    h_prev = torch.zeros(size=(1, 1, hid_dim))
+    h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
 
     ### STEPS PER EPISODE ###
     for t in count():
@@ -129,7 +129,7 @@ def sac_learn(
             # Push the episode to replay
             policy_memory.push(ep_trajectory)
             # reset training conditions
-            h_prev = torch.zeros(size=(1, 1, hid_dim))
+            h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
             state = env.reset()
             ep_trajectory = []
             # reset tracking variables
@@ -150,7 +150,7 @@ def sac_learn(
             with torch.no_grad():
                 next_state_action, next_state_log_pi, _, _, _ = _actor.sample(next_state_batch, h_train, sampling=False)
                 qf1_next_target, qf2_next_target = _critic_target(next_state_batch, next_state_action, h_train)
-                min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
                 next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
             qf1, qf2 = _critic(state_batch, action_batch, h_train)  # Two Q-functions to mitigate positive bias in the policy improvement step
@@ -165,7 +165,7 @@ def sac_learn(
             pi_action_bat, log_prob_bat, _, _, _ = _actor.sample(state_batch, h_train, sampling= False)
 
             qf1_pi, qf2_pi = _critic(state_batch, pi_action_bat, h_train)
-            min_qf_pi = torch.minimum(qf1_pi, qf2_pi)
+            min_qf_pi = torch.min(qf1_pi, qf2_pi)
 
             policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
 

@@ -26,18 +26,18 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
 def NormalizeData(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
+    return 2 * (data - np.min(data)) / (np.max(data) - np.min(data)) - 1
 
 alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
 alm_activity_arr = NormalizeData(alm_activity["warped_activity_3pcs_1slick"])
 
-INP_DIM = 6+64
+INP_DIM = 256+6
 HID_DIM = 256
 ACTION_DIM = 8
 TARGET_DYNAMICS = alm_activity_arr
 THRESH = 0.16
-ALM_HID = 64
-CHECK_PATH = "checkpoints/cont_lick_check100000.pth"
+ALM_HID = 256
+CHECK_PATH = "checkpoints/cont_lick_check2000.pth"
 SAVE_PATH = "learned_trajectories/trajectory.npy"
 
 def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
@@ -80,16 +80,16 @@ def test(
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset()
     #num_layers specified in the policy model 
-    h_prev = torch.zeros(size=(1, 1, hid_dim))
+    h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
 
     ### STEPS PER EPISODE ###
-    for t in count():
+    for t in range(env._target_dynamics.shape[0]):
 
         trajectory.append(state[-3:])
         actor_trajectory.append(state[-6:-3])
 
         with torch.no_grad():
-            action, h_current = select_action(_actor, state, h_prev, evaluate=True)  # Sample action from policy
+            action, h_current = select_action(_actor, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
@@ -99,24 +99,22 @@ def test(
         state = next_state
         h_prev = h_current
 
-        ### EARLY TERMINATION OF EPISODE
-        if done:
-            # reset training conditions
-            h_prev = torch.zeros(size=(1, 1, hid_dim))
-            state = env.reset()
-            # reset tracking variables
-            episode_steps = 0
-            episode_reward = 0
-            trajectory = np.array(trajectory)
-            actor_trajectory = np.array(actor_trajectory)
-            fig = plt.figure()
-            ax = fig.add_subplot(projection='3d')
-            ax.scatter(trajectory[:,0], trajectory[:,1], trajectory[:,2])
-            ax.scatter(actor_trajectory[:,0], actor_trajectory[:,1], actor_trajectory[:,2])
-            plt.show()
-            trajectory = []
-            actor_trajectory = []
-            np.save(save_path, np.array(trajectory))
+    # reset training conditions
+    h_prev = torch.zeros(size=(1, 1, hid_dim))
+    state = env.reset()
+    # reset tracking variables
+    episode_steps = 0
+    episode_reward = 0
+    trajectory = np.array(trajectory)
+    actor_trajectory = np.array(actor_trajectory)
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.scatter(trajectory[:,0], trajectory[:,1], trajectory[:,2])
+    ax.scatter(actor_trajectory[:,0], actor_trajectory[:,1], actor_trajectory[:,2])
+    plt.show()
+    trajectory = []
+    actor_trajectory = []
+    np.save(save_path, np.array(trajectory))
 
 if __name__ == "__main__":
     env = Lick_Env_Cont(ACTION_DIM, TARGET_DYNAMICS, THRESH, ALM_HID)

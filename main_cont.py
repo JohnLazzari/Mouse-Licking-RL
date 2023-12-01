@@ -11,16 +11,16 @@ from lick_env import Lick_Env_Cont
 import torch
 
 def NormalizeData(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
+    return 2 * ((data - np.min(data)) / (np.max(data) - np.min(data))) - 1
 
 alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
 alm_activity_arr = alm_activity["warped_activity_3pcs_1slick"]
 
 BATCH_SIZE = 6
-INP_DIM = 6+64
+INP_DIM = 256+6
 HID_DIM = 256
 ACTION_DIM = 8
-ALPHA = 0.20
+ALPHA = 0.75
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 15_000
 LEARNING_STARTS = 1_000
@@ -30,15 +30,15 @@ LEARNING_RATE = 0.001
 ALPHA_OPT = 0.95
 EPS = 0.01
 TARGET_DYNAMICS = NormalizeData(alm_activity_arr)
-THRESH = 0.01
-ALM_HID = 64
+THRESH = 0.5
+ALM_HID = 256
 ENTROPY_TUNING = True
 WEIGHT_DECAY = .1
 
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
-        constructor=optim.RMSprop,
+        constructor=optim.AdamW,
         kwargs=dict(lr=LEARNING_RATE, eps=EPS, weight_decay=WEIGHT_DECAY),
     )
 

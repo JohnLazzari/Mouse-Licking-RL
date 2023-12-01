@@ -5,18 +5,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sac_model import weights_init_
 
+
 class ALM(nn.Module):
     def __init__(self, action_dim, alm_hid):
         super(ALM, self).__init__()
         self.action_dim = action_dim
         self.alm_hid = alm_hid
-        self._alm = nn.RNN(action_dim, alm_hid, batch_first=True, nonlinearity='relu')
+        self._alm_in = nn.Linear(action_dim, alm_hid)
+        self._alm = nn.RNN(alm_hid, alm_hid, batch_first=True, nonlinearity='tanh')
         self._alm_out = nn.Linear(alm_hid, 3)
 
         for param in self.parameters():
             param.requires_grad = False
-    
+
     def forward(self, x, hn):
+        x = F.relu(self._alm_in(x))
         activity, hn = self._alm(x, hn)
         activity = F.relu(self._alm_out(activity))
         return activity, hn
@@ -70,13 +73,13 @@ class Lick_Env_Cont(gym.Env):
         self.checkpoint = torch.load("checkpoints/alm_init.pth")
         self.alm.load_state_dict(self.checkpoint["alm_state_dict"])
     
-    def _get_reward(self, t: int, activity: torch.Tensor) -> (int, torch.Tensor):
+    def _get_reward(self, t: int, activity: torch.Tensor, action: torch.Tensor) -> (int, torch.Tensor):
         mse = torch.abs(activity-self._target_dynamics[t,:])
         range = torch.any(mse > self.thresh).item()
         if range:
-            reward = -10
+            reward = -5*torch.sum(2**mse).item()
         else:
-            reward = 5*torch.sum(1 / (1000**mse+1e-6)).item()
+            reward = 5*torch.sum(1 / (1000**mse+1e-6)).item() - .1 * torch.linalg.norm(action)
         return reward, mse
     
     def _get_done(self, t: int, error: torch.Tensor) -> bool:
@@ -93,25 +96,24 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_activity_hid(self, action: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
-            action = torch.tensor(action).unsqueeze(0)
             activity, self._alm_hn = self.alm(action, self._alm_hn)
         return activity
     
-    # TODO learn an initial hidden state
     def reset(self) -> list:
-        self._alm_hn = self.checkpoint["hidden_state"]
+        self._alm_hn = torch.zeros(size=(1, self._alm_hid))
         activity = torch.zeros(size=(3,))
         state = torch.cat((self._alm_hn.squeeze(), activity, self._target_dynamics[0,:]))
         return state.tolist()
 
     def step(self, t: int, action: torch.Tensor) -> (list, int, bool):
+        action = torch.tensor(action).unsqueeze(0)
         if t < self.max_timesteps-1:
             next_t = t+1
         else:
             next_t = t
         activity = self._get_activity_hid(action)
         state = self._get_next_state(activity, next_t)
-        reward, error = self._get_reward(t, activity)
+        reward, error = self._get_reward(t, activity, action)
         done = self._get_done(t, error)
         return state.tolist(), reward, done
     

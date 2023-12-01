@@ -24,27 +24,21 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.fc2 = nn.Linear(hid_dim, hid_dim)
         self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc3 = nn.Linear(hid_dim, hid_dim)
-        self.fc4 = nn.Linear(hid_dim, hid_dim)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        self.action_scale = .5
-        self.action_bias = .5
+        self.action_scale = 1
+        self.action_bias = 0
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
         gru_x, hn = self.gru(x, hn)
-        x = F.relu(self.fc3(gru_x))
-        x = F.relu(self.fc4(x))
 
-        mean = self.mean_linear(x)
-        std = self.std_linear(x)
+        mean = self.mean_linear(gru_x)
+        std = self.std_linear(gru_x)
         std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
         
         return mean, std, hn, gru_x
@@ -79,8 +73,8 @@ class Actor(nn.Module):
 
         if sampling == False:
             action = action.reshape(mean_size[0], mean_size[1], mean_size[2])
-            mean = mean.reshape(mean_size[0], mean_size[1], mean_size[2])
             log_prob = log_prob.reshape(log_std_size[0], log_std_size[1], 1) 
+            mean = mean.reshape(mean_size[0], mean_size[1], mean_size[2])
 
         return action, log_prob, mean, h_current, gru_out
 
@@ -92,31 +86,24 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.fc12 = nn.Linear(hid_dim, hid_dim)
         self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc13 = nn.Linear(hid_dim, hid_dim)
-        self.fc14 = nn.Linear(hid_dim, 1)
+        self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.fc22 = nn.Linear(hid_dim, hid_dim)
         self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc23 = nn.Linear(hid_dim, hid_dim)
-        self.fc24 = nn.Linear(hid_dim, 1)
+        self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor) -> (int, int):
+
         x = torch.cat((state, action), dim=-1)
         hn = hn.cuda()
 
         x1 = F.relu(self.fc11(x))
-        x1 = F.relu(self.fc12(x1))
         x1, hn1 = self.gru1(x1, hn)
-        x1 = F.relu(self.fc13(x1))
-        x1 = self.fc14(x1)
+        x1 = self.fc12(x1)
 
         x2 = F.relu(self.fc21(x))
-        x2 = F.relu(self.fc22(x2))
         x2, hn2 = self.gru2(x2, hn)
-        x2 = F.relu(self.fc23(x2))
-        x2 = self.fc24(x2)
+        x2 = self.fc22(x2)
 
         return x1, x2
