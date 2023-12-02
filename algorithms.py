@@ -116,7 +116,6 @@ def sac(actor,
     soft_update(critic_target, critic, .005)
     h_train = h_train.detach()
 
-# TODO LOTS OF DEBUGGING TO MAKE SURE THERE IS NOTHING WEIRD WITH GRADIENTS
 def REINFORCE(episode, alm, gamma, log_probs, alm_values):
 
     alm.alm_values_optim.zero_grad()
@@ -132,13 +131,11 @@ def REINFORCE(episode, alm, gamma, log_probs, alm_values):
         R = tuple[2] + gamma * R
         returns.appendleft(R)
     returns = torch.tensor(returns)
-    if returns.shape[0] > 1:
-        returns = (returns - returns.mean()) / (returns.std() + 1e-3)
 
-    for log_prob, R, value in zip(log_probs, returns, alm_values):
+    for log_prob, R, value, t in zip(log_probs, returns, alm_values, range(len(episode))):
         delta = R - value
         update_alm_values.append(-delta.detach()*value)
-        update_alm.append(-R*log_prob)
+        update_alm.append(-delta.detach()*log_prob)
     
     update_alm_values = torch.sum(torch.stack(update_alm_values))
     update_alm = torch.sum(torch.stack(update_alm))

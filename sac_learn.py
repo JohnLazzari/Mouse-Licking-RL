@@ -72,13 +72,11 @@ def sac_learn(
     total_episodes = 0
     avg_reward = [0]
     avg_steps = [0]
-    LOG_EVERY_N_STEPS = 10
+    LOG_EVERY_N_STEPS = 1
 
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset()
     ep_trajectory = []
-    alm_log_probs = []
-    alm_values = []
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
@@ -90,9 +88,7 @@ def sac_learn(
             action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
-        next_state, reward, done, alm_log_prob, alm_value = env.step(episode_steps%env.max_timesteps, action)
-        alm_log_probs.append(alm_log_prob)
-        alm_values.append(alm_value)
+        next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
         episode_reward += reward
         episode_steps += 1
 
@@ -108,9 +104,6 @@ def sac_learn(
 
             total_episodes += 1
 
-            # Apply ALM update (using REINFORCE)
-            REINFORCE(ep_trajectory, env, gamma, alm_log_probs, alm_values)
-            
             # Add stats to lists
             avg_steps.append(episode_steps)
             avg_reward.append(episode_reward)
@@ -124,12 +117,46 @@ def sac_learn(
 
             # resest lists
             ep_trajectory = []
-            alm_log_probs = []
-            alm_values = []
 
             # reset tracking variables
             episode_steps = 0
             episode_reward = 0
+
+            ### 4. Log progress and keep track of statistics
+            if len(avg_reward) > 0:
+                mean_episode_reward = np.mean(np.array(avg_reward)[-10:])
+            if len(avg_steps) > 0:
+                mean_episode_steps = np.mean(np.array(avg_steps)[-10:])
+            if len(avg_reward) > 10:
+                best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
+
+            Statistics["mean_episode_rewards"].append(mean_episode_reward)
+            Statistics["mean_episode_steps"].append(mean_episode_steps)
+            Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
+
+            if total_episodes % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
+                print("Timestep %d" % (t,))
+                print("mean reward (100 episodes): %f" % mean_episode_reward)
+                print("mean steps (100 episodes): %f" % mean_episode_steps)
+                print("best mean reward: %f" % best_mean_episode_reward)
+                sys.stdout.flush()
+
+                # Dump statistics to pickle
+                with open('statistics.pkl', 'wb') as f:
+                    pickle.dump(Statistics, f)
+                    print("Saved to %s" % 'statistics.pkl')
+                    print('--------------------------\n')
+            
+            if t % save_iter == 0 and t > learning_starts:
+                torch.save({
+                    'iteration': t,
+                    'agent_state_dict': actor_bg.state_dict(),
+                    'critic_state_dict': critic_bg.state_dict(),
+                    'critic_target_state_dict': critic_target_bg.state_dict(),
+                    'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
+                    'alm_network_state_dict': env.alm.state_dict(),
+                }, save_path + str(t) + '.pth')
 
         # Apply Basal Ganglia update (using SAC)
         if len(policy_memory.buffer) > batch_size and t > learning_starts and t % learning_freq == 0:
@@ -149,42 +176,6 @@ def sac_learn(
                 alpha,
                 alpha_optim)
         
-        ### 4. Log progress and keep track of statistics
-        if len(avg_reward) > 0:
-            mean_episode_reward = np.mean(np.array(avg_reward)[-10:])
-        if len(avg_steps) > 0:
-            mean_episode_steps = np.mean(np.array(avg_steps)[-10:])
-        if len(avg_reward) > 10:
-            best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
-
-        Statistics["mean_episode_rewards"].append(mean_episode_reward)
-        Statistics["mean_episode_steps"].append(mean_episode_steps)
-        Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
-
-        if t % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
-            print("Timestep %d" % (t,))
-            print("mean reward (100 episodes): %f" % mean_episode_reward)
-            print("mean steps (100 episodes): %f" % mean_episode_steps)
-            print("best mean reward: %f" % best_mean_episode_reward)
-            sys.stdout.flush()
-
-            # Dump statistics to pickle
-            with open('statistics.pkl', 'wb') as f:
-                pickle.dump(Statistics, f)
-                print("Saved to %s" % 'statistics.pkl')
-                print('--------------------------\n')
-        
-        if t % save_iter == 0 and t > learning_starts:
-            torch.save({
-                'iteration': t,
-                'agent_state_dict': actor_bg.state_dict(),
-                'critic_state_dict': critic_bg.state_dict(),
-                'critic_target_state_dict': critic_target_bg.state_dict(),
-                'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
-                'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
-                'alm_network_state_dict': env.alm.state_dict(),
-                'alm_value_network_state_dict': env.alm_values.state_dict()
-            }, save_path + str(t) + '.pth')
 
 
     
