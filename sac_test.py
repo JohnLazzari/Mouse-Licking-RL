@@ -72,6 +72,7 @@ def test(
     _critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
 
     env.alm.load_state_dict(checkpoint['alm_network_state_dict'])
+    env.alm_values.load_state_dict(checkpoint['alm_value_network_state_dict'])
     
     episode_reward = 0
     episode_steps = 0
@@ -94,7 +95,7 @@ def test(
             action, h_current = select_action(_actor, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
-        next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
+        next_state, reward, done, log_probs, values = env.step(episode_steps%env.max_timesteps, action)
         episode_reward += reward
         episode_steps += 1
 

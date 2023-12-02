@@ -5,7 +5,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from sac_model import weights_init_
+from torch.distributions import Normal
 
+LOG_SIG_MIN = -20
+LOG_SIG_MAX = 2
+epsilon = 1e-6
 
 class ALM(nn.Module):
     def __init__(self, action_dim, alm_hid):
@@ -14,13 +18,56 @@ class ALM(nn.Module):
         self.alm_hid = alm_hid
         self._alm_in = nn.Linear(action_dim, alm_hid)
         self._alm = nn.RNN(alm_hid, alm_hid, batch_first=True, nonlinearity='tanh')
-        self._alm_out = nn.Linear(alm_hid, 3)
+
+        self.mean_linear = nn.Linear(alm_hid, 3)
+        self.std_linear = nn.Linear(alm_hid, 3)
+
+        self.action_scale = .5
+        self.action_bias = .5
 
     def forward(self, x, hn):
+
         x = F.relu(self._alm_in(x))
         activity, hn = self._alm(x, hn)
-        activity = F.relu(self._alm_out(activity))
-        return activity, hn
+
+        mean = self.mean_linear(activity)
+        log_std = self.std_linear(activity)
+        log_std = torch.clamp(log_std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
+
+        mean = mean.reshape(-1, mean.size()[-1])
+        log_std = log_std.reshape(-1, log_std.size()[-1])
+
+        std = log_std.exp()
+        normal = Normal(mean, std)
+        x_t = normal.rsample()
+
+        y_t = torch.tanh(x_t)
+        action = y_t * self.action_scale + self.action_bias
+
+        log_prob = normal.log_prob(x_t)
+
+        # Enforce the action_bounds
+        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
+        log_prob = log_prob.sum(-1, keepdim=True)
+
+        mean = torch.tanh(mean) * self.action_scale + self.action_bias
+
+        return action, hn, mean, log_prob
+
+
+class ALM_Values(nn.Module):
+    def __init__(self, alm_hid):
+        super(ALM_Values, self).__init__()
+
+        self.linear1 = nn.Linear(8, alm_hid)
+        self.linear2 = nn.Linear(alm_hid, alm_hid)
+        self.linear3 = nn.Linear(alm_hid, 1)
+    
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x)
+        return x
 
 
 class Lick_Env_Discrete(gym.Env):
@@ -67,19 +114,23 @@ class Lick_Env_Cont(gym.Env):
         self.max_timesteps = self._target_dynamics.shape[0]
         self._alm_hid = alm_hid
 
+        # Networks
         self.alm = ALM(action_dim, alm_hid)
-        self.alm_optim = optim.RMSprop(self.alm.parameters(), lr=.0008)
-        self.criterion = nn.MSELoss()
-        #self.checkpoint = torch.load("checkpoints/alm_init.pth")
-        #self.alm.load_state_dict(self.checkpoint["alm_state_dict"])
+        self.alm_values = ALM_Values(alm_hid)
+
+        # Optimizers
+        self.alm_optim = optim.RMSprop(self.alm.parameters(), lr=.0001)
+        self.alm_values_optim = optim.RMSprop(self.alm_values.parameters(), lr=.0001)
     
     def _get_reward(self, t: int, activity: torch.Tensor, action: torch.Tensor) -> (int, torch.Tensor):
+        activity = activity.detach().cpu()
+        action = action.detach().cpu()
         mse = torch.abs(activity-self._target_dynamics[t,:])
         range = torch.any(mse > self.thresh).item()
         if range:
-            reward = -5*torch.sum(2**mse).item()
+            reward = -torch.sum(2**mse).item()
         else:
-            reward = 5*torch.sum(1 / (1000**mse+1e-6)).item() - .1 * torch.linalg.norm(action)
+            reward = torch.sum(1 / (1000**mse+1e-6)).item()
         return reward, mse
     
     def _get_done(self, t: int, error: torch.Tensor) -> bool:
@@ -91,26 +142,18 @@ class Lick_Env_Cont(gym.Env):
         return done
     
     def _get_next_state(self, activity: torch.Tensor, t: int) -> torch.Tensor:
-        state = torch.cat((self._alm_hn.squeeze(), activity.squeeze(), self._target_dynamics[t,:]))
+        state = activity.detach().cpu().squeeze()
         return state
     
     def _get_activity_hid(self, action: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            activity, self._alm_hn = self.alm(action, self._alm_hn)
-        return activity.detach()
-    
-    def update_alm_parameters(self, action_sequence):
-        temp_hn = torch.zeros(size=(1, self._alm_hid))
-        seq_activity, _ = self.alm(action_sequence, temp_hn)
-        loss = self.criterion(seq_activity, self._target_dynamics[:action_sequence.shape[0],:])
-        self.alm_optim.zero_grad()
-        loss.backward()
-        self.alm_optim.step()
+        activity, self._alm_hn, mean, log_prob = self.alm(action, self._alm_hn)
+        value = self.alm_values(action)
+        return activity, mean, log_prob, value
     
     def reset(self) -> list:
         self._alm_hn = torch.zeros(size=(1, self._alm_hid))
         activity = torch.zeros(size=(3,))
-        state = torch.cat((self._alm_hn.squeeze(), activity, self._target_dynamics[0,:]))
+        state = activity
         return state.tolist()
 
     def step(self, t: int, action: torch.Tensor) -> (list, int, bool):
@@ -119,11 +162,11 @@ class Lick_Env_Cont(gym.Env):
             next_t = t+1
         else:
             next_t = t
-        activity = self._get_activity_hid(action)
+        activity, mean, log_prob, value = self._get_activity_hid(action)
         state = self._get_next_state(activity, next_t)
         reward, error = self._get_reward(t, activity, action)
         done = self._get_done(t, error)
-        return state.tolist(), reward, done
+        return state.tolist(), reward, done, log_prob, value
     
     
 
