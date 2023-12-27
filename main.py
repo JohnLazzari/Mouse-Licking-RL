@@ -1,55 +1,69 @@
 import gym
 import torch.optim as optim
+import numpy as np
+import scipy.io
+import matplotlib.pyplot as plt
 
-from dqn_model import DQN, DQN_RNN
-from dqn_learn import OptimizerSpec, dqn_learing
+from sac_model import Actor, Critic
+from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
-from utils.schedule import LinearSchedule
 from lick_env import Lick_Env
+import torch
 
-BATCH_SIZE = 32
+BATCH_SIZE = 6
+HID_DIM = 256
+ACTION_DIM = 2
+ALPHA = 0.20
 GAMMA = 0.99
-REPLAY_BUFFER_SIZE = 1000000
-LEARNING_STARTS = 100
-LEARNING_FREQ = 4
-FRAME_HISTORY_LEN = 4
-TARGER_UPDATE_FREQ = 10000
-LEARNING_RATE = 0.003
-ALPHA = 0.95
+REPLAY_BUFFER_SIZE = 15_000
+LEARNING_STARTS = 1_000
+SAVE_ITER = 100_000
+LEARNING_FREQ = 1
+LEARNING_RATE = 0.0008
+ALPHA_OPT = 0.95
 EPS = 0.01
+THRESH = 0.5
+ENTROPY_TUNING = True
+WEIGHT_DECAY = .1
 DT = 0.01
-TARGET_TIME = .1
+TARGET_TIME = 14
+
+THALAMOCORTICAL_DIM = 64
+
+INP_DIM = 2 + ACTION_DIM + THALAMOCORTICAL_DIM
 
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
         constructor=optim.RMSprop,
-        kwargs=dict(lr=LEARNING_RATE, alpha=ALPHA, eps=EPS),
+        kwargs=dict(lr=LEARNING_RATE, eps=EPS, weight_decay=WEIGHT_DECAY),
     )
 
-    exploration_schedule = LinearSchedule(1000000, 0.1)
-
-    dqn_learing(
+    sac_learn(
         env=env,
         seed=seed,
-        q_func=DQN_RNN,
+        inp_dim=INP_DIM,
+        hid_dim=HID_DIM,
+        action_dim=ACTION_DIM,
+        actor=Actor,
+        critic=Critic,
         optimizer_spec=optimizer_spec,
-        exploration=exploration_schedule,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
         batch_size=BATCH_SIZE,
+        alpha=ALPHA,
         gamma=GAMMA,
+        automatic_entropy_tuning=ENTROPY_TUNING,
         learning_starts=LEARNING_STARTS,
         learning_freq=LEARNING_FREQ,
-        frame_history_len=FRAME_HISTORY_LEN,
-        target_update_freq=TARGER_UPDATE_FREQ,
+        save_iter=SAVE_ITER
     )
 
 if __name__ == '__main__':
-    # Get Atari games.
-    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
-    env = Lick_Env(seed, DT, TARGET_TIME)
+
+    seed = np.random.randint(0, high=123456) # Use a seed of zero (you may want to randomize the seed!)
+    torch.manual_seed(seed)
+    env = Lick_Env(seed, DT, TARGET_TIME, ACTION_DIM, THALAMOCORTICAL_DIM)
 
     # Run training
     env = get_env(env, seed)
-
     main(env, seed)

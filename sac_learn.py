@@ -75,7 +75,7 @@ def sac_learn(
     LOG_EVERY_N_STEPS = 1
 
     ### GET INITAL STATE + RESET MODEL BY POSE
-    state = env.reset()
+    state = env.reset(0)
     ep_trajectory = []
 
     #num_layers specified in the policy model 
@@ -113,7 +113,7 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-            state = env.reset()
+            state = env.reset(total_episodes)
 
             # resest lists
             ep_trajectory = []
@@ -136,8 +136,8 @@ def sac_learn(
 
             if total_episodes % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
                 print("Timestep %d" % (t,))
-                print("mean reward (100 episodes): %f" % mean_episode_reward)
-                print("mean steps (100 episodes): %f" % mean_episode_steps)
+                print("mean reward (10 episodes): %f" % mean_episode_reward)
+                print("mean steps (10 episodes): %f" % mean_episode_steps)
                 print("best mean reward: %f" % best_mean_episode_reward)
                 sys.stdout.flush()
 
