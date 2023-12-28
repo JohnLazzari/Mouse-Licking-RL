@@ -13,30 +13,33 @@ class ThalamoCortical(nn.Module):
         self.inp_dim = inp_dim
         self.hid = hid
 
+        # Unload fixed weights
+        weights = torch.load("checkpoints/thalamocortical_init.pth")
+
         # Cortical Weights
-        self.J_cc = torch.randn(hid, hid) / np.sqrt(hid)
-        self.J_ct = torch.randn(hid, inp_dim) / np.sqrt(hid)
+        self.J_cc = weights["Jcc"]
+        self.J_ct = weights["lick_Jct"]
 
         # Thalamic Weights
-        self.J_tc = torch.randn(inp_dim, hid) / np.sqrt(hid)
+        self.J_tc = weights["lick_Jtc"]
 
         # Thalamic Timescale (not sure what to put)
         self.tau = 1.
 
         # Readout for probability
-        self.W_out = torch.randn(hid,) / np.sqrt(hid)
+        self.W_out = weights["W_out"]
 
         self.cortical_activity = torch.zeros(size=(hid,))
         self.thalamic_activity = torch.zeros(size=(inp_dim,))
 
-    # TODO initialize weights of thalamocortical-corticothalamal network 
-    # such that a specific selection from BG results in a lick at a certain timestep (if possible)
-    # BG will learn to generate sustained activity specific to a particular motif (lick at 1s or 3s)
+    # TODO learn the preparatory weights and add that into the network so that each switch starts with correct initial condition
+    # Another TODO, debug the code and make sure everything is running properly (and cleaned)
     def forward(self, x):
 
         # discrete dynamics with forward euler (dt = 1)
         self.thalamic_activity = self.thalamic_activity - (1/self.tau) * self.thalamic_activity + self.J_tc @ self.cortical_activity + x
+        # make this relu just 0 or 1 instead
         self.cortical_activity = self.J_cc @ self.cortical_activity + self.J_ct @ F.relu(self.thalamic_activity)
-        lick_prob = F.sigmoid(self.W_out @ self.cortical_activity)
+        lick_prob = self.W_out @ self.cortical_activity
 
         return lick_prob

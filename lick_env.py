@@ -40,17 +40,19 @@ class Lick_Env(gym.Env):
     
     def _get_reward(self, t, lick):
 
+        reward = 0
+
         # Get target delay time
         if self.switch == 0:
-            delay_time = 1
+            delay_time = int(1/self.dt)
         elif self.switch == 1:
-            delay_time = 3
+            delay_time = int(3/self.dt)
 
         # Get reward based on the target delay time
         if lick and t >= delay_time:
-            return 1 / t 
+            reward += delay_time / t 
         
-        return 0
+        return reward
 
     def _get_done(self, t, lick):
 
@@ -70,7 +72,7 @@ class Lick_Env(gym.Env):
             a_t = torch.tensor(a_t)
             lick_prob = self.thalamocortical_net(a_t)
         
-        if random.rand() > lick_prob:
+        if lick_prob >= 1:
             lick = 1
         else:
             lick = 0

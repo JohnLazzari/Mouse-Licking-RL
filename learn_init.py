@@ -7,86 +7,175 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-class ALM(nn.Module):
-    def __init__(self, action_dim, alm_hid):
-        super(ALM, self).__init__()
-        self.action_dim = action_dim
-        self.alm_hid = alm_hid
-        self._alm_in = nn.Linear(action_dim, alm_hid)
-        self._alm = nn.RNN(alm_hid, alm_hid, batch_first=True, nonlinearity='tanh')
-        self._alm_out = nn.Linear(alm_hid, 3)
+INP_DIM = 1
+HID_DIM = 64
+EPOCHS = 5000
+LR = 0.001
 
-    def forward(self, x, hn):
-        x = F.relu(self._alm_in(x))
-        activity, hn = self._alm(x, hn)
-        activity = F.relu(self._alm_out(activity))
-        return activity, hn
+J_cc = torch.randn(HID_DIM, HID_DIM) / np.sqrt(HID_DIM+HID_DIM)
+W_out = torch.randn(HID_DIM,) / np.sqrt(HID_DIM)
 
+class ThalamoCortical_Silent(nn.Module):
+    def __init__(self, inp_dim, hid):
+        super(ThalamoCortical_Silent, self).__init__()
+        self.inp_dim = inp_dim
+        self.hid = hid
 
-def NormalizeData(data):
-    return ((data - np.min(data)) / (np.max(data) - np.min(data)))
+        # Cortical Weights
+        self.J_ct = nn.Parameter(data=torch.randn(hid, inp_dim) / np.sqrt(hid + inp_dim), requires_grad=True)
 
-def get_next_act(actor, alm, state, hn, alm_hn, alm_activity_arr):
-    _, _, action, hn, _ = actor.sample(state, hn, sampling=True)
-    alm_out, alm_hn = alm(action, alm_hn)
-    next_state = torch.cat((alm_hn, alm_out, alm_activity_arr), dim=1)
-    return action, hn, alm_hn, next_state
+        # Thalamic Weights
+        self.J_tc = nn.Parameter(data=torch.randn(inp_dim, hid) / np.sqrt(hid + inp_dim), requires_grad=True)
+
+        # Thalamic Timescale (not sure what to put)
+        self.tau = 1.
+
+        self.cortical_activity = torch.zeros(size=(hid,))
+        self.thalamic_activity = torch.zeros(size=(inp_dim,))
+
+    def forward(self, x):
+
+        # discrete dynamics with forward euler (dt = 1)
+        self.thalamic_activity = self.thalamic_activity - (1/self.tau) * self.thalamic_activity + self.J_tc @ self.cortical_activity + x
+        # make this relu just 0 or 1 instead
+        self.cortical_activity = J_cc @ self.cortical_activity + self.J_ct @ F.relu(self.thalamic_activity)
+        lick_prob = W_out @ self.cortical_activity
+
+        return lick_prob
+
+class ThalamoCortical_Lick(nn.Module):
+    def __init__(self, inp_dim, hid):
+        super(ThalamoCortical_Lick, self).__init__()
+        self.inp_dim = inp_dim
+        self.hid = hid
+
+        # Cortical Weights
+        self.J_ct = nn.Parameter(data=torch.randn(hid, inp_dim) / np.sqrt(hid + inp_dim), requires_grad=True)
+
+        # Thalamic Weights
+        self.J_tc = nn.Parameter(data=torch.randn(inp_dim, hid) / np.sqrt(hid + inp_dim), requires_grad=True)
+
+        # Thalamic Timescale (not sure what to put)
+        self.tau = 1.
+
+        self.cortical_activity = torch.zeros(size=(hid,))
+        self.thalamic_activity = torch.zeros(size=(inp_dim,))
+
+    def forward(self, x):
+
+        # discrete dynamics with forward euler (dt = 1)
+        self.thalamic_activity = self.thalamic_activity - (1/self.tau) * self.thalamic_activity + self.J_tc @ self.cortical_activity + x
+        # make this relu just 0 or 1 instead
+        self.cortical_activity = J_cc @ self.cortical_activity + self.J_ct @ F.relu(self.thalamic_activity)
+        lick_prob = W_out @ self.cortical_activity
+
+        return lick_prob
+
+class ThalamoCortical_Prep(nn.Module):
+    def __init__(self, inp_dim, hid):
+        super(ThalamoCortical_Prep, self).__init__()
+        self.inp_dim = inp_dim
+        self.hid = hid
+
+        # Cortical Weights
+        self.J_ct = nn.Parameter(data=torch.randn(hid, inp_dim) / np.sqrt(hid + inp_dim), requires_grad=True)
+
+        # Thalamic Weights
+        self.J_tc = nn.Parameter(data=torch.randn(inp_dim, hid) / np.sqrt(hid + inp_dim), requires_grad=True)
+
+        # Thalamic Timescale (not sure what to put)
+        self.tau = 1.
+
+        self.cortical_activity = torch.zeros(size=(hid,))
+        self.thalamic_activity = torch.zeros(size=(inp_dim,))
+
+    def forward(self, x):
+
+        # discrete dynamics with forward euler (dt = 1)
+        self.thalamic_activity = self.thalamic_activity - (1/self.tau) * self.thalamic_activity + self.J_tc @ self.cortical_activity + x
+        # make this relu just 0 or 1 instead
+        self.cortical_activity = J_cc @ self.cortical_activity + self.J_ct @ F.relu(self.thalamic_activity)
+        lick_prob = W_out @ self.cortical_activity
+
+        return lick_prob
 
 def main():
 
-    alm_activity = scipy.io.loadmat("alm_warped_activity_3pcs_1slick.mat")
-    alm_activity_arr = alm_activity["warped_activity_3pcs_1slick"]
-    alm_activity_arr = NormalizeData(alm_activity_arr)
-    alm_activity_arr = torch.tensor(alm_activity_arr, dtype=torch.float32, device="cuda")
+    targ_silent = torch.zeros(size=(int(1/.01),))
+    targ_lick = torch.linspace(0, 1, int(1/.01))
 
-    INP_DIM = 262
-    HID_DIM = 256
-    ACTION_DIM = 8
-    ALM_HID = 256
-    EPOCHS = 10000
-    LR = 0.001
-    TIMESTEPS = alm_activity_arr.shape[0]
+    # meant to just activate a certain unit while silencing others
+    silent_inp = torch.tensor([1])
+    lick_inp = torch.tensor([1])
+    prep_inp = torch.tensor([1])
 
     criterion = nn.MSELoss()
 
-    alm = ALM(ACTION_DIM, ALM_HID).cuda()
-    rand_actor = Actor(INP_DIM, HID_DIM, ACTION_DIM).cuda()
-    optimizer = optim.Adam(alm.parameters(), lr=LR)
+    silent_net = ThalamoCortical_Silent(INP_DIM, HID_DIM)
+    lick_net = ThalamoCortical_Lick(INP_DIM, HID_DIM)
+    prep_net = ThalamoCortical_Prep(INP_DIM, HID_DIM)
 
-    all_actions = []
+    silent_optimizer = optim.Adam(silent_net.parameters(), lr=LR)
+    lick_optimizer = optim.Adam(lick_net.parameters(), lr=LR)
+    prep_optimizer = optim.Adam(prep_net.parameters(), lr=LR)
 
-    alm_hn = torch.zeros(size=(1, ALM_HID)).cuda()
-    actor_hn = torch.zeros(size=(1, HID_DIM)).cuda()
-
-    state = torch.cat((alm_hn.squeeze(), torch.zeros((3,)).cuda(), alm_activity_arr[0,:])).unsqueeze(0).to(torch.float32)
-
-    with torch.no_grad():
-        for t in range(1, TIMESTEPS):
-            action, actor_hn, alm_hn, state = get_next_act(rand_actor, alm, state, actor_hn, alm_hn, alm_activity_arr[t,:].unsqueeze(0))
-            all_actions.append(action)
-        all_actions = torch.cat(all_actions, dim=0)
-
+    # Silent optimization
     for epoch in range(EPOCHS):
 
-        alm_hn = torch.zeros(size=(1, ALM_HID)).cuda()
-        alm_out, _ = alm(all_actions, alm_hn)
-        loss = criterion(alm_out, alm_activity_arr[:-1])
+        cortical_series = []
+        for t in range(targ_silent.shape[0]):
+            cortical_out = silent_net(silent_inp)
+            cortical_series.append(cortical_out.unsqueeze(0))
+        loss = criterion(torch.concatenate(cortical_series), targ_silent)
         print("epoch", epoch, "loss", loss.item())
-        optimizer.zero_grad()
+        silent_optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+        silent_optimizer.step()
+        silent_net.cortical_activity = torch.zeros_like(silent_net.cortical_activity)
+        silent_net.thalamic_activity = torch.zeros_like(silent_net.thalamic_activity)
 
-    alm_out = alm_out.cpu().detach().numpy()
-    alm_activity_arr = alm_activity_arr.cpu().detach().numpy()
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.scatter(alm_activity_arr[:,0], alm_activity_arr[:,1], alm_activity_arr[:,2])
-    ax.scatter(alm_out[:,0], alm_out[:,1], alm_out[:,2])
-    plt.show()
+    # lick optimization
+    for epoch in range(EPOCHS):
+
+        cortical_series = []
+        for t in range(targ_lick.shape[0]):
+            cortical_out = lick_net(lick_inp)
+            cortical_series.append(cortical_out.unsqueeze(0))
+        loss = criterion(torch.concatenate(cortical_series), targ_lick)
+        print("epoch", epoch, "loss", loss.item())
+        lick_optimizer.zero_grad()
+        loss.backward()
+        lick_optimizer.step()
+        lick_net.cortical_activity = torch.zeros_like(lick_net.cortical_activity)
+        lick_net.thalamic_activity = torch.zeros_like(lick_net.thalamic_activity)
+
+    # prep optimization
+    # Not doing prep dynamics rn (test what happens without it when switching occurs)
+    '''
+    for epoch in range(EPOCHS):
+
+        cortical_series = []
+        for t in range(targ_lick.shape[0]):
+            cortical_out = prep_net(prep_inp)
+            cortical_series.append(cortical_out.unsqueeze(0))
+        loss = criterion(torch.concatenate(cortical_series), targ_lick)
+        print("epoch", epoch, "loss", loss.item())
+        prep_optimizer.zero_grad()
+        loss.backward()
+        prep_optimizer.step()
+        prep_net.cortical_activity = torch.zeros_like(prep_net.cortical_activity)
+        prep_net.thalamic_activity = torch.zeros_like(prep_net.thalamic_activity)
+    '''
 
     torch.save({
-        'alm_state_dict': alm.state_dict()
-    }, 'checkpoints/alm_init.pth')
+        'silent_Jct': silent_net.J_ct,
+        'silent_Jtc': silent_net.J_tc,
+        'lick_Jct': lick_net.J_ct,
+        'lick_Jtc': lick_net.J_tc,
+        'Jcc': J_cc,
+        'W_out': W_out,
+    }, 'checkpoints/thalamocortical_init.pth')
+
 
 if __name__ == "__main__":
     main()

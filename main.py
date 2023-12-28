@@ -4,8 +4,8 @@ import numpy as np
 import scipy.io
 import matplotlib.pyplot as plt
 
-from sac_model import Actor, Critic
-from sac_learn import OptimizerSpec, sac_learn
+from ac_model import Actor, Critic
+from learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env
 import torch
@@ -13,6 +13,7 @@ import torch
 BATCH_SIZE = 6
 HID_DIM = 256
 ACTION_DIM = 2
+THALAMIC_INP_DIM = 1
 ALPHA = 0.20
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 15_000
@@ -30,7 +31,7 @@ TARGET_TIME = 14
 
 THALAMOCORTICAL_DIM = 64
 
-INP_DIM = 2 + ACTION_DIM + THALAMOCORTICAL_DIM
+INP_DIM = THALAMIC_INP_DIM + ACTION_DIM + THALAMOCORTICAL_DIM
 
 def main(env, seed):
 
@@ -62,7 +63,7 @@ if __name__ == '__main__':
 
     seed = np.random.randint(0, high=123456) # Use a seed of zero (you may want to randomize the seed!)
     torch.manual_seed(seed)
-    env = Lick_Env(seed, DT, TARGET_TIME, ACTION_DIM, THALAMOCORTICAL_DIM)
+    env = Lick_Env(seed, DT, TARGET_TIME, THALAMIC_INP_DIM, THALAMOCORTICAL_DIM)
 
     # Run training
     env = get_env(env, seed)

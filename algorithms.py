@@ -18,7 +18,7 @@ from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 
-def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
+def select_action_sac(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
     state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
     hn = hn.cuda()
 
@@ -26,6 +26,14 @@ def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) 
         action, _, _, hn, _ = policy.sample(state, hn, sampling=True)
     else:
         _, _, action, hn, _ = policy.sample(state, hn, sampling=True)
+
+    return action.detach().cpu().tolist()[0], hn.detach()
+
+def select_action_ac(policy: Actor, state: list, hn: torch.Tensor) -> (list, torch.Tensor):
+    state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
+    hn = hn.cuda()
+
+    action, _, hn, _ = policy(state, hn)
 
     return action.detach().cpu().tolist()[0], hn.detach()
 
@@ -115,6 +123,35 @@ def sac(actor,
 
     soft_update(critic_target, critic, .005)
     h_train = h_train.detach()
+
+def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
+
+    state = torch.tensor(tuple[0]).cuda().unsqueeze(0).unsqueeze(0)
+    action = torch.tensor(tuple[1]).cuda().unsqueeze(0).unsqueeze(0)
+    reward = torch.tensor(tuple[2]).cuda()
+    next_state = torch.tensor(tuple[3]).cuda().unsqueeze(0).unsqueeze(0)
+    mask = torch.tensor(tuple[4]).cuda()
+    h_prev = tuple[5].cuda()
+    h_next = tuple[6].cuda()
+
+    delta = reward + gamma * critic(next_state, h_next) + critic(state, h_prev)
+
+    value_loss = -delta.detach() * critic(state, h_prev)
+
+    _, log_prob, _, _ = actor(state, h_prev)
+    policy_loss = -I * delta.detach() * log_prob
+
+    I = gamma * I
+
+    actor_optim.zero_grad()
+    policy_loss.backward()
+    actor_optim.step()
+
+    critic_optim.zero_grad()
+    value_loss.backward()
+    critic_optim.step()
+
+    return I
 
 def REINFORCE(episode, alm, gamma, log_probs, alm_values):
 
