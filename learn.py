@@ -15,7 +15,6 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic
 from algorithms import sac, select_action_ac, hard_update, REINFORCE, One_Step_AC
 
 USE_CUDA = torch.cuda.is_available()
@@ -85,19 +84,23 @@ def sac_learn(
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
-        episode_reward += reward
-        episode_steps += 1
 
         mask = 1 if episode_steps == env.max_timesteps else float(not done)
 
-        tuple = (state, action, reward, next_state, mask, h_prev, h_next)
+        if episode_steps == 0:
+            tuple = (state, action, reward, next_state, mask, h_prev, h_next)
+        else:
+            tuple = (state, action, reward, next_state, mask)
+
         ep_trajectory.append(tuple)
 
-        if t > learning_starts and t % learning_freq == 0:
-            I = One_Step_AC(tuple, actor_bg, critic_bg, actor_bg_optimizer, critic_bg_optimizer, gamma, I)
+        I = One_Step_AC(ep_trajectory, actor_bg, critic_bg, actor_bg_optimizer, critic_bg_optimizer, gamma, I)
 
         state = next_state
         h_prev = h_next
+
+        episode_reward += reward
+        episode_steps += 1
 
         ### EARLY TERMINATION OF EPISODE
         if done:

@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from sac_model import weights_init_
 from torch.distributions import Normal
 from thalamocortical_networks import ThalamoCortical
 import numpy.random as random
@@ -43,7 +42,7 @@ class Lick_Env(gym.Env):
 
         reward = 0
         # Incentivize licking
-        reward += (action[0] * 0.001)
+        reward += (action[0] * 0.01)
 
         # Get target delay time
         if self.switch == 0:
@@ -53,7 +52,7 @@ class Lick_Env(gym.Env):
 
         # Get reward based on the target delay time
         if lick and t >= delay_time:
-            reward += (5 * delay_time / t)
+            reward += (10 * delay_time / t)
         
         return reward
 

@@ -37,15 +37,15 @@ class Actor(nn.Module):
 
         gru_x, hn = self.gru(x, hn)
 
-        x = F.softmax(self.fc2(gru_x), dim=-1)
+        x = F.softmax(self.fc2(hn), dim=-1)
+
+        log_probs = torch.log(x)
 
         m = Categorical(x)
 
         action = m.sample()
-
-        log_prob = m.log_prob(action)
         
-        return action, log_prob, hn, gru_x
+        return action, log_probs.squeeze(), hn, gru_x
     
 # Critic RNN
 class Critic(nn.Module):
@@ -60,10 +60,8 @@ class Critic(nn.Module):
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor) -> (int, int):
 
-        hn = hn.cuda()
-
         x = F.relu(self.fc1(x))
         x, hn = self.gru(x, hn)
-        x = self.fc2(x)
+        x = self.fc2(hn)
 
         return x

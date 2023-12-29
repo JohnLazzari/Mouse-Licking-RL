@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from sac_model import weights_init_
 from torch.distributions import Normal
 
 class ThalamoCortical(nn.Module):
@@ -33,9 +32,6 @@ class ThalamoCortical(nn.Module):
 
         self.prev_action = torch.tensor([0])
 
-    # TODO learn the preparatory weights and add that into the network so that each switch starts with correct initial condition
-    # Another TODO, debug the code and make sure everything is running properly (and cleaned)
-    # Another TODO, tweak the dynamics of the model as well
     def forward(self, x):
 
         if not torch.equal(x, self.prev_action):

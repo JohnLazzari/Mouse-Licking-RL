@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sac_model import Actor
 import scipy.io
 import numpy as np
 import torch.nn.functional as F

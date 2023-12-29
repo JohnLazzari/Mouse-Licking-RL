@@ -11,7 +11,7 @@ from lick_env import Lick_Env
 import torch
 
 BATCH_SIZE = 6
-HID_DIM = 64
+HID_DIM = 256
 ACTION_DIM = 2
 THALAMIC_INP_DIM = 1
 ALPHA = 0.20
@@ -20,12 +20,12 @@ REPLAY_BUFFER_SIZE = 15_000
 LEARNING_STARTS = 1_000
 SAVE_ITER = 100_000
 LEARNING_FREQ = 1
-LEARNING_RATE = 0.0008
+LEARNING_RATE = 0.001
 ALPHA_OPT = 0.95
 EPS = 0.01
 THRESH = 0.5
 ENTROPY_TUNING = True
-WEIGHT_DECAY = .01
+WEIGHT_DECAY = .001
 DT = 0.01
 TARGET_TIME = 14
 THALAMOCORTICAL_DIM = 8
@@ -35,7 +35,7 @@ INP_DIM = THALAMIC_INP_DIM + ACTION_DIM + THALAMOCORTICAL_DIM
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
-        constructor=optim.AdamW,
+        constructor=optim.RMSprop,
         kwargs=dict(lr=LEARNING_RATE, eps=EPS, weight_decay=WEIGHT_DECAY),
     )
 

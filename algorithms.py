@@ -16,7 +16,7 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic
+from ac_model import Actor, Critic
 
 def select_action_sac(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
     state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
@@ -126,20 +126,21 @@ def sac(actor,
 
 def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
 
-    state = torch.tensor(tuple[0]).cuda().unsqueeze(0).unsqueeze(0)
-    action = torch.tensor(tuple[1]).cuda().unsqueeze(0).unsqueeze(0)
-    reward = torch.tensor(tuple[2]).cuda()
-    next_state = torch.tensor(tuple[3]).cuda().unsqueeze(0).unsqueeze(0)
-    mask = torch.tensor(tuple[4]).cuda()
-    h_prev = tuple[5].cuda()
-    h_next = tuple[6].cuda()
+    state = torch.FloatTensor([element[0] for element in tuple]).cuda().unsqueeze(0)
+    action = torch.FloatTensor([element[1] for element in tuple]).cuda()
+    reward = torch.FloatTensor([element[2] for element in tuple]).cuda()
+    next_state = torch.FloatTensor([element[3] for element in tuple]).cuda().unsqueeze(0)
+    mask = torch.FloatTensor([element[4] for element in tuple]).cuda()
+    h_prev = tuple[0][5].cuda()
+    h_next = tuple[0][6].cuda()
 
-    delta = reward + gamma * critic(next_state, h_next) - critic(state, h_prev)
+    delta = reward[-1] + gamma * critic(next_state, h_next) - critic(state, h_prev)
 
     value_loss = -delta.detach() * critic(state, h_prev)
 
     _, log_prob, _, _ = actor(state, h_prev)
-    policy_loss = -I * delta.detach() * log_prob
+    cur_log_prob = log_prob[int(action[-1].item())]
+    policy_loss = -I * delta.detach() * cur_log_prob
 
     I = gamma * I
 
