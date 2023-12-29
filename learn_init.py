@@ -8,14 +8,13 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 INP_DIM = 1
-HID_DIM = 64
-EPOCHS_LICK = 2500
+HID_DIM = 8
+EPOCHS_LICK = 10_000
 EPOCHS_PREP = 1000
 LR = 0.001
 
 J_cc = torch.randn(HID_DIM, HID_DIM) / np.sqrt(HID_DIM+HID_DIM)
 W_out = torch.randn(HID_DIM,) / np.sqrt(HID_DIM)
-
 
 class ThalamoCortical_Lick(nn.Module):
     def __init__(self, inp_dim, hid):
@@ -37,11 +36,12 @@ class ThalamoCortical_Lick(nn.Module):
     def forward(self, x):
 
         # discrete dynamics with forward euler (dt = 1)
+        pre_activity = self.cortical_activity
         self.thalamic_activity = self.J_tc @ self.cortical_activity + x
         self.cortical_activity = J_cc @ self.cortical_activity + self.J_ct @ self.thalamic_activity
         lick_prob = W_out @ self.cortical_activity
 
-        return lick_prob
+        return pre_activity, lick_prob
 
 class ThalamoCortical_Prep(nn.Module):
     def __init__(self, inp_dim, hid):
@@ -72,32 +72,34 @@ class ThalamoCortical_Prep(nn.Module):
 
 def main():
 
-    targ_lick = torch.linspace(0, 1, int(1/.01))**2
+    targ_lick = torch.linspace(0, 1, int(1/.01))
 
     # meant to just activate a certain unit while silencing others
-    lick_inp = torch.tensor([1])
+    lick_inp = torch.tensor([0.1])
 
     criterion = nn.MSELoss()
 
     lick_net = ThalamoCortical_Lick(INP_DIM, HID_DIM)
-    prep_net = ThalamoCortical_Prep(8, HID_DIM)
+    prep_net = ThalamoCortical_Prep(128, HID_DIM)
 
-    lick_optimizer = optim.AdamW(lick_net.parameters(), lr=LR, weight_decay=0.1)
+    lick_optimizer = optim.AdamW(lick_net.parameters(), lr=LR, weight_decay=0.001)
     prep_optimizer = optim.AdamW(prep_net.parameters(), lr=LR, weight_decay=0.1)
 
     # lick optimization
     for epoch in range(EPOCHS_LICK):
 
         cortical_series = []
+        activity_series = []
         for t in range(targ_lick.shape[0]):
-            cortical_out = lick_net(lick_inp)
+            activity, cortical_out = lick_net(lick_inp)
             cortical_series.append(cortical_out.unsqueeze(0))
-        loss = criterion(torch.concatenate(cortical_series), targ_lick)
+            activity_series.append(activity)
+        loss = criterion(torch.concatenate(cortical_series), targ_lick) + 0.0001*torch.linalg.norm(torch.stack(activity_series))**2
         print("epoch", epoch, "loss", loss.item())
         lick_optimizer.zero_grad()
         loss.backward()
         lick_optimizer.step()
-        lick_net.cortical_activity = torch.zeros_like(lick_net.cortical_activity)
+        lick_net.cortical_activity = torch.zeros_like(lick_net.cortical_activity).detach()
 
     '''
     # prep optimization

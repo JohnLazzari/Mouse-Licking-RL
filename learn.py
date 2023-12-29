@@ -63,8 +63,8 @@ def sac_learn(
     best_mean_episode_reward = -float("inf")
     episode_steps = 0
     total_episodes = 0
-    avg_reward = [0]
-    avg_steps = [0]
+    avg_reward = []
+    avg_steps = []
     LOG_EVERY_N_STEPS = 1
 
     ### GET INITAL STATE + RESET MODEL BY POSE

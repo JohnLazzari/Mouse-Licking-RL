@@ -134,7 +134,7 @@ def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
     h_prev = tuple[5].cuda()
     h_next = tuple[6].cuda()
 
-    delta = reward + gamma * critic(next_state, h_next) + critic(state, h_prev)
+    delta = reward + gamma * critic(next_state, h_next) - critic(state, h_prev)
 
     value_loss = -delta.detach() * critic(state, h_prev)
 

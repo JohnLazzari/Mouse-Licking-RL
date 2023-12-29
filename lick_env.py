@@ -39,9 +39,11 @@ class Lick_Env(gym.Env):
         state = [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), 0., self.switch]
         return state
     
-    def _get_reward(self, t, lick):
+    def _get_reward(self, t, lick, action):
 
         reward = 0
+        # Incentivize licking
+        reward += (action[0] * 0.001)
 
         # Get target delay time
         if self.switch == 0:
@@ -51,7 +53,7 @@ class Lick_Env(gym.Env):
 
         # Get reward based on the target delay time
         if lick and t >= delay_time:
-            reward += delay_time / t 
+            reward += (5 * delay_time / t)
         
         return reward
 
@@ -81,13 +83,14 @@ class Lick_Env(gym.Env):
         return lick
     
     def _get_next_state(self, lick):
+        # Thalamocortical network gives feedback to basal ganglia
         return [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), lick, self.switch]
 
     def step(self, t, action):
         # Get the lick or no lick
         lick = self._get_lick(action)
         # Get reward
-        reward = self._get_reward(t, lick)
+        reward = self._get_reward(t, lick, action)
         # Get done
         done = self._get_done(t, lick)
         # Get state

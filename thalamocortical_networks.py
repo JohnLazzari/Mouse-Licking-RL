@@ -40,9 +40,10 @@ class ThalamoCortical(nn.Module):
 
         if not torch.equal(x, self.prev_action):
             self.cortical_activity = torch.zeros(size=(self.hid,))
+        self.prev_action = x
 
         # discrete dynamics with forward euler (dt = 1)
-        self.thalamic_activity = self.J_tc @ self.cortical_activity + x
+        self.thalamic_activity = self.J_tc @ self.cortical_activity + (x*0.1)
         self.cortical_activity = self.J_cc @ self.cortical_activity + self.J_ct @ self.thalamic_activity
         lick_prob = self.W_out @ self.cortical_activity
 
