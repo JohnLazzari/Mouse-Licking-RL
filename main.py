@@ -36,7 +36,7 @@ INP_DIM = THALAMIC_INP_DIM + ACTION_DIM + THALAMOCORTICAL_DIM
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
-        constructor=optim.RMSprop,
+        constructor=optim.AdamW,
         kwargs=dict(lr=LEARNING_RATE, eps=EPS, weight_decay=WEIGHT_DECAY),
     )
 

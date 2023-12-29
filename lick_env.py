@@ -35,6 +35,7 @@ class Lick_Env(gym.Env):
                 self.switch = 1.
         self.thalamocortical_net.cortical_activity = torch.zeros(size=(self.hid_dim,))
         self.thalamocortical_net.thalamic_activity = torch.zeros(size=(self.inp_dim,))
+        self.thalamocortical_net.prev_action = torch.zeros_like(self.thalamocortical_net.prev_action)
         state = [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), 0., self.switch]
         return state
     

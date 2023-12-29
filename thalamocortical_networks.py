@@ -30,16 +30,20 @@ class ThalamoCortical(nn.Module):
         self.W_out = weights["W_out"]
 
         self.cortical_activity = torch.zeros(size=(hid,))
-        self.thalamic_activity = torch.zeros(size=(inp_dim,))
+
+        self.prev_action = torch.tensor([0])
 
     # TODO learn the preparatory weights and add that into the network so that each switch starts with correct initial condition
     # Another TODO, debug the code and make sure everything is running properly (and cleaned)
+    # Another TODO, tweak the dynamics of the model as well
     def forward(self, x):
 
+        if not torch.equal(x, self.prev_action):
+            self.cortical_activity = torch.zeros(size=(self.hid,))
+
         # discrete dynamics with forward euler (dt = 1)
-        self.thalamic_activity = self.thalamic_activity - (1/self.tau) * self.thalamic_activity + self.J_tc @ self.cortical_activity + x
-        # make this relu just 0 or 1 instead
-        self.cortical_activity = self.J_cc @ self.cortical_activity + self.J_ct @ F.relu(self.thalamic_activity)
+        self.thalamic_activity = self.J_tc @ self.cortical_activity + x
+        self.cortical_activity = self.J_cc @ self.cortical_activity + self.J_ct @ self.thalamic_activity
         lick_prob = self.W_out @ self.cortical_activity
 
         return lick_prob
