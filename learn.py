@@ -134,7 +134,7 @@ def sac_learn(
             Statistics["mean_episode_steps"].append(mean_episode_steps)
             Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
 
-            if total_episodes % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
+            if total_episodes % LOG_EVERY_N_STEPS == 0:
                 print("Timestep %d" % (t,))
                 print("episode reward: %f" % episode_reward)
                 print("episode steps: %f" % episode_steps)
