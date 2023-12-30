@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 INP_DIM = 1
 HID_DIM = 8
-EPOCHS_LICK = 10_000
+EPOCHS_LICK = 25_000
 EPOCHS_PREP = 1000
 LR = 0.001
 
@@ -71,7 +71,7 @@ class ThalamoCortical_Prep(nn.Module):
 
 def main():
 
-    targ_lick = torch.linspace(0, 1, int(1/.01))
+    targ_lick = torch.linspace(0, 1, int(1/.1))
 
     # meant to just activate a certain unit while silencing others
     lick_inp = torch.tensor([0.1])
@@ -81,7 +81,7 @@ def main():
     lick_net = ThalamoCortical_Lick(INP_DIM, HID_DIM)
     prep_net = ThalamoCortical_Prep(128, HID_DIM)
 
-    lick_optimizer = optim.AdamW(lick_net.parameters(), lr=LR, weight_decay=0.001)
+    lick_optimizer = optim.AdamW(lick_net.parameters(), lr=LR)
     prep_optimizer = optim.AdamW(prep_net.parameters(), lr=LR, weight_decay=0.1)
 
     # lick optimization

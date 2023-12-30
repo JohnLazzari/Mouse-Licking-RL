@@ -121,9 +121,6 @@ def sac_learn(
             # resest lists
             ep_trajectory = []
 
-            # reset tracking variables
-            episode_steps = 0
-            episode_reward = 0
 
             ### 4. Log progress and keep track of statistics
             if len(avg_reward) > 0:
@@ -139,8 +136,8 @@ def sac_learn(
 
             if total_episodes % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
                 print("Timestep %d" % (t,))
-                print("mean reward (10 episodes): %f" % mean_episode_reward)
-                print("mean steps (10 episodes): %f" % mean_episode_steps)
+                print("episode reward: %f" % episode_reward)
+                print("episode steps: %f" % episode_steps)
                 print("best mean reward: %f" % best_mean_episode_reward)
                 sys.stdout.flush()
 
@@ -149,6 +146,10 @@ def sac_learn(
                     pickle.dump(Statistics, f)
                     print("Saved to %s" % 'statistics.pkl')
                     print('--------------------------\n')
+
+            # reset tracking variables
+            episode_steps = 0
+            episode_reward = 0
             
             if t % save_iter == 0 and t > learning_starts:
                 torch.save({

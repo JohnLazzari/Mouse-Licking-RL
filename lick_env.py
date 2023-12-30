@@ -41,18 +41,19 @@ class Lick_Env(gym.Env):
     def _get_reward(self, t, lick, action):
 
         reward = 0
-        # Incentivize licking
-        reward += (action[0] * 0.01)
 
-        # Get target delay time
+        # Get target delay time (t starts at zero)
         if self.switch == 0:
-            delay_time = int(1/self.dt)
+            delay_time = int(1/self.dt) - 1
         elif self.switch == 1:
-            delay_time = int(3/self.dt)
+            delay_time = int(3/self.dt) - 1
 
         # Get reward based on the target delay time
         if lick and t >= delay_time:
-            reward += (10 * delay_time / t)
+            reward += (2 * delay_time / t)
+        
+        if lick and t < delay_time:
+            reward -= 1
         
         return reward
 
@@ -78,7 +79,7 @@ class Lick_Env(gym.Env):
             lick = 1
         else:
             lick = 0
-        
+
         return lick
     
     def _get_next_state(self, lick):

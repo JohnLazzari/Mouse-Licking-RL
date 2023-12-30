@@ -28,12 +28,14 @@ class Actor(nn.Module):
         self.gru = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc2 = nn.Linear(hid_dim, action_dim)
 
+        weights_init_(self)
+
         
     def forward(self, x: torch.Tensor, hn: torch.Tensor) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
         hn = hn.cuda()
 
-        x = F.relu(self.fc1(x))
+        x = F.leaky_relu(self.fc1(x))
 
         gru_x, hn = self.gru(x, hn)
 
@@ -51,6 +53,7 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, inp_dim: int, hid_dim: int):
         super(Critic, self).__init__()
+
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         
@@ -60,7 +63,7 @@ class Critic(nn.Module):
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor) -> (int, int):
 
-        x = F.relu(self.fc1(x))
+        x = F.leaky_relu(self.fc1(x))
         x, hn = self.gru(x, hn)
         x = self.fc2(hn)
 
