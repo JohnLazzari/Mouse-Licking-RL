@@ -47,12 +47,12 @@ class Lick_Env(gym.Env):
             self.thalamocortical_net.thalamic_activity = torch.zeros(size=(self.inp_dim,))
             self.thalamocortical_net.prev_action = torch.zeros_like(self.thalamocortical_net.prev_action)
 
-            state = [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), 0., self.switch, 0.]
+            state = [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), self.switch, 0.]
 
         elif self.mode == "no_dynamics":
 
             self.ramp = 0.
-            state = [self.ramp, 0., self.switch, 0.]
+            state = [self.ramp, self.switch, 0.]
 
         return state
     
@@ -109,9 +109,9 @@ class Lick_Env(gym.Env):
     def _get_next_state(self, lick, t):
         # Thalamocortical network gives feedback to basal ganglia
         if self.mode == "learned_dynamics":
-            state =  [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), lick, self.switch, (t*self.dt) / (self.target_time)]
+            state =  [*self.thalamocortical_net.thalamic_activity.tolist(), *self.thalamocortical_net.cortical_activity.tolist(), self.switch, ((t+1)*self.dt) / (self.target_time)]
         elif self.mode == "no_dynamics":
-            state =  [self.ramp, lick, self.switch, (t*self.dt) / (self.target_time)]
+            state =  [self.ramp, self.switch, ((t+1)*self.dt) / (self.target_time)]
         return state
 
     def step(self, t, action):

@@ -29,12 +29,12 @@ WEIGHT_DECAY = .001
 DT = 0.1
 TARGET_TIME = 14
 THALAMOCORTICAL_DIM = 8
-MODE = "learned_dynamics" # either no_dynamics, learned_dynamics, or true_dynamics
+MODE = "no_dynamics" # either no_dynamics, learned_dynamics, or true_dynamics
 
 if MODE == "learned_dynamics":
-    INP_DIM = THALAMIC_INP_DIM + THALAMOCORTICAL_DIM + 3
+    INP_DIM = THALAMIC_INP_DIM + THALAMOCORTICAL_DIM + 2
 elif MODE == "no_dynamics":
-    INP_DIM = 4
+    INP_DIM = 3
 
 def main(env, seed):
 
