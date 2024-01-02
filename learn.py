@@ -85,7 +85,7 @@ def sac_learn(
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
 
-        mask = 1 if episode_steps == env.max_timesteps else float(not done)
+        mask = 1 if episode_steps == env.max_timesteps - 1 else float(not done)
 
         if episode_steps == 0:
             tuple = (state, action, reward, next_state, mask, h_prev, h_next)
@@ -136,6 +136,7 @@ def sac_learn(
 
             if total_episodes % LOG_EVERY_N_STEPS == 0:
                 print("Timestep %d" % (t,))
+                print("Target Delay %d" % (env.switch,))
                 print("episode reward: %f" % episode_reward)
                 print("episode steps: %f" % episode_steps)
                 print("best mean reward: %f" % best_mean_episode_reward)

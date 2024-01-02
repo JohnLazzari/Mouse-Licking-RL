@@ -20,7 +20,7 @@ REPLAY_BUFFER_SIZE = 15_000
 LEARNING_STARTS = 1_000
 SAVE_ITER = 100_000
 LEARNING_FREQ = 1
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0008
 ALPHA_OPT = 0.95
 EPS = 0.01
 THRESH = 0.5
@@ -29,14 +29,18 @@ WEIGHT_DECAY = .001
 DT = 0.1
 TARGET_TIME = 14
 THALAMOCORTICAL_DIM = 8
+MODE = "learned_dynamics" # either no_dynamics, learned_dynamics, or true_dynamics
 
-INP_DIM = THALAMIC_INP_DIM + THALAMOCORTICAL_DIM + 3
+if MODE == "learned_dynamics":
+    INP_DIM = THALAMIC_INP_DIM + THALAMOCORTICAL_DIM + 3
+elif MODE == "no_dynamics":
+    INP_DIM = 4
 
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
         constructor=optim.RMSprop,
-        kwargs=dict(lr=LEARNING_RATE, eps=EPS, weight_decay=WEIGHT_DECAY),
+        kwargs=dict(lr=LEARNING_RATE, eps=EPS),
     )
 
     sac_learn(
@@ -62,7 +66,7 @@ if __name__ == '__main__':
 
     seed = np.random.randint(0, high=123456) # Use a seed of zero (you may want to randomize the seed!)
     torch.manual_seed(seed)
-    env = Lick_Env(seed, DT, TARGET_TIME, THALAMIC_INP_DIM, THALAMOCORTICAL_DIM)
+    env = Lick_Env(seed, DT, TARGET_TIME, THALAMIC_INP_DIM, THALAMOCORTICAL_DIM, MODE)
 
     # Run training
     env = get_env(env, seed)

@@ -33,7 +33,7 @@ def select_action_ac(policy: Actor, state: list, hn: torch.Tensor) -> (list, tor
     state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
     hn = hn.cuda()
 
-    action, _, hn, _ = policy(state, hn)
+    action, log_probs, hn, _ = policy(state, hn)
 
     return action.detach().cpu().tolist()[0], hn.detach()
 
@@ -134,7 +134,7 @@ def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
     h_prev = tuple[0][5].cuda()
     h_next = tuple[0][6].cuda()
 
-    delta = reward[-1] + gamma * critic(next_state, h_next) - critic(state, h_prev)
+    delta = reward[-1] + gamma * mask[-1] * critic(next_state, h_prev) - critic(state, h_prev)
 
     value_loss = -delta.detach() * critic(state, h_prev)
 

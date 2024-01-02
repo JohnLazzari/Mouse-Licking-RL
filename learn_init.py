@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 
 INP_DIM = 1
 HID_DIM = 8
-EPOCHS_LICK = 25_000
+EPOCHS_LICK = 40_000
 EPOCHS_PREP = 1000
 LR = 0.001
 
-J_cc = torch.randn(HID_DIM, HID_DIM) / np.sqrt(HID_DIM+HID_DIM)
-W_out = torch.randn(HID_DIM,) / np.sqrt(HID_DIM)
+J_cc = torch.eye(HID_DIM)
 
 class ThalamoCortical_Lick(nn.Module):
     def __init__(self, inp_dim, hid):
@@ -30,100 +29,80 @@ class ThalamoCortical_Lick(nn.Module):
         # Thalamic Timescale (not sure what to put)
         self.tau = 1.
 
-        self.cortical_activity = torch.zeros(size=(hid,))
+        # Readout
+        self.W_out = nn.Parameter(torch.randn(hid,) / np.sqrt(HID_DIM), requires_grad=True)
+
+        self.cortical_activity = torch.zeros(size=(hid,)) # will be initialized based on switch time
 
     def forward(self, x):
 
         # discrete dynamics with forward euler (dt = 1)
         pre_activity = self.cortical_activity
-        self.thalamic_activity = self.J_tc @ self.cortical_activity + x
+        self.thalamic_activity = x*self.J_tc @ self.cortical_activity
         self.cortical_activity = J_cc @ self.cortical_activity + self.J_ct @ self.thalamic_activity
-        lick_prob = W_out @ self.cortical_activity
+        lick_prob = self.W_out @ self.cortical_activity
 
         return pre_activity, lick_prob
-
-class ThalamoCortical_Prep(nn.Module):
-    def __init__(self, inp_dim, hid):
-        super(ThalamoCortical_Prep, self).__init__()
-        self.inp_dim = inp_dim
-        self.hid = hid
-
-        # Cortical Weights
-        self.J_ct = nn.Parameter(data=torch.randn(hid, inp_dim) / np.sqrt(hid + inp_dim), requires_grad=True)
-
-        # Thalamic Weights
-        self.J_tc = nn.Parameter(data=torch.randn(inp_dim, hid) / np.sqrt(hid + inp_dim), requires_grad=True)
-
-        # Thalamic Timescale (not sure what to put)
-        self.tau = 1.
-
-        self.cortical_activity = torch.zeros(size=(hid,))
-        self.c_init_mu = torch.zeros(size=(hid,))
-
-    def forward(self):
-
-        # discrete dynamics with forward euler (dt = 1)
-        x_mu = - J_cc @ self.c_init_mu + self.J_ct @ self.J_tc @ self.c_init_mu + torch.eye(HID_DIM) @ self.c_init_mu
-        self.cortical_activity = torch.eye(HID_DIM) @ self.cortical_activity + J_cc @ self.cortical_activity + self.J_ct @ self.J_tc @ self.cortical_activity - torch.eye(HID_DIM) @ self.cortical_activity + x_mu
-        lick = W_out @ self.cortical_activity
-
-        return self.cortical_activity, lick
 
 def main():
 
     targ_lick = torch.linspace(0, 1, int(1/.1))
 
-    # meant to just activate a certain unit while silencing others
-    lick_inp = torch.tensor([0.1])
-
     criterion = nn.MSELoss()
 
-    lick_net = ThalamoCortical_Lick(INP_DIM, HID_DIM)
-    prep_net = ThalamoCortical_Prep(128, HID_DIM)
+    lick_net_1s = ThalamoCortical_Lick(INP_DIM, HID_DIM)
+    lick_net_3s = ThalamoCortical_Lick(INP_DIM, HID_DIM)
 
-    lick_optimizer = optim.AdamW(lick_net.parameters(), lr=LR)
-    prep_optimizer = optim.AdamW(prep_net.parameters(), lr=LR, weight_decay=0.1)
+    lick_1s_optimizer = optim.AdamW(lick_net_1s.parameters(), lr=LR)
+    lick_3s_optimizer = optim.AdamW(lick_net_3s.parameters(), lr=LR)
 
     # lick optimization
     for epoch in range(EPOCHS_LICK):
 
+        # meant to just activate a certain unit while silencing others
+        lick_net_1s.cortical_activity = torch.ones_like(lick_net_1s.cortical_activity).detach() * 0.1
+        lick_inp = torch.tensor([1])
+
         cortical_series = []
         activity_series = []
         for t in range(targ_lick.shape[0]):
-            activity, cortical_out = lick_net(lick_inp)
+            activity, cortical_out = lick_net_1s(lick_inp)
             cortical_series.append(cortical_out.unsqueeze(0))
             activity_series.append(activity)
         loss = criterion(torch.concatenate(cortical_series), targ_lick) + 0.0001*torch.linalg.norm(torch.stack(activity_series))**2
         print("epoch", epoch, "loss", loss.item())
-        lick_optimizer.zero_grad()
+        lick_1s_optimizer.zero_grad()
         loss.backward()
-        lick_optimizer.step()
-        lick_net.cortical_activity = torch.zeros_like(lick_net.cortical_activity).detach()
+        lick_1s_optimizer.step()
 
-    '''
-    # prep optimization
-    # Not doing prep dynamics rn (test what happens without it when switching occurs)
-    for epoch in range(EPOCHS_PREP):
+    # lick optimization
+    for epoch in range(EPOCHS_LICK):
+
+        # meant to just activate a certain unit while silencing others
+        lick_inp = torch.tensor([1])
+        lick_net_3s.cortical_activity = torch.ones_like(lick_net_3s.cortical_activity).detach() * 0.3
 
         cortical_series = []
-        lick_series = []
-        prep_net.cortical_activity = torch.FloatTensor(HID_DIM).uniform_(-15, 15)
-        for t in range(25):
-            corical_out, out = prep_net()
-            cortical_series.append(corical_out.unsqueeze(0))
-            lick_series.append(out.unsqueeze(0))
-        loss = criterion(torch.concatenate(cortical_series)[-1], prep_net.c_init_mu) + .001 * torch.sum(torch.concatenate(lick_series)**2)
+        activity_series = []
+        for t in range(targ_lick.shape[0]):
+            activity, cortical_out = lick_net_3s(lick_inp)
+            cortical_series.append(cortical_out.unsqueeze(0))
+            activity_series.append(activity)
+        loss = criterion(torch.concatenate(cortical_series), targ_lick) + 0.0001*torch.linalg.norm(torch.stack(activity_series))**2
         print("epoch", epoch, "loss", loss.item())
-        prep_optimizer.zero_grad()
+        lick_3s_optimizer.zero_grad()
         loss.backward()
-        prep_optimizer.step()
-    '''
+        lick_3s_optimizer.step()
 
     torch.save({
-        'lick_Jct': lick_net.J_ct,
-        'lick_Jtc': lick_net.J_tc,
-        'Jcc': J_cc,
-        'W_out': W_out,
+        'Jct_1s': lick_net_1s.J_ct,
+        'Jtc_1s': lick_net_1s.J_tc,
+        'Jcc_1s': J_cc,
+        'W_out_1s': lick_net_1s.W_out,
+        'Jct_3s': lick_net_3s.J_ct,
+        'Jtc_3s': lick_net_3s.J_tc,
+        'Jcc_3s': J_cc,
+        'W_out_3s': lick_net_3s.W_out,
     }, 'checkpoints/thalamocortical_init.pth')
 
 
