@@ -37,16 +37,6 @@ class ThalamoCortical(nn.Module):
 
         self.prev_action = torch.tensor([0])
 
-    ''' TODO try out 3 different environments
-    1. sustained activity without thalamocortical dynamics, state is only simple ramping value, lick or no lick, and switch
-    2. sustained activity with thalamocortical dynamics, state contains the thalamocortical activity with learned values from ramping (current)
-    3. sustained activity with thalamocortical dynamics, the feedback is the actual ALM activity and if sustained then a lick occurs
-    (since the output of the BG is always 1 or 0 and holding that for a certain period of time, having an actual cortical model may not be necessary)
-    (However, if having actual dynamics in the feedback helps then that could be useful, but actually training a model may be unnessecary)
-    (maybe also add a cue to the environment and start from trial onset with cue 1s after trial onset)
-    (Can learn the delay with a single target time, therefore only try the above with switching)
-    (Its also possible that each of the above feedback mechanisms can be implemented with separate dynamics for each target time, which may help it differentiate)
-    '''
     def forward(self, x, switch):
 
         if not torch.equal(x, self.prev_action) and switch == 0:

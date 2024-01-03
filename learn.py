@@ -22,6 +22,13 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
+def empty_eligibility_trace(model):
+
+    z = {}
+    for param in model.state_dict():
+        z[param] = torch.zeros_like(model.state_dict()[param])
+    return z
+
 def sac_learn(
     env,
     seed,
@@ -39,7 +46,7 @@ def sac_learn(
     learning_starts=50000,
     learning_freq=1,
     save_iter=100000,
-    save_path="checkpoints/cont_lick_check",
+    save_path="checkpoints/learend_lick_check",
 ):
     ### Switching to one-step actor critic (Goodbye SAC) ###
 
@@ -75,6 +82,8 @@ def sac_learn(
 
     # I
     I = 1
+    z_critic = empty_eligibility_trace(critic_bg)
+    z_actor = empty_eligibility_trace(actor_bg)
 
     ### STEPS PER EPISODE ###
     for t in count():
@@ -85,7 +94,7 @@ def sac_learn(
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         next_state, reward, done = env.step(episode_steps%env.max_timesteps, action)
 
-        mask = 1 if episode_steps == env.max_timesteps - 1 else float(not done)
+        mask = not done
 
         if episode_steps == 0:
             tuple = (state, action, reward, next_state, mask, h_prev, h_next)
@@ -94,7 +103,7 @@ def sac_learn(
 
         ep_trajectory.append(tuple)
 
-        I = One_Step_AC(ep_trajectory, actor_bg, critic_bg, actor_bg_optimizer, critic_bg_optimizer, gamma, I)
+        I, z_critic, z_actor = One_Step_AC(ep_trajectory, actor_bg, critic_bg, actor_bg_optimizer, critic_bg_optimizer, gamma, I, z_critic, z_actor)
 
         state = next_state
         h_prev = h_next
@@ -107,6 +116,8 @@ def sac_learn(
 
             # I
             I = 1
+            z_critic = empty_eligibility_trace(critic_bg)
+            z_actor = empty_eligibility_trace(actor_bg)
 
             total_episodes += 1
 
@@ -121,7 +132,6 @@ def sac_learn(
             # resest lists
             ep_trajectory = []
 
-
             ### 4. Log progress and keep track of statistics
             if len(avg_reward) > 0:
                 mean_episode_reward = np.mean(np.array(avg_reward)[-10:])
@@ -135,29 +145,30 @@ def sac_learn(
             Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
 
             if total_episodes % LOG_EVERY_N_STEPS == 0:
-                print("Timestep %d" % (t,))
+                print("Episode %d" % (total_episodes,))
                 print("Target Delay %d" % (env.switch,))
                 print("episode reward: %f" % episode_reward)
                 print("episode steps: %f" % episode_steps)
                 print("best mean reward: %f" % best_mean_episode_reward)
                 sys.stdout.flush()
 
+                '''
                 # Dump statistics to pickle
                 with open('statistics.pkl', 'wb') as f:
                     pickle.dump(Statistics, f)
                     print("Saved to %s" % 'statistics.pkl')
                     print('--------------------------\n')
+                '''
 
             # reset tracking variables
             episode_steps = 0
             episode_reward = 0
             
-            if t % save_iter == 0 and t > learning_starts:
+            if total_episodes % save_iter == 0:
                 torch.save({
-                    'iteration': t,
+                    'iteration': total_episodes,
                     'agent_state_dict': actor_bg.state_dict(),
                     'critic_state_dict': critic_bg.state_dict(),
                     'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
                     'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
-                    'alm_network_state_dict': env.alm.state_dict(),
-                }, save_path + str(t) + '.pth')
+                }, save_path + str(total_episodes) + '.pth')

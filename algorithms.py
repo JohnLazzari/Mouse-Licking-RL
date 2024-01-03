@@ -124,7 +124,10 @@ def sac(actor,
     soft_update(critic_target, critic, .005)
     h_train = h_train.detach()
 
-def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
+def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I, z_critic, z_actor):
+
+    lambda_critic = .9
+    lambda_actor = .9
 
     state = torch.FloatTensor([element[0] for element in tuple]).cuda().unsqueeze(0)
     action = torch.FloatTensor([element[1] for element in tuple]).cuda()
@@ -136,23 +139,36 @@ def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I):
 
     delta = reward[-1] + gamma * mask[-1] * critic(next_state, h_prev) - critic(state, h_prev)
 
-    value_loss = -delta.detach() * critic(state, h_prev)
+    # Critic Update
+    critic_optim.zero_grad()
+    z_critic_func = {}
+    for param in z_critic:
+        z_critic_func[param] = (gamma * lambda_critic * z_critic[param]).detach()
+    critic_forward = critic(state, h_prev)
+    critic_forward.backward()
+    # update z_critic and gradients
+    for name, param in critic.named_parameters():
+        z_critic[name] = (z_critic_func[name] + param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_critic_func[name] + param.grad)
 
+    # Actor Update
+    actor_optim.zero_grad()
+    z_actor_func = {}
+    for param in z_actor:
+        z_actor_func[param] = (gamma * lambda_actor * z_actor[param]).detach()
     _, log_prob, _, _ = actor(state, h_prev)
     cur_log_prob = log_prob[int(action[-1].item())]
-    policy_loss = -I * delta.detach() * cur_log_prob
+    cur_log_prob.backward()
+    for name, param in actor.named_parameters():
+        z_actor[name] = (z_actor_func[name] + I * param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_actor_func[name] + I * param.grad)
 
     I = gamma * I
 
-    actor_optim.zero_grad()
-    policy_loss.backward()
     actor_optim.step()
-
-    critic_optim.zero_grad()
-    value_loss.backward()
     critic_optim.step()
 
-    return I
+    return I, z_critic, z_actor
 
 def REINFORCE(episode, alm, gamma, log_probs, alm_values):
 
