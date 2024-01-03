@@ -8,10 +8,6 @@ from torch.distributions import Normal
 from thalamocortical_networks import ThalamoCortical
 import numpy.random as random
 
-LOG_SIG_MIN = -20
-LOG_SIG_MAX = 2
-epsilon = 1e-6
-
 class Lick_Env(gym.Env):
     def __init__(self, seed, dt, target_time, inp_dim, hid_dim, mode):
         super(Lick_Env, self).__init__()
@@ -30,7 +26,7 @@ class Lick_Env(gym.Env):
 
     def reset(self, episode):
 
-        if episode % 100 == 0:
+        if episode % 1 == 0:
 
             if self.switch == 1:
                 self.switch = 0.

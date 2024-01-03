@@ -20,7 +20,7 @@ REPLAY_BUFFER_SIZE = 15_000
 LEARNING_STARTS = 1_000
 SAVE_ITER = 100_000
 LEARNING_FREQ = 1
-LEARNING_RATE = 0.0008
+LEARNING_RATE = 0.0001
 ALPHA_OPT = 0.95
 EPS = 0.01
 THRESH = 0.5
@@ -39,7 +39,7 @@ elif MODE == "no_dynamics":
 def main(env, seed):
 
     optimizer_spec = OptimizerSpec(
-        constructor=optim.RMSprop,
+        constructor=optim.Adam,
         kwargs=dict(lr=LEARNING_RATE, eps=EPS),
     )
 
@@ -64,7 +64,7 @@ def main(env, seed):
 
 if __name__ == '__main__':
 
-    seed = np.random.randint(0, high=123456) # Use a seed of zero (you may want to randomize the seed!)
+    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     torch.manual_seed(seed)
     env = Lick_Env(seed, DT, TARGET_TIME, THALAMIC_INP_DIM, THALAMOCORTICAL_DIM, MODE)
 
