@@ -19,7 +19,7 @@ from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 
 def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
-    state = torch.tensor(state).unsqueeze(0).unsqueeze(0).cuda()
+    state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).unsqueeze(0).cuda()
     hn = hn.cuda()
 
     if evaluate == False: 

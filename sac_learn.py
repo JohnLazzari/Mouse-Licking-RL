@@ -75,7 +75,7 @@ def sac_learn(
     LOG_EVERY_N_STEPS = 1
 
     ### GET INITAL STATE + RESET MODEL BY POSE
-    state = env.reset()
+    state = env.reset(0)
     ep_trajectory = []
 
     #num_layers specified in the policy model 
@@ -113,7 +113,7 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-            state = env.reset()
+            state = env.reset(0) # This is currently only one delay time for the sake of testing code, change back after it can learn one delay time
 
             # resest lists
             ep_trajectory = []
@@ -134,10 +134,10 @@ def sac_learn(
             Statistics["mean_episode_steps"].append(mean_episode_steps)
             Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
 
-            if total_episodes % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
-                print("Timestep %d" % (t,))
-                print("mean reward (100 episodes): %f" % mean_episode_reward)
-                print("mean steps (100 episodes): %f" % mean_episode_steps)
+            if total_episodes % LOG_EVERY_N_STEPS == 0:
+                print("Episode %d" % (total_episodes,))
+                print("mean reward (10 episodes): %f" % mean_episode_reward)
+                print("mean steps (10 episodes): %f" % mean_episode_steps)
                 print("best mean reward: %f" % best_mean_episode_reward)
                 sys.stdout.flush()
 
@@ -147,7 +147,7 @@ def sac_learn(
                     print("Saved to %s" % 'statistics.pkl')
                     print('--------------------------\n')
             
-            if t % save_iter == 0 and t > learning_starts:
+            if total_episodes % save_iter == 0:
                 torch.save({
                     'iteration': t,
                     'agent_state_dict': actor_bg.state_dict(),
@@ -159,7 +159,7 @@ def sac_learn(
                 }, save_path + str(t) + '.pth')
 
         # Apply Basal Ganglia update (using SAC)
-        if len(policy_memory.buffer) > batch_size and t > learning_starts and t % learning_freq == 0:
+        if len(policy_memory.buffer) > batch_size and total_episodes > learning_starts and total_episodes % learning_freq == 0:
 
             sac(actor_bg,
                 critic_bg,
