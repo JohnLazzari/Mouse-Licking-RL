@@ -48,7 +48,6 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if action == 1 and t >= delay_time:
-            print("here")
             reward = delay_time / t
 
         return reward
