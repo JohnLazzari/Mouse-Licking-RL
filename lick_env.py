@@ -23,7 +23,7 @@ class Lick_Env_Cont(gym.Env):
         self.switch = 0
         self.cue = 0
         self.cue_time = 1 / dt
-        self.beta = .95
+        self.beta = 0.9
 
     def reset(self, episode) -> list:
 
@@ -53,7 +53,7 @@ class Lick_Env_Cont(gym.Env):
         return reward
     
     def _get_done(self, t: int, action: int) -> bool:
-        if t == self.max_timesteps-1 or action == 1:
+        if t == self.max_timesteps or action == 1:
             done = True
         else:
             done = False
@@ -81,10 +81,7 @@ class Lick_Env_Cont(gym.Env):
     
     def step(self, t: int, action: torch.Tensor) -> (list, int, bool):
         action = action[0]
-        if t < self.max_timesteps-1:
-            next_t = t+1
-        else:
-            next_t = t
+        next_t = t+1
         lick = self._get_lick(action)
         state = self._get_next_state(next_t)
         reward = self._get_reward(next_t, lick, action)
