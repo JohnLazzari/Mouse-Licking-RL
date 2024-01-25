@@ -19,13 +19,14 @@ class Lick_Env_Cont(gym.Env):
         self.thresh = thresh
         self.max_timesteps = timesteps
         self.dt = dt
+        self.switch_const = 0
         self.cortical_state = 0
         self.switch = 0
         self.cue = 0
         self.cue_time = 1 / dt
         self.beta = 0.9
 
-    def reset(self, episode) -> list:
+    def reset(self, episode: int) -> list:
 
         self.cue = 0
         self.cortical_state = 0
@@ -33,10 +34,12 @@ class Lick_Env_Cont(gym.Env):
         if episode % 1 == 0:
             if self.switch == 0:
                 self.switch = 1
+                self.switch_const = 0.2
             else:
                 self.switch = 0
+                self.switch_const = 0.4
 
-        state = [self.cortical_state, self.switch, self.cue]
+        state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
     def _get_reward(self, t: int, action: int, activity: int) -> int:
@@ -66,7 +69,7 @@ class Lick_Env_Cont(gym.Env):
         else:
             self.cue = 0
 
-        state = [self.cortical_state, self.switch, self.cue]
+        state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
     def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
