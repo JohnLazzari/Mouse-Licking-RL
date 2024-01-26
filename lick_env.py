@@ -24,7 +24,7 @@ class Lick_Env_Cont(gym.Env):
         self.switch = 0
         self.cue = 0
         self.cue_time = 1 / dt
-        self.beta = 0.9
+        self.beta = 0.85
 
     def reset(self, episode: int) -> list:
 
@@ -37,36 +37,41 @@ class Lick_Env_Cont(gym.Env):
                 self.switch_const = 0.2
             else:
                 self.switch = 0
-                self.switch_const = 0.4
+                self.switch_const = 0.3
 
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
-    def _get_reward(self, t: int, action: int, activity: int) -> int:
+    def _get_reward(self, t: int, action: int) -> int:
 
         if self.switch == 1:
             delay_time = 2 / self.dt
         else:
-            delay_time = 4 / self.dt
+            delay_time = 3 / self.dt
 
         reward = 0
-        if action == 1 and t >= delay_time:
-            reward = delay_time / t
+        if self.cue == 1:
+            reward = 0.01 * self.cortical_state
+            if action == 1 and t >= delay_time:
+                reward += 5 * (delay_time / t)
+        elif self.cue == 0:
+            reward = -0.01 * self.cortical_state
 
         return reward
     
     def _get_done(self, t: int, action: int) -> bool:
-        if t == self.max_timesteps or action == 1:
+        done = False
+        if t == self.max_timesteps:
             done = True
-        else:
-            done = False
+        if t > self.cue_time and self.cue == 0 and self.cortical_state < 0.1:
+            done = True
         return done
     
-    def _get_next_state(self, t: int) -> torch.Tensor:
+    def _get_next_state(self, t: int, lick: int) -> torch.Tensor:
 
         if t == self.cue_time:
             self.cue = 1
-        else:
+        if lick == 1:
             self.cue = 0
 
         state = [self.cortical_state, self.switch_const, self.cue]
@@ -86,8 +91,8 @@ class Lick_Env_Cont(gym.Env):
         action = action[0]
         next_t = t+1
         lick = self._get_lick(action)
-        state = self._get_next_state(next_t)
-        reward = self._get_reward(next_t, lick, action)
+        reward = self._get_reward(next_t, lick)
+        state = self._get_next_state(next_t, lick)
         done = self._get_done(next_t, lick)
         return state, reward, done
     

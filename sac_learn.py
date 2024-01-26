@@ -152,7 +152,6 @@ def sac_learn(
                     'critic_target_state_dict': critic_target_bg.state_dict(),
                     'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
                     'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
-                    'alm_network_state_dict': env.alm.state_dict(),
                 }, model_save_path + str(total_episodes) + '.pth')
 
             # reset tracking variables
