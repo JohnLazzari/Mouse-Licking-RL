@@ -10,7 +10,7 @@ from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
 import torch
 
-BATCH_SIZE = 4
+BATCH_SIZE = 6
 INP_DIM = 3
 HID_DIM = 32
 ACTION_DIM = 1
@@ -18,15 +18,15 @@ ALPHA = 0.20
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 50_000
 LEARNING_STARTS = 100
-SAVE_ITER = 5000
+SAVE_ITER = 10000
 LEARNING_FREQ = 1
 LEARNING_RATE = 0.0003
 ALPHA_OPT = 0.95
 EPS = 0.01
 ENTROPY_TUNING = True
-WEIGHT_DECAY = 0
+WEIGHT_DECAY = 0.001
 DT = 0.1
-TIMESTEPS = int(5 / DT)
+TIMESTEPS = int(6 / DT)
 THRESH = 1
 
 def main(env, seed):

@@ -30,10 +30,10 @@ OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 INP_DIM = 3
 HID_DIM = 32
 ACTION_DIM = 1
-THRESH = 5
+THRESH = 1
 DT = 0.1
-TIMESTEPS = int(10 / DT)
-CHECK_PATH = "checkpoints/cont_lick_check5000.pth"
+TIMESTEPS = int(6 / DT)
+CHECK_PATH = "checkpoints/cont_lick_check20000.pth"
 SAVE_PATH = "results"
 
 
@@ -92,15 +92,20 @@ def test(
                 break
 
     # reset tracking variables
-    switch_0_pca = PCA(n_components=1)
+    switch_0_pca = PCA(n_components=3)
     switch_0_projected = switch_0_pca.fit_transform(np.array(str_activity[0]))
 
-    switch_1_pca = PCA(n_components=1)
+    switch_1_pca = PCA(n_components=3)
     switch_1_projected = switch_1_pca.fit_transform(np.array(str_activity[1]))
 
+    ax = plt.figure().add_subplot(projection='3d')
+    ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
+    ax.plot(switch_1_projected[:, 0], switch_1_projected[:, 1], switch_1_projected[:, 2])
+    plt.show()
+
     # plot trajectories
-    plt.plot(switch_0_projected, label="str pc1 3s")
-    plt.plot(switch_1_projected, label="str pc1 1s")
+    plt.plot(switch_0_projected[:, 0], label="str pc1 3s")
+    plt.plot(switch_1_projected[:, 0], label="str pc1 1s")
     plt.plot(alm_activity[0], label="alm pc1 3s")
     plt.plot(alm_activity[1], label="alm pc1 1s")
     plt.legend()
