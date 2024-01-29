@@ -27,7 +27,7 @@ ENTROPY_TUNING = True
 WEIGHT_DECAY = 0
 DT = 0.1
 TIMESTEPS = int(5 / DT)
-THRESH = 5
+THRESH = 1
 
 def main(env, seed):
 

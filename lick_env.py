@@ -51,19 +51,27 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.cue == 1:
-            reward = 0.01 * self.cortical_state
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
         elif self.cue == 0:
-            reward = -0.01 * self.cortical_state
+            if self.cortical_state < 0.1 and t >= delay_time:
+                reward += 1
 
         return reward
     
     def _get_done(self, t: int, action: int) -> bool:
+
+        if self.switch == 1:
+            delay_time = 2 / self.dt
+        else:
+            delay_time = 3 / self.dt
+
         done = False
         if t == self.max_timesteps:
             done = True
-        if t > self.cue_time and self.cue == 0 and self.cortical_state < 0.1:
+        if t > delay_time and self.cue == 0 and self.cortical_state < 0.1:
+            done = True
+        if action == 1 and t < delay_time:
             done = True
         return done
     
@@ -78,7 +86,7 @@ class Lick_Env_Cont(gym.Env):
         return state
     
     def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
-        self.cortical_state = self.beta * self.cortical_state + action
+        self.cortical_state = max(0, self.beta * self.cortical_state + action * 0.2)
 
         if self.cortical_state >= self.thresh:
             lick = 1
