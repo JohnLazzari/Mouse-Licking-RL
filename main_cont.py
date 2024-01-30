@@ -9,57 +9,49 @@ from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont
 import torch
+import config
 
-BATCH_SIZE = 6
-INP_DIM = 3
-HID_DIM = 32
-ACTION_DIM = 1
-ALPHA = 0.20
-GAMMA = 0.99
-REPLAY_BUFFER_SIZE = 50_000
-LEARNING_STARTS = 100
-SAVE_ITER = 10000
-LEARNING_FREQ = 1
-LEARNING_RATE = 0.0003
-ALPHA_OPT = 0.95
-EPS = 0.01
-ENTROPY_TUNING = True
-WEIGHT_DECAY = 0.001
-DT = 0.1
-TIMESTEPS = int(6 / DT)
-THRESH = 1
+def main():
 
-def main(env, seed):
+    ### PARAMETERS ###
+    parser = config.config_parser()
+    args = parser.parse_args()
+
+    ### CREATE ENVIRONMENT ###
+    torch.manual_seed(args.seed)
+    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt)
+
+    ### RUN TRAINING ###
+    env = get_env(env, args.seed)
+    main(env, args.seed)
 
     optimizer_spec = OptimizerSpec(
         constructor=optim.Adam,
-        kwargs=dict(lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY),
+        kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
     )
 
     sac_learn(
-        env=env,
-        seed=seed,
-        inp_dim=INP_DIM,
-        hid_dim=HID_DIM,
-        action_dim=ACTION_DIM,
-        actor=Actor,
-        critic=Critic,
-        optimizer_spec=optimizer_spec,
-        replay_buffer_size=REPLAY_BUFFER_SIZE,
-        batch_size=BATCH_SIZE,
-        alpha=ALPHA,
-        gamma=GAMMA,
-        automatic_entropy_tuning=ENTROPY_TUNING,
-        learning_starts=LEARNING_STARTS,
-        learning_freq=LEARNING_FREQ,
-        save_iter=SAVE_ITER
+        env,
+        args.seed,
+        args.inp_dim,
+        args.hid_dim,
+        args.action_dim,
+        Actor,
+        Critic,
+        optimizer_spec,
+        args.policy_replay_size,
+        args.policy_batch_size,
+        args.alpha,
+        args.gamma,
+        args.automatic_entropy_tuning,
+        args.learning_starts,
+        args.learning_freq,
+        args.save_iter,
+        args.log_steps,
+        args.model_save_path,
+        args.reward_save_path,
+        args.steps_save_path
     )
 
 if __name__ == '__main__':
-    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
-    torch.manual_seed(seed)
-    env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT)
-
-    # Run training
-    env = get_env(env, seed)
-    main(env, seed)
+    main()

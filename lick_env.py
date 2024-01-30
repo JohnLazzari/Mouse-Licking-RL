@@ -51,9 +51,12 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.cue == 1:
+            reward -= 0.001 * np.abs(activity)
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
         elif self.cue == 0:
+            if t >= delay_time:
+                reward -= 0.001 * np.abs(1 / activity)
             if self.cortical_state < 0.1 and t >= delay_time:
                 reward += 5
             if t < self.cue_time:
