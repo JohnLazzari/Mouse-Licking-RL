@@ -19,11 +19,10 @@ def main():
 
     ### CREATE ENVIRONMENT ###
     torch.manual_seed(args.seed)
-    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt)
+    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale)
 
     ### RUN TRAINING ###
     env = get_env(env, args.seed)
-    main(env, args.seed)
 
     optimizer_spec = OptimizerSpec(
         constructor=optim.Adam,
@@ -34,7 +33,7 @@ def main():
         env,
         args.seed,
         args.inp_dim,
-        args.hid_dim,
+        args.hidden_dim,
         args.action_dim,
         Actor,
         Critic,

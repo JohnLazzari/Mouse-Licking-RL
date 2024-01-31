@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
+import numpy as np
 
 LOG_SIG_MIN = -20
 LOG_SIG_MAX = 2
@@ -25,9 +26,21 @@ class Actor(nn.Module):
         
         self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
         
+        # Fix mean linear layer
         self.mean_linear = nn.Linear(hid_dim, action_dim)
-        self.std_linear = nn.Linear(hid_dim, action_dim)
+        self.mean_linear.weight.requires_grad = False
+        self.mean_linear.bias.requires_grad = False
+        torch.nn.init.uniform_(self.mean_linear.weight, 0, np.sqrt(6 / (hid_dim + action_dim)))
+        torch.nn.init.zeros_(self.mean_linear.bias)
 
+        # Fix std linear layer
+        self.std_linear = nn.Linear(hid_dim, action_dim)
+        self.std_linear.weight.requires_grad = False
+        self.std_linear.bias.requires_grad = False
+        torch.nn.init.uniform_(self.std_linear.weight, 0, np.sqrt(6 / (hid_dim + action_dim)))
+        torch.nn.init.zeros_(self.std_linear.bias)
+
+        # Range of actions from -1 to 1
         self.action_scale = 1
         self.action_bias = 0
 

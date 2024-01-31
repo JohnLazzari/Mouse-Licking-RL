@@ -90,7 +90,7 @@ def sac_learn(
             action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
-        next_state, reward, done = env.step(episode_steps, action)
+        next_state, reward, done = env.step(episode_steps, action, h_prev)
         episode_reward += reward
         episode_steps += 1
 

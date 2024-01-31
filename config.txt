@@ -10,7 +10,7 @@ alpha = 0.2
 automatic_entropy_tuning = True
 seed = 0
 policy_batch_size = 6
-hidden_dim = 32
+hidden_dim = 256
 action_dim = 1
 inp_dim = 3
 log_steps = 10
@@ -19,6 +19,8 @@ save_iter = 10000
 thresh = 1
 dt = 0.1
 timesteps = 60
+beta = .95
+bg_scale = .35
 
 ### MODEL SAVING ###
 model_save_path = "checkpoints/lick_ramp"
