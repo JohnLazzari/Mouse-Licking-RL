@@ -32,16 +32,18 @@ def sac_learn(
     actor, 
     critic,
     optimizer_spec,
-    replay_buffer_size=1000000,
-    batch_size=8,
-    alpha=0.20,
-    gamma=0.99,
-    automatic_entropy_tuning=False, 
-    learning_starts=50000,
-    learning_freq=1,
-    save_iter=100000,
-    model_save_path="checkpoints/cont_lick_check",
-    training_save_folder="training_reports"
+    replay_buffer_size,
+    batch_size,
+    alpha,
+    gamma,
+    automatic_entropy_tuning, 
+    learning_starts,
+    learning_freq,
+    save_iter,
+    log_steps,
+    model_save_path,
+    reward_save_path,
+    steps_save_path
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
@@ -73,7 +75,6 @@ def sac_learn(
     total_episodes = 0
     avg_reward = [0]
     avg_steps = [0]
-    LOG_EVERY_N_STEPS = 10
 
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset(0)
@@ -137,10 +138,10 @@ def sac_learn(
             print("best mean reward: %f" % best_mean_episode_reward)
             sys.stdout.flush()
 
-            if total_episodes % LOG_EVERY_N_STEPS == 0:
+            if total_episodes % log_steps == 0:
                 # Dump statistics to pickle
-                np.save(f'{training_save_folder}/rewards.npy', Statistics["mean_episode_rewards"])
-                np.save(f'{training_save_folder}/steps.npy', Statistics["mean_episode_steps"])
+                np.save(f'{reward_save_path}.npy', Statistics["mean_episode_rewards"])
+                np.save(f'{steps_save_path}.npy', Statistics["mean_episode_steps"])
                 print("Saved to %s" % 'training_reports')
                 print('--------------------------\n')
             
