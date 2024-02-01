@@ -150,7 +150,7 @@ class Trajectory_Env(gym.Env):
         self.beta = beta
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
-        self.thresh = 0.01
+        self.thresh = 0.05
 
         # Load data
         self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
@@ -177,6 +177,8 @@ class Trajectory_Env(gym.Env):
         done = False
         dist = abs(activity - self.alm_activity[t-1])
         if dist > self.thresh:
+            done = True
+        if t == self.max_timesteps:
             done = True
         return done
     
