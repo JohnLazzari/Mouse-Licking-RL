@@ -37,7 +37,7 @@ class Actor(nn.Module):
         self.std_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear.weight.requires_grad = False
         self.std_linear.bias.requires_grad = False
-        torch.nn.init.uniform_(self.std_linear.weight, 0, np.sqrt(6 / (hid_dim + action_dim)))
+        torch.nn.init.uniform_(self.std_linear.weight, -np.sqrt(6 / (hid_dim + action_dim)), np.sqrt(6 / (hid_dim + action_dim)))
         torch.nn.init.zeros_(self.std_linear.bias)
 
         # Range of actions from -1 to 1
