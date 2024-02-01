@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sac_model import Actor, Critic
 from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
-from lick_env import Lick_Env_Cont
+from lick_env import Lick_Env_Cont, Trajectory_Env
 import torch
 import config
 
@@ -19,7 +19,11 @@ def main():
 
     ### CREATE ENVIRONMENT ###
     torch.manual_seed(args.seed)
-    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
+    
+    if args.trajectory_env == True:
+        env = Trajectory_Env(args.action_dim, args.timesteps, args.dt, args.beta, args.bg_scale, args.alm_data_path)
+    else:
+        env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
 
     ### RUN TRAINING ###
     env = get_env(env, args.seed)

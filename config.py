@@ -126,6 +126,11 @@ def config_parser():
                         default=0.05, 
                         help='scale of bg action')
 
+    parser.add_argument('--trajectory_env', 
+                        type=bool, 
+                        default=False, 
+                        help='use environment that directly follows alm activity')
+
     # Saving Parameters
     parser.add_argument('--model_save_path', 
                         type=str, 

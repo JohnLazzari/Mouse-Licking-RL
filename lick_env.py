@@ -20,7 +20,7 @@ class Lick_Env_Cont(gym.Env):
         self.dt = dt
         self.switch_const = 0
         self.cortical_state = 0
-        self.switch = 0
+        self.switch = 1
         self.cue = 0
         self.cue_time = 1 / dt
         self.beta = beta
@@ -63,18 +63,31 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.cue == 1:
+
+            # Follow the ramping activity while the cue has sounded and the mouse hasnt licked yet
+            # Goal is to further incentivize accurate ramping ramping activity
             reward -= 0.001 * abs(activity - self.alm_activity[t-1])
+            # Provide a high reward once ramping is successfully completed after the delay time 
+            # Reward is scaled by how late the mouse licks
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
+
         elif self.cue == 0:
+
+            # If cue is zero and t is past the delay time, that means the mouse licked already and now the task is to decrease activity
+            # Incentivizing mouse to follow true decay activity
             if t > delay_time:
                 # The position in the alm activity should start from peak in this case
-                reward -= 0.001 * abs(activity - self.alm_activity[200 + self.time_elapsed_from_lick])
+                reward -= 0.001 * abs(activity - self.alm_activity[(int(delay_time)-1) + self.time_elapsed_from_lick])
                 self.time_elapsed_from_lick += 1
-            if self.cortical_state < 0.5 and t > delay_time:
+
+            # If the alm activity decays to around 0.5, end the episode and give high reward
+            if self.cortical_state <= self.alm_activity[-1] and t > delay_time:
                 reward += 5
+
+            # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
             if t < self.cue_time:
-                reward -= 0.001 * torch.linalg.norm(hn.squeeze()).item()
+                reward -= 0.001 * abs(activity - self.alm_activity[t-1])
 
         return reward
     
@@ -88,7 +101,7 @@ class Lick_Env_Cont(gym.Env):
         done = False
         if t == self.max_timesteps:
             done = True
-        if t > delay_time and self.cue == 0 and self.cortical_state < 0.5:
+        if t > delay_time and self.cue == 0 and self.cortical_state <= self.alm_activity[-1]:
             done = True
         if action == 1 and t < delay_time:
             done = True
@@ -124,7 +137,68 @@ class Lick_Env_Cont(gym.Env):
         return state, reward, done
     
     
+class Trajectory_Env(gym.Env):
+    def __init__(self, action_dim, timesteps, dt, beta, bg_scale, alm_data_path):
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
+        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        self.max_timesteps = timesteps
+        self.dt = dt
+        self.switch_const = 0
+        self.cortical_state = 0
+        self.cue = 0
+        self.cue_time = 1 / dt
+        self.beta = beta
+        self.bg_scale = bg_scale
+        self.alm_data_path = alm_data_path
+        self.thresh = 0.01
 
+        # Load data
+        self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
+        self.alm_activity = np.squeeze(NormalizeData(self.alm_activity))
 
+    def reset(self, episode: int) -> list:
 
+        self.cue = 0
+        self.cortical_state = 0
+        self.switch_const = 0.2
 
+        state = [self.cortical_state, self.switch_const, self.cue]
+        return state
+    
+    def _get_reward(self, t: int, activity: int) -> int:
+
+        dist = abs(activity - self.alm_activity[t-1])
+        reward = 5 * (1 / 1000**(dist))
+
+        return reward
+    
+    def _get_done(self, t: int, activity: int) -> bool:
+
+        done = False
+        dist = abs(activity - self.alm_activity[t-1])
+        if dist > self.thresh:
+            done = True
+        return done
+    
+    def _get_next_state(self, t: int) -> torch.Tensor:
+
+        # hardcoded for now
+        if t == self.cue_time:
+            self.cue = 1
+        if t == 200:
+            self.cue = 0
+
+        state = [self.cortical_state, self.switch_const, self.cue]
+        return state
+    
+    def _get_activity(self, action: torch.Tensor) -> torch.Tensor:
+        self.cortical_state = max(0, self.beta * self.cortical_state + action * self.bg_scale)
+    
+    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor) -> (list, int, bool):
+        action = action[0]
+        next_t = t+1
+        self._get_activity(action)
+        reward = self._get_reward(next_t, action)
+        state = self._get_next_state(next_t)
+        done = self._get_done(next_t, action)
+        return state, reward, done
