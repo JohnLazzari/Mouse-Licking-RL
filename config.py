@@ -106,6 +106,26 @@ def config_parser():
                         default=60, 
                         help='number of timesteps for single episode (num / dt)')
 
+    parser.add_argument('--alm_data_path', 
+                        type=str, 
+                        default='data/alm_fr_averaged_1s.mat',
+                        help='path to folder and file of alm firing rate data to add to reward shaping')
+
+    parser.add_argument('--frame_skips', 
+                        type=int, 
+                        default=2,
+                        help='number of times to repeat same action')
+
+    parser.add_argument('--beta', 
+                        type=float, 
+                        default=0.99, 
+                        help='decay for alm state')
+
+    parser.add_argument('--bg_scale', 
+                        type=float, 
+                        default=0.05, 
+                        help='scale of bg action')
+
     # Saving Parameters
     parser.add_argument('--model_save_path', 
                         type=str, 

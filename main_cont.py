@@ -19,7 +19,7 @@ def main():
 
     ### CREATE ENVIRONMENT ###
     torch.manual_seed(args.seed)
-    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale)
+    env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
 
     ### RUN TRAINING ###
     env = get_env(env, args.seed)
@@ -47,6 +47,7 @@ def main():
         args.learning_freq,
         args.save_iter,
         args.log_steps,
+        args.frame_skips,
         args.model_save_path,
         args.reward_save_path,
         args.steps_save_path

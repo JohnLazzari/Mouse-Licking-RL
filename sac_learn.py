@@ -41,6 +41,7 @@ def sac_learn(
     learning_freq,
     save_iter,
     log_steps,
+    frame_skips,
     model_save_path,
     reward_save_path,
     steps_save_path
@@ -90,9 +91,10 @@ def sac_learn(
             action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
-        next_state, reward, done = env.step(episode_steps, action, h_prev)
-        episode_reward += reward
-        episode_steps += 1
+        for _ in range(frame_skips):
+            next_state, reward, done = env.step(episode_steps, action, h_prev)
+            episode_reward += reward
+            episode_steps += 1
 
         mask = 1 if episode_steps == env.max_timesteps else float(not done)
 
