@@ -63,18 +63,18 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.cue == 1:
-            reward += 0.001 * abs(activity - self.alm_activity[t-1])
+            reward -= 0.001 * abs(activity - self.alm_activity[t-1])
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
         elif self.cue == 0:
             if t > delay_time:
                 # The position in the alm activity should start from peak in this case
-                reward += 0.001 * abs(activity - self.alm_activity[200 + self.time_elapsed_from_lick])
+                reward -= 0.001 * abs(activity - self.alm_activity[200 + self.time_elapsed_from_lick])
                 self.time_elapsed_from_lick += 1
-            if self.cortical_state < 0.1 and t > delay_time:
+            if self.cortical_state < 0.5 and t > delay_time:
                 reward += 5
             if t < self.cue_time:
-                reward -= 0.01 * torch.linalg.norm(hn.squeeze()).item()
+                reward -= 0.001 * torch.linalg.norm(hn.squeeze()).item()
 
         return reward
     
@@ -88,7 +88,7 @@ class Lick_Env_Cont(gym.Env):
         done = False
         if t == self.max_timesteps:
             done = True
-        if t > delay_time and self.cue == 0 and self.cortical_state < 0.1:
+        if t > delay_time and self.cue == 0 and self.cortical_state < 0.5:
             done = True
         if action == 1 and t < delay_time:
             done = True

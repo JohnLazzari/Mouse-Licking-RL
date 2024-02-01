@@ -93,8 +93,10 @@ def sac_learn(
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
             next_state, reward, done = env.step(episode_steps, action, h_prev)
-            episode_reward += reward
             episode_steps += 1
+            episode_reward += reward
+            if done == True:
+                break
 
         mask = 1 if episode_steps == env.max_timesteps else float(not done)
 
