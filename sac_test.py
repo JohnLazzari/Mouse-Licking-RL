@@ -28,14 +28,17 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
 INP_DIM = 3
-HID_DIM = 32
+HID_DIM = 256
 ACTION_DIM = 1
 THRESH = 1
-DT = 0.1
-TIMESTEPS = int(6 / DT)
-CHECK_PATH = "checkpoints/cont_lick_check20000.pth"
-SAVE_PATH = "results"
-
+DT = 0.01
+TIMESTEPS = int(3 / DT)
+CHECK_PATH = "checkpoints/lick_ramp8000.pth"
+SAVE_PATH = "results/lick_ramp8000_fr.npy"
+BETA = .99
+BG_SCALE = .05
+FRAMESKIP = 5
+ALM_DATA = "data/alm_fr_averaged_1s.mat"
 
 def test(
     env,
@@ -45,7 +48,8 @@ def test(
     actor, 
     critic,
     check_path,
-    save_path
+    save_path,
+    frameskips
 ):
     checkpoint = torch.load(check_path)
 
@@ -63,27 +67,31 @@ def test(
     alm_activity = {}
     str_activity = {}
 
+    ### GET INITAL STATE + RESET MODEL BY POSE
+    state = env.reset(0)
+    #num_layers specified in the policy model 
+    h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
+    
+    alm_activity[env.switch] = []
+    str_activity[env.switch] = []
+
     ### STEPS PER EPISODE ###
-    for conditions in range(2):
+    for conditions in range(1):
 
-        ### GET INITAL STATE + RESET MODEL BY POSE
-        state = env.reset(conditions)
-        #num_layers specified in the policy model 
-        h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-        
-        alm_activity[env.switch] = []
-        str_activity[env.switch] = []
-
-        for t in range(env.max_timesteps):
-
-            alm_activity[env.switch].append(state[0])
-            str_activity[env.switch].append(h_prev.squeeze().cpu().numpy())
+        for t in count():
 
             with torch.no_grad():
                 action, h_current = select_action(_actor, state, h_prev, evaluate=True)  # Sample action from policy
 
             ### TRACKING REWARD + EXPERIENCE TUPLE###
-            next_state, reward, done = env.step(t, action)
+            for _ in range(frameskips):
+                alm_activity[env.switch].append(state[0])
+                str_activity[env.switch].append(h_prev.squeeze().cpu().numpy())
+                next_state, reward, done = env.step(episode_steps, action, h_prev)
+                episode_steps += 1
+                episode_reward += reward
+                if done:
+                    break
 
             state = next_state
             h_prev = h_current
@@ -93,24 +101,20 @@ def test(
 
     # reset tracking variables
     switch_0_pca = PCA(n_components=3)
-    switch_0_projected = switch_0_pca.fit_transform(np.array(str_activity[0]))
-
-    switch_1_pca = PCA(n_components=3)
-    switch_1_projected = switch_1_pca.fit_transform(np.array(str_activity[1]))
+    switch_0_projected = switch_0_pca.fit_transform(np.array(str_activity[1]))
 
     ax = plt.figure().add_subplot(projection='3d')
     ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
-    ax.plot(switch_1_projected[:, 0], switch_1_projected[:, 1], switch_1_projected[:, 2])
     plt.show()
 
     # plot trajectories
     plt.plot(switch_0_projected[:, 0], label="str pc1 3s")
-    plt.plot(switch_1_projected[:, 0], label="str pc1 1s")
-    plt.plot(alm_activity[0], label="alm pc1 3s")
-    plt.plot(alm_activity[1], label="alm pc1 1s")
+    plt.plot(alm_activity[1], label="alm pc1 3s")
     plt.legend()
     plt.show()
 
+    np.save(save_path, np.array(str_activity[1]))
+
 if __name__ == "__main__":
-    env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT)
-    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH)
+    env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
+    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP)
