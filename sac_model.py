@@ -26,13 +26,7 @@ class Actor(nn.Module):
         
         self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
         
-        # Fix mean linear layer
         self.mean_linear = nn.Linear(hid_dim, action_dim)
-        self.mean_linear.weight.requires_grad = False
-        self.mean_linear.bias.requires_grad = False
-        torch.nn.init.uniform_(self.mean_linear.weight, 0, np.sqrt(6 / (hid_dim + action_dim)))
-        torch.nn.init.zeros_(self.mean_linear.bias)
-
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
         # Range of actions from -1 to 1
