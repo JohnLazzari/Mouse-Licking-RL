@@ -69,7 +69,7 @@ def sac(actor,
     h_train = torch.zeros(size=(1, batch_size, hid_dim))
     with torch.no_grad():
         next_state_action, next_state_log_pi, _, _, _ = actor.sample(next_state_batch, h_train, sampling=False, len_seq=len_seq)
-        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_train, len_seq)
+        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, len_seq)
         min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
         next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
@@ -77,10 +77,11 @@ def sac(actor,
     loss_mask = [torch.ones(size=(length, 1)) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
-    qf1, qf2 = critic(state_batch, action_batch, h_train, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
+    qf1, qf2 = critic(state_batch, action_batch, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
 
     qf1 = qf1 * loss_mask
     qf2 = qf2 * loss_mask
+    next_q_value *= loss_mask
 
     qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
     qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
@@ -91,10 +92,11 @@ def sac(actor,
     critic_optimizer.step()
 
     pi_action_bat, log_prob_bat, _, _, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
-    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_train, len_seq)
+    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, len_seq)
 
     qf1_pi = qf1_pi * loss_mask
     qf2_pi = qf2_pi * loss_mask
+    log_prob_bat *= loss_mask
 
     min_qf_pi = torch.minimum(qf1_pi, qf2_pi)
 

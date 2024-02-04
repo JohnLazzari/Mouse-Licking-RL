@@ -33,11 +33,11 @@ ACTION_DIM = 1
 THRESH = 1
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "checkpoints/lick_ramp8000.pth"
-SAVE_PATH = "results/lick_ramp8000_fr.npy"
+CHECK_PATH = "checkpoints/lick_ramp19000.pth"
+SAVE_PATH = "results/lick_ramp19000_fr.npy"
 BETA = .99
 BG_SCALE = .05
-FRAMESKIP = 5
+FRAMESKIP = 1
 ALM_DATA = "data/alm_fr_averaged_1s.mat"
 
 def test(

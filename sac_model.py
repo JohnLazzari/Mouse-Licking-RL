@@ -91,25 +91,28 @@ class Critic(nn.Module):
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         
-        self.gru1 = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc12 = nn.Linear(hid_dim, 1)
+        self.fc11 = nn.Linear(inp_dim, hid_dim)
+        self.fc12 = nn.Linear(hid_dim, hid_dim)
+        self.fc13 = nn.Linear(hid_dim, hid_dim)
+        self.fc14 = nn.Linear(hid_dim, 1)
 
-        self.gru2 = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc22 = nn.Linear(hid_dim, 1)
+        self.fc21 = nn.Linear(inp_dim, hid_dim)
+        self.fc22 = nn.Linear(hid_dim, hid_dim)
+        self.fc23 = nn.Linear(hid_dim, hid_dim)
+        self.fc24 = nn.Linear(hid_dim, 1)
     
-    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None) -> (int, int):
+    def forward(self, state: torch.Tensor, action: torch.Tensor, len_seq: bool = None) -> (int, int):
 
         x = torch.cat((state, action), dim=-1)
-        hn = hn.cuda()
 
-        x1 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
-        x1, hn1 = self.gru1(x1, hn)
-        x1, _ = pad_packed_sequence(x1, batch_first=True)
-        x1 = self.fc12(x1)
+        x1 = F.relu(self.fc11(x))
+        x1 = F.relu(self.fc12(x1))
+        x1 = F.relu(self.fc13(x1))
+        x1 = self.fc14(x1)
 
-        x2 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
-        x2, hn2 = self.gru2(x2, hn)
-        x2, _ = pad_packed_sequence(x2, batch_first=True)
-        x2 = self.fc22(x2)
+        x2 = F.relu(self.fc21(x))
+        x2 = F.relu(self.fc22(x2))
+        x2 = F.relu(self.fc23(x2))
+        x2 = self.fc24(x2)
 
         return x1, x2
