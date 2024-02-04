@@ -66,7 +66,7 @@ class Lick_Env_Cont(gym.Env):
 
             # Follow the ramping activity while the cue has sounded and the mouse hasnt licked yet
             # Goal is to further incentivize accurate ramping ramping activity
-            reward -= 0.01 * abs(activity - self.alm_activity[t-1])
+            reward -= 0.001 * abs(activity - self.alm_activity[t-1])
             # Provide a high reward once ramping is successfully completed after the delay time 
             # Reward is scaled by how late the mouse licks
             if action == 1 and t >= delay_time:
@@ -78,7 +78,7 @@ class Lick_Env_Cont(gym.Env):
             # Incentivizing mouse to follow true decay activity
             if t > delay_time:
                 # The position in the alm activity should start from peak in this case
-                reward -= 0.01 * abs(activity - self.alm_activity[(int(delay_time)-1) + self.time_elapsed_from_lick])
+                reward -= 0.001 * abs(activity - self.alm_activity[(int(delay_time)-1) + self.time_elapsed_from_lick])
                 self.time_elapsed_from_lick += 1
 
             # If the alm activity decays to around 0.5, end the episode and give high reward
@@ -87,7 +87,7 @@ class Lick_Env_Cont(gym.Env):
 
             # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
             if t < self.cue_time:
-                reward -= 0.01 * abs(activity - self.alm_activity[t-1])
+                reward -= 0.001 * abs(activity - self.alm_activity[t-1])
 
         return reward
     
