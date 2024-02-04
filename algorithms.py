@@ -81,6 +81,7 @@ def sac(actor,
 
     qf1 = qf1 * loss_mask
     qf2 = qf2 * loss_mask
+    next_q_value *= loss_mask
 
     qf1_loss = F.mse_loss(qf1, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
     qf2_loss = F.mse_loss(qf2, next_q_value)  # JQ = 𝔼(st,at)~D[0.5(Q1(st,at) - r(st,at) - γ(𝔼st+1~p[V(st+1)]))^2]
@@ -95,6 +96,7 @@ def sac(actor,
 
     qf1_pi = qf1_pi * loss_mask
     qf2_pi = qf2_pi * loss_mask
+    log_prob_bat *= loss_mask
 
     min_qf_pi = torch.minimum(qf1_pi, qf2_pi)
 

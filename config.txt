@@ -14,14 +14,14 @@ hidden_dim = 256
 action_dim = 1
 inp_dim = 3
 log_steps = 10
-policy_replay_size = 50000
+policy_replay_size = 100000
 save_iter = 10000
 thresh = 1
 dt = 0.01
 timesteps = 300
 beta = .99
 bg_scale = .05
-frame_skips = 5
+frame_skips = 2
 alm_data_path = "data/alm_fr_averaged_1s.mat"
 
 ### MODEL SAVING ###
