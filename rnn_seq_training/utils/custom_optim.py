@@ -45,8 +45,8 @@ class CustomAdamOptimizer(optim.Optimizer):
                 if group['names'][i] == "weight_ih_l0":
                     p.data = torch.clamp(p.data, group['excite_clip_value'], 10)
                     assert (p.data > 0).all()
-                if group['names'][i] == "mean_linear.weight":
-                    p.data = torch.clamp(p.data, -10, group['inhib_clip_value'])
-                    assert (p.data < 0).all()
+                #if group['names'][i] == "mean_linear.weight":
+                #    p.data = torch.clamp(p.data, -10, group['inhib_clip_value'])
+                #    assert (p.data < 0).all()
 
         return loss

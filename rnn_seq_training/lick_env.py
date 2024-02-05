@@ -119,7 +119,7 @@ class Lick_Env_Cont(gym.Env):
         return state
     
     def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
-        self.cortical_state = max(0, self.beta * self.cortical_state + (-action+1) * self.bg_scale)
+        self.cortical_state = max(0, self.beta * self.cortical_state + action * self.bg_scale)
 
         if self.cortical_state >= self.thresh:
             lick = 1
