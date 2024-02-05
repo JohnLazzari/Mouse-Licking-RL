@@ -73,6 +73,7 @@ class Lick_Env_Cont(gym.Env):
 
         elif self.cue == 0:
 
+            '''
             # If cue is zero and t is past the delay time, that means the mouse licked already and now the task is to decrease activity
             # Incentivizing mouse to follow true decay activity
             if t > delay_time:
@@ -83,6 +84,7 @@ class Lick_Env_Cont(gym.Env):
             # If the alm activity decays to around 0.5, end the episode and give high reward
             if self.cortical_state <= self.alm_activity[-1] and t > delay_time:
                 reward += 5
+            '''
 
             # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
             if t < self.cue_time:
@@ -100,9 +102,9 @@ class Lick_Env_Cont(gym.Env):
         done = False
         if t == self.max_timesteps:
             done = True
-        if t > delay_time and self.cue == 0 and self.cortical_state <= self.alm_activity[-1]:
-            done = True
-        if action == 1 and t < delay_time:
+        #if t > delay_time and self.cue == 0 and self.cortical_state <= self.alm_activity[-1]:
+        #    done = True
+        if action == 1:
             done = True
         return done
     
@@ -110,14 +112,14 @@ class Lick_Env_Cont(gym.Env):
 
         if t == self.cue_time:
             self.cue = 1
-        if lick == 1:
-            self.cue = 0
+        #if lick == 1:
+        #    self.cue = 0
 
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
     def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
-        self.cortical_state = max(0, self.beta * self.cortical_state + action * self.bg_scale)
+        self.cortical_state = max(0, self.beta * self.cortical_state + (-action+1) * self.bg_scale)
 
         if self.cortical_state >= self.thresh:
             lick = 1

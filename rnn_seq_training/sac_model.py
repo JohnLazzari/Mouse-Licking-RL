@@ -32,8 +32,8 @@ class Actor_Seq(nn.Module):
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
         # Range of actions from -1 to 1
-        self.action_scale = 1
-        self.action_bias = 0
+        self.action_scale = .5
+        self.action_bias = .5
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
