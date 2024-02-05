@@ -23,7 +23,7 @@ def main():
     if args.env == "trajectory":
         env = Trajectory_Env(args.action_dim, args.timesteps, args.dt, args.beta, args.bg_scale, args.alm_data_path)
     elif args.env == "lick_ramp":
-        env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path, args.model)
+        env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
 
     ### RUN TRAINING ###
     env = get_env(env, args.seed)

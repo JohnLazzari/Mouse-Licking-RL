@@ -33,11 +33,11 @@ ACTION_DIM = 1
 THRESH = 1
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "checkpoints/lick_ramp8000.pth"
-SAVE_PATH = "results/lick_ramp8000_fr.npy"
+CHECK_PATH = "checkpoints/lick_ramp30000.pth"
+SAVE_PATH = "results/lick_ramp30000_fr.npy"
 BETA = .99
 BG_SCALE = .05
-FRAMESKIP = 5
+FRAMESKIP = 2
 ALM_DATA = "data/alm_fr_averaged_1s.mat"
 
 def test(
@@ -54,14 +54,8 @@ def test(
     checkpoint = torch.load(check_path)
 
     _actor = actor(inp_dim, hid_dim, action_dim).cuda()
-    _critic = critic(action_dim+inp_dim, hid_dim).cuda()
-    _critic_target = critic(action_dim+inp_dim, hid_dim).cuda()
-
     _actor.load_state_dict(checkpoint['agent_state_dict'])
-    _critic.load_state_dict(checkpoint['critic_state_dict'])
-    _critic_target.load_state_dict(checkpoint['critic_target_state_dict'])
 
-    
     episode_reward = 0
     episode_steps = 0
     alm_activity = {}

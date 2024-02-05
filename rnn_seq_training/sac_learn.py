@@ -15,7 +15,7 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic, Actor_Seq
+from sac_model import Critic, Actor_Seq
 from algorithms import sac, select_action, hard_update, REINFORCE
 
 USE_CUDA = torch.cuda.is_available()
@@ -46,7 +46,6 @@ def sac_learn(
     model_save_path,
     reward_save_path,
     steps_save_path,
-    model
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
@@ -61,11 +60,7 @@ def sac_learn(
     for name, param in actor_bg.named_parameters():
         param_names.append(name)
     
-    if model == "rnn_seq":
-        actor_bg_optimizer = actor_optimizer_spec.constructor(actor_bg.parameters(), names=param_names, **actor_optimizer_spec.kwargs)
-    elif model == "rnn":
-        actor_bg_optimizer = actor_optimizer_spec.constructor(actor_bg.parameters(), **actor_optimizer_spec.kwargs)
-
+    actor_bg_optimizer = actor_optimizer_spec.constructor(actor_bg.parameters(), names=param_names, **actor_optimizer_spec.kwargs)
     critic_bg_optimizer = critic_optimizer_spec.constructor(critic_bg.parameters(), **critic_optimizer_spec.kwargs)
 
     target_entropy = -env.action_space.shape[0]
@@ -92,9 +87,9 @@ def sac_learn(
     ep_trajectory = []
 
     #num_layers specified in the policy model 
-    h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-    if model == "rnn_seq":
-        actor_bg.reset_y(1)
+    h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
+    y_depression = torch.zeros(size=(1, hid_dim)).cuda()
+    y_beta = torch.ones(size=(1, hid_dim,)).cuda()*0.25
 
     # TODO learning for new network isnt correct, y is not updated during the processing of the sequence, need to make a custom rnn
     # need to make sure I update params every step as opposed to after every episode (too much bad experience)
@@ -103,7 +98,7 @@ def sac_learn(
     for t in count():
 
         with torch.no_grad():
-            action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
+            action, h_current, y_depression = select_action(actor_bg, state, h_prev, y_depression, y_beta, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
@@ -133,7 +128,8 @@ def sac_learn(
             policy_memory.push(ep_trajectory)
 
             # reset training conditions
-            h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
+            h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
+            y_depression = torch.zeros(size=(1, hid_dim)).cuda()
             state = env.reset(total_episodes) 
 
             # resest lists
@@ -178,27 +174,24 @@ def sac_learn(
             episode_steps = 0
             episode_reward = 0
 
-            # Apply Basal Ganglia update (using SAC)
-            if len(policy_memory.buffer) > batch_size and total_episodes > learning_starts and total_episodes % learning_freq == 0:
+        # Apply Basal Ganglia update (using SAC)
+        if len(policy_memory.buffer) > batch_size and total_episodes > learning_starts and total_episodes % learning_freq == 0:
 
-                sac(actor_bg,
-                    critic_bg,
-                    critic_target_bg,
-                    critic_bg_optimizer,
-                    actor_bg_optimizer,
-                    policy_memory,
-                    batch_size,
-                    hid_dim,
-                    gamma,
-                    automatic_entropy_tuning,
-                    log_alpha,
-                    target_entropy,
-                    alpha,
-                    alpha_optim,
-                    model)
+            sac(actor_bg,
+                critic_bg,
+                critic_target_bg,
+                critic_bg_optimizer,
+                actor_bg_optimizer,
+                policy_memory,
+                batch_size,
+                hid_dim,
+                gamma,
+                automatic_entropy_tuning,
+                log_alpha,
+                target_entropy,
+                alpha,
+                alpha_optim)
 
-            if model == "rnn_seq":
-                actor_bg.reset_y(1)
         
 
 

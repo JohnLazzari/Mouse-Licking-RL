@@ -16,18 +16,19 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic
+from sac_model import Critic, Actor_Seq
 
-def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
+def select_action(policy: Actor_Seq, state: list, hn: torch.Tensor, y_depression: torch.Tensor, y_beta: torch.Tensor, evaluate: bool) -> (list, torch.Tensor):
     state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).unsqueeze(0).cuda()
     hn = hn.cuda()
+    y_ones = torch.ones_like(y_depression)
 
     if evaluate == False: 
-        action, _, _, hn, _ = policy.sample(state, hn, sampling=True)
+        action, _, _, hn, y_depression, _ = policy.sample(state, hn, y_depression, y_ones, y_beta, sampling=True)
     else:
-        _, _, action, hn, _ = policy.sample(state, hn, sampling=True)
+        _, _, action, hn, y_depression, _ = policy.sample(state, hn, y_depression, y_ones, y_beta, sampling=True)
 
-    return action.detach().cpu().tolist()[0], hn.detach()
+    return action.detach().cpu().tolist()[0], hn.detach(), y_depression.detach()
 
 def soft_update(target: Critic, source: Critic, tau: float):
     for target_param, param in zip(target.parameters(), source.parameters()):
@@ -51,7 +52,7 @@ def sac(actor,
         target_entropy,
         alpha,
         alpha_optim,
-        model
+        beta=0.25
         ):
 
     if automatic_entropy_tuning:
@@ -67,12 +68,16 @@ def sac(actor,
     next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
     mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
-    h_train = torch.zeros(size=(1, batch_size, hid_dim))
+    h_train = torch.zeros(size=(batch_size, hid_dim), device="cuda")
+    y_depression = torch.zeros(size=(batch_size, hid_dim), device="cuda")
+    y_ones = torch.ones(size=(batch_size, hid_dim), device="cuda")
+    y_beta = torch.ones(size=(batch_size, hid_dim), device="cuda")*beta
+
+    h_train_critic = torch.zeros(size=(1, batch_size, hid_dim))
+
     with torch.no_grad():
-        if model == "rnn_seq":
-            actor.reset_y(batch_size)
-        next_state_action, next_state_log_pi, _, _, _ = actor.sample(next_state_batch, h_train, sampling=False, len_seq=len_seq)
-        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_train, len_seq)
+        next_state_action, next_state_log_pi, _, _, _, _ = actor.sample(next_state_batch, h_train, y_depression, y_ones, y_beta, sampling=False, len_seq=len_seq)
+        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_train_critic, len_seq)
         min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
         next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
@@ -80,7 +85,7 @@ def sac(actor,
     loss_mask = [torch.ones(size=(length, 1)) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
-    qf1, qf2 = critic(state_batch, action_batch, h_train, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
+    qf1, qf2 = critic(state_batch, action_batch, h_train_critic, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
 
     qf1 = qf1 * loss_mask
     qf2 = qf2 * loss_mask
@@ -94,10 +99,8 @@ def sac(actor,
     qf_loss.backward()
     critic_optimizer.step()
 
-    if model == "rnn_seq":
-        actor.reset_y(batch_size)
-    pi_action_bat, log_prob_bat, _, _, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
-    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_train, len_seq)
+    pi_action_bat, log_prob_bat, _, _, _, _ = actor.sample(state_batch, h_train, y_depression, y_ones, y_beta, sampling= False, len_seq=len_seq)
+    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_train_critic, len_seq)
 
     qf1_pi = qf1_pi * loss_mask
     qf2_pi = qf2_pi * loss_mask

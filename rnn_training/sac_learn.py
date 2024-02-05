@@ -15,7 +15,7 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic, Actor_Seq
+from sac_model import Actor, Critic
 from algorithms import sac, select_action, hard_update, REINFORCE
 
 USE_CUDA = torch.cuda.is_available()

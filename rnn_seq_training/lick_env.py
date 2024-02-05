@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from sac_model import weights_init_
 from torch.distributions import Normal
 import scipy.io as sio
 
@@ -12,7 +11,7 @@ def NormalizeData(data):
     return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 class Lick_Env_Cont(gym.Env):
-    def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path, model):
+    def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.thresh = thresh
@@ -27,7 +26,6 @@ class Lick_Env_Cont(gym.Env):
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
-        self.model_type = model
 
         # Load data
         self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']

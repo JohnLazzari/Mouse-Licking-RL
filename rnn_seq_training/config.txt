@@ -24,7 +24,6 @@ bg_scale = .05
 frame_skips = 5
 alm_data_path = "data/alm_fr_averaged_1s.mat"
 env = "lick_ramp"
-model = "rnn_seq"
 
 ### MODEL SAVING ###
 model_save_path = "checkpoints/lick_ramp_seq"

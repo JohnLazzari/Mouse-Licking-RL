@@ -131,12 +131,6 @@ def config_parser():
                         default='lick_ramp', 
                         help='environment to use (lick_ramp, trajectory)')
 
-    parser.add_argument('--model', 
-                        type=str, 
-                        default='rnn', 
-                        help='rnn model to use (rnn, rnn_seq). rnn_seq is a version of model from (Murray, 2017) with a custom optimizer/learning algo to respect Dales law')
-    
-
     # Saving Parameters
     parser.add_argument('--model_save_path', 
                         type=str, 
