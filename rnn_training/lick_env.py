@@ -70,6 +70,10 @@ class Lick_Env_Cont(gym.Env):
             # Reward is scaled by how late the mouse licks
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
+            if action == 1 and t < delay_time:
+                reward -= 5
+            if action != 1 and t == self.max_timesteps:
+                reward -= 5
 
         elif self.cue == 0:
 
@@ -87,8 +91,10 @@ class Lick_Env_Cont(gym.Env):
             '''
 
             # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
-            if t < self.cue_time:
+            if t <= self.cue_time:
                 reward -= 0.01 * abs(activity - self.alm_activity[t-1] + 1e-2)
+                if action == 1:
+                    reward -= 5
 
         return reward
     
@@ -123,6 +129,7 @@ class Lick_Env_Cont(gym.Env):
 
         if self.cortical_state >= self.thresh:
             lick = 1
+            self.cortical_state = 1
         else:
             lick = 0
 
@@ -133,8 +140,8 @@ class Lick_Env_Cont(gym.Env):
         next_t = t+1
         lick = self._get_lick(action)
         reward = self._get_reward(next_t, lick, action, hn)
-        state = self._get_next_state(next_t, lick)
         done = self._get_done(next_t, lick)
+        state = self._get_next_state(next_t, lick)
         return state, reward, done
     
     
