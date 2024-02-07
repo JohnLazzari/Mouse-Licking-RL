@@ -17,26 +17,8 @@ class CustomAdamOptimizer(optim.Optimizer):
                 if p.grad is None:
                     continue
 
-                grad = p.grad.data
-                state = self.state[p]
-
-                # Initialize state parameters if not present
-                if len(state) == 0:
-                    state['step'] = 0
-                    state['exp_avg'] = torch.zeros_like(p.data)
-                    state['exp_avg_sq'] = torch.zeros_like(p.data)
-
-                state['step'] += 1
-                beta1, beta2 = group['betas']
-
-                state['exp_avg'] = beta1 * state['exp_avg'] + (1 - beta1) * grad
-                state['exp_avg_sq'] = beta2 * state['exp_avg_sq'] + (1 - beta2) * (grad ** 2)
-
-                bias_correction1 = 1 - beta1 ** state['step']
-                bias_correction2 = 1 - beta2 ** state['step']
-
-                lr = group['lr'] * (np.sqrt(bias_correction2) / bias_correction1)
-                p.data.addcdiv_(-lr, state['exp_avg'], torch.sqrt(state['exp_avg_sq']) + group['eps'])
+                d_p = p.grad.data
+                p.data.add_(-group['lr'], d_p)
 
                 # Weight clipping
                 if group['names'][i] == "weight_hh_l0":
@@ -45,8 +27,5 @@ class CustomAdamOptimizer(optim.Optimizer):
                 if group['names'][i] == "weight_ih_l0":
                     p.data = torch.clamp(p.data, group['excite_clip_value'], 10)
                     assert (p.data > 0).all()
-                #if group['names'][i] == "mean_linear.weight":
-                #    p.data = torch.clamp(p.data, -10, group['inhib_clip_value'])
-                #    assert (p.data < 0).all()
 
         return loss

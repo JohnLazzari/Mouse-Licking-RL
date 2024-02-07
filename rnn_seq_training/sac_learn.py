@@ -88,7 +88,7 @@ def sac_learn(
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
-    y_depression = torch.zeros(size=(1, hid_dim)).cuda()
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()
     y_beta = torch.ones(size=(1, hid_dim,)).cuda()*0.25
 
     # TODO learning for new network isnt correct, y is not updated during the processing of the sequence, need to make a custom rnn

@@ -39,8 +39,8 @@ class Actor_Seq(nn.Module):
 
         new_x = []
         for t in range(x.shape[1]):
-            new_x.append(F.relu((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
-            y_depression = y_depression - (1 / 10) * ( (y_depression - y_ones) * (y_ones - new_x[-1]) - (y_depression - y_beta) * new_x[-1])
+            new_x.append(self.gain_sigmoid((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
+            y_depression = y_depression - (1 / 20) * ( (y_depression - y_ones) * (y_ones - new_x[-1]) - (y_depression - y_beta) * new_x[-1])
         hn = new_x[-1]
         new_x = torch.stack(new_x, dim=1)
 
@@ -49,6 +49,9 @@ class Actor_Seq(nn.Module):
         std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
         
         return mean, std, hn, new_x, y_depression
+
+    def gain_sigmoid(self, x, gain=20):
+        return 1 / (1 + torch.exp(-gain * x))
     
     def sample(self, state: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling: bool = True, len_seq: list = None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
