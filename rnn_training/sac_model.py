@@ -29,7 +29,7 @@ class Actor(nn.Module):
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        # Range of actions from -1 to 1
+        # Range of actions from 0 to 1
         self.action_scale = .5
         self.action_bias = .5
 

@@ -145,70 +145,116 @@ class Lick_Env_Cont(gym.Env):
         return state, reward, done
     
     
-class Trajectory_Env(gym.Env):
-    def __init__(self, action_dim, timesteps, dt, beta, bg_scale, alm_data_path):
+class Kinematics_Env(gym.Env):
+    def __init__(self, action_dim, dt, kinematics_folder):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        self.max_timesteps = timesteps
         self.dt = dt
-        self.switch_const = 0
-        self.cortical_state = 0
         self.cue = 0
         self.cue_time = 1 / dt
-        self.beta = beta
-        self.bg_scale = bg_scale
-        self.alm_data_path = alm_data_path
-        self.thresh = 0.05
+        self.kinematics_folder = kinematics_folder
+        self.thresh = 0.1
+        self.max_timesteps = None
+        self.cur_cond = None
+        self.kinematics_jaw_x = {}
+        self.kinematics_jaw_y = {}
+        self.Taxis = {}
 
         # Load data
-        self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
-        self.alm_activity = np.squeeze(NormalizeData(self.alm_activity))
+        for cond in range(3):
+
+            self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
+            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]))
+
+            self.kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
+            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]))
+
+            self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
 
     def reset(self, episode: int) -> list:
 
+        self.cur_cond = episode % 3
+        assert self.kinematics_jaw_x[self.cur_cond].shape == self.kinematics_jaw_y[self.cur_cond].shape
+        self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
+        self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
-        self.cortical_state = 0
-        self.switch_const = 0.2
 
-        state = [self.cortical_state, self.switch_const, self.cue]
+        # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
+        state = [0., 
+                 0., 
+                 self.kinematics_jaw_x[self.cur_cond][0], 
+                 self.kinematics_jaw_y[self.cur_cond][0], 
+                 self.speed_const, 
+                 self.cue]
+
         return state
     
-    def _get_reward(self, t: int, activity: int) -> int:
+    def _get_reward(self, t: int, action: int) -> int:
 
-        dist = abs(activity - self.alm_activity[t-1])
-        reward = 5 * (1 / 1000**(dist))
+        dist_x_jaw = abs(action[0] - self.kinematics_jaw_x[self.cur_cond][t])
+        dist_y_jaw = abs(action[1] - self.kinematics_jaw_y[self.cur_cond][t])
+
+        reward_x = (1 / 1000**(dist_x_jaw))
+        reward_y = (1 / 1000**(dist_y_jaw))
+
+        reward = reward_x + reward_y
+
+        # add reward based on cue
+        if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 0.033:
+            reward += 5
+
+        # add reward based on lick
+        if self.cur_cond == 0:
+            if 0.95 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.1:
+                reward += 5
+        elif self.cur_cond == 1:
+            if 1.25 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.4:
+                reward += 5
+        elif self.cur_cond == 2:
+            if 1.55 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.7:
+                reward += 5
 
         return reward
     
-    def _get_done(self, t: int, activity: int) -> bool:
+    def _get_done(self, t: int, action: int) -> bool:
 
         done = False
-        dist = abs(activity - self.alm_activity[t-1])
-        if dist > self.thresh:
+        dist_x_jaw = abs(action[0] - self.kinematics_jaw_x[self.cur_cond][t])
+        dist_y_jaw = abs(action[1] - self.kinematics_jaw_y[self.cur_cond][t])
+        if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh:
             done = True
-        if t == self.max_timesteps:
+        if t == self.max_timesteps-1:
             done = True
         return done
     
-    def _get_next_state(self, t: int) -> torch.Tensor:
+    def _get_next_state(self, t: int, action: torch.Tensor) -> torch.Tensor:
 
-        # hardcoded for now
-        if t == self.cue_time:
+        # change cue based on Taxis
+        if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 0.033:
             self.cue = 1
-        if t == 200:
-            self.cue = 0
 
-        state = [self.cortical_state, self.switch_const, self.cue]
+        # change cue based on condition
+        if self.cur_cond == 0:
+            if 0.95 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.1:
+                self.cue = 0
+        elif self.cur_cond == 1:
+            if 1.25 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.4:
+                self.cue = 0
+        elif self.cur_cond == 2:
+            if 1.55 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 1.7:
+                self.cue = 0
+
+        state = [action[0], 
+                 action[1], 
+                 self.kinematics_jaw_x[self.cur_cond][t], 
+                 self.kinematics_jaw_y[self.cur_cond][t], 
+                 self.speed_const, 
+                 self.cue]
+
         return state
     
-    def _get_activity(self, action: torch.Tensor) -> torch.Tensor:
-        self.cortical_state = max(0, self.beta * self.cortical_state + action * self.bg_scale)
-    
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor) -> (list, int, bool):
-        action = action[0]
-        next_t = t+1
-        self._get_activity(action)
-        reward = self._get_reward(next_t, action)
-        state = self._get_next_state(next_t)
-        done = self._get_done(next_t, action)
+        reward = self._get_reward(t, action)
+        state = self._get_next_state(t, action)
+        done = self._get_done(t, action)
         return state, reward, done

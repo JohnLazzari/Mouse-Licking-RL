@@ -21,6 +21,7 @@ from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 from sklearn.decomposition import PCA
+from scipy.ndimage import gaussian_filter1d
 
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -33,12 +34,12 @@ ACTION_DIM = 1
 THRESH = 1
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "checkpoints/lick_ramp30000.pth"
-SAVE_PATH = "results/lick_ramp30000_fr.npy"
+CHECK_PATH = "../checkpoints/lick_ramp10000.pth"
+SAVE_PATH = "../results/lick_ramp10000_fr.npy"
 BETA = .99
-BG_SCALE = .05
+BG_SCALE = .04
 FRAMESKIP = 2
-ALM_DATA = "data/alm_fr_averaged_1s.mat"
+ALM_DATA = "../data/alm_fr_averaged_1s.mat"
 
 def test(
     env,
@@ -94,16 +95,24 @@ def test(
                 break
 
     # reset tracking variables
+    print(np.array(str_activity[1]).shape)
+    A_agent = gaussian_filter1d(np.array(str_activity[1]), 5, axis=0)
+    psth = np.mean(A_agent, axis=-1)
+    plt.plot(psth)
+    plt.show()
+
     switch_0_pca = PCA(n_components=3)
-    switch_0_projected = switch_0_pca.fit_transform(np.array(str_activity[1]))
+    switch_0_projected = switch_0_pca.fit_transform(A_agent)
 
     ax = plt.figure().add_subplot(projection='3d')
     ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
     plt.show()
 
     # plot trajectories
-    plt.plot(switch_0_projected[:, 0], label="str pc1 3s")
-    plt.plot(alm_activity[1], label="alm pc1 3s")
+    plt.plot(switch_0_projected[:, 0], label="str pc1 1s")
+    plt.plot(switch_0_projected[:, 1], label="str pc2 1s")
+    plt.plot(switch_0_projected[:, 2], label="str pc3 1s")
+    plt.axvline(100, linestyle='dashed')
     plt.legend()
     plt.show()
 
