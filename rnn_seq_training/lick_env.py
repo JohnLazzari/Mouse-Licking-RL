@@ -53,7 +53,7 @@ class Lick_Env_Cont(gym.Env):
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
-    def _get_reward(self, t: int, action: int, activity: int, hn: torch.Tensor) -> int:
+    def _get_reward(self, t: int, action: int, activity: int, y_depression: torch.Tensor) -> int:
 
         if self.switch == 1:
             delay_time = 2 / self.dt
@@ -61,6 +61,7 @@ class Lick_Env_Cont(gym.Env):
             delay_time = 3 / self.dt
 
         reward = 0
+        #reward -= torch.linalg.norm(y_depression).item()
         if self.cue == 1:
 
             # Follow the ramping activity while the cue has sounded and the mouse hasnt licked yet
@@ -135,11 +136,11 @@ class Lick_Env_Cont(gym.Env):
 
         return lick
     
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor) -> (list, int, bool):
+    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, y_depression) -> (list, int, bool):
         action = action[0]
         next_t = t+1
         lick = self._get_lick(action)
-        reward = self._get_reward(next_t, lick, action, hn)
+        reward = self._get_reward(next_t, lick, action, y_depression)
         done = self._get_done(next_t, lick)
         state = self._get_next_state(next_t, lick)
         return state, reward, done

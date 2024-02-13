@@ -22,8 +22,8 @@ class Actor_Seq(nn.Module):
         
         self.weight_ih_l0 = nn.Parameter(torch.zeros(size=(inp_dim, hid_dim)))
         self.weight_hh_l0 = nn.Parameter(torch.zeros(size=(hid_dim, hid_dim)))
-        nn.init.uniform_(self.weight_hh_l0, -np.sqrt(6 / (hid_dim + hid_dim)), inhib_upper_bound)
-        nn.init.uniform_(self.weight_ih_l0, excite_lower_bound, np.sqrt(6 / (hid_dim + hid_dim)))
+        nn.init.uniform_(self.weight_hh_l0, -1, inhib_upper_bound)
+        nn.init.uniform_(self.weight_ih_l0, excite_lower_bound, np.sqrt(6 / (hid_dim)))
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         #nn.init.uniform_(self.mean_linear.weight, -np.sqrt(6 / (hid_dim + hid_dim)), inhib_upper_bound)
@@ -40,7 +40,9 @@ class Actor_Seq(nn.Module):
         new_x = []
         for t in range(x.shape[1]):
             new_x.append(self.gain_sigmoid((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
-            y_depression = y_depression - (1 / 20) * ( (y_depression - y_ones) * (y_ones - new_x[-1]) - (y_depression - y_beta) * new_x[-1])
+            y_depression = torch.clip(y_depression + (1 / 10) * ( -(y_depression - 1) * (1 - new_x[-1]) - (y_depression - 0.25) * new_x[-1] ), 0, 1)
+            if y_depression.shape == (1, self.hid_dim):
+                print(y_depression)
         hn = new_x[-1]
         new_x = torch.stack(new_x, dim=1)
 

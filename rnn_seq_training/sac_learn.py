@@ -88,7 +88,8 @@ def sac_learn(
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, hid_dim)).cuda()
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
+    y_depression[0, 0] = 1
     y_beta = torch.ones(size=(1, hid_dim,)).cuda()*0.25
 
     # TODO learning for new network isnt correct, y is not updated during the processing of the sequence, need to make a custom rnn
@@ -102,7 +103,7 @@ def sac_learn(
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
-            next_state, reward, done = env.step(episode_steps, action, h_prev)
+            next_state, reward, done = env.step(episode_steps, action, h_prev, y_depression)
             episode_steps += 1
             episode_reward += reward
             if done == True:
@@ -129,7 +130,8 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
-            y_depression = torch.zeros(size=(1, hid_dim)).cuda()
+            y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
+            y_depression[0, 0] = 1
             state = env.reset(total_episodes) 
 
             # resest lists
