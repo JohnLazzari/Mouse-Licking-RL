@@ -6,9 +6,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
 import scipy.io as sio
+import matplotlib.pyplot as plt
 
-def NormalizeData(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
+def NormalizeData(data, min, max):
+    return (data - min) / (max - min)
 
 class Lick_Env_Cont(gym.Env):
     def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path):
@@ -158,16 +159,28 @@ class Kinematics_Env(gym.Env):
         self.cur_cond = None
         self.kinematics_jaw_x = {}
         self.kinematics_jaw_y = {}
+        self.kinematics_tongue_x = {}
+        self.kinematics_tongue_y = {}
         self.Taxis = {}
 
         # Load data
         for cond in range(3):
 
-            self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
-            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]))
 
             self.kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
-            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]))
+            self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
+            # y position is lower than x position, using these min and max values such that the scaling between x and y is accurate
+            min_jaw, max_jaw = np.min(self.kinematics_jaw_y[cond]), np.max(self.kinematics_jaw_x[cond])
+
+            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]), min_jaw, max_jaw)
+            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw, max_jaw)
+
+            self.kinematics_tongue_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_tongue.mat')['condy_tongue_mean']
+            self.kinematics_tongue_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_tongue.mat')['condx_tongue_mean']
+            min_tongue, max_tongue = np.min(self.kinematics_tongue_y[cond]), np.max(self.kinematics_tongue_x[cond])
+
+            self.kinematics_tongue_y[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_y[cond]), min_tongue, max_tongue)
+            self.kinematics_tongue_x[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_x[cond]), min_tongue, max_tongue)
 
             self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
 
@@ -175,6 +188,7 @@ class Kinematics_Env(gym.Env):
 
         self.cur_cond = episode % 3
         assert self.kinematics_jaw_x[self.cur_cond].shape == self.kinematics_jaw_y[self.cur_cond].shape
+        assert self.kinematics_tongue_x[self.cur_cond].shape == self.kinematics_tongue_y[self.cur_cond].shape
         self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
@@ -182,8 +196,12 @@ class Kinematics_Env(gym.Env):
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
         state = [0., 
                  0., 
+                 0.,
+                 0.,
                  self.kinematics_jaw_x[self.cur_cond][0], 
                  self.kinematics_jaw_y[self.cur_cond][0], 
+                 self.kinematics_tongue_x[self.cur_cond][0], 
+                 self.kinematics_tongue_y[self.cur_cond][0], 
                  self.speed_const, 
                  self.cue]
 
@@ -194,10 +212,16 @@ class Kinematics_Env(gym.Env):
         dist_x_jaw = abs(action[0] - self.kinematics_jaw_x[self.cur_cond][t])
         dist_y_jaw = abs(action[1] - self.kinematics_jaw_y[self.cur_cond][t])
 
-        reward_x = (1 / 1000**(dist_x_jaw))
-        reward_y = (1 / 1000**(dist_y_jaw))
+        dist_x_tongue = abs(action[2] - self.kinematics_tongue_x[self.cur_cond][t])
+        dist_y_tongue = abs(action[3] - self.kinematics_tongue_y[self.cur_cond][t])
 
-        reward = reward_x + reward_y
+        reward_x_jaw = (1 / 1000**(dist_x_jaw))
+        reward_y_jaw = (1 / 1000**(dist_y_jaw))
+
+        reward_x_tongue = (1 / 1000**(dist_x_tongue))
+        reward_y_tongue = (1 / 1000**(dist_y_tongue))
+
+        reward = reward_x_jaw + reward_y_jaw + reward_x_tongue + reward_y_tongue
 
         # add reward based on cue
         if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] > 0.033:
@@ -219,9 +243,14 @@ class Kinematics_Env(gym.Env):
     def _get_done(self, t: int, action: int) -> bool:
 
         done = False
+
         dist_x_jaw = abs(action[0] - self.kinematics_jaw_x[self.cur_cond][t])
         dist_y_jaw = abs(action[1] - self.kinematics_jaw_y[self.cur_cond][t])
-        if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh:
+
+        dist_x_tongue = abs(action[2] - self.kinematics_tongue_x[self.cur_cond][t])
+        dist_y_tongue = abs(action[3] - self.kinematics_tongue_y[self.cur_cond][t])
+
+        if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh or dist_x_tongue > self.thresh or dist_y_tongue > self.thresh:
             done = True
         if t == self.max_timesteps-1:
             done = True
@@ -246,8 +275,12 @@ class Kinematics_Env(gym.Env):
 
         state = [action[0], 
                  action[1], 
+                 action[2],
+                 action[3],
                  self.kinematics_jaw_x[self.cur_cond][t], 
                  self.kinematics_jaw_y[self.cur_cond][t], 
+                 self.kinematics_tongue_x[self.cur_cond][t], 
+                 self.kinematics_tongue_y[self.cur_cond][t], 
                  self.speed_const, 
                  self.cue]
 
