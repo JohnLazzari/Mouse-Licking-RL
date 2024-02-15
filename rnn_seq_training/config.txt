@@ -1,7 +1,7 @@
 ### GENERAL TRAINING PARAMETERS ###
 gamma = 0.99
 tau = 0.005
-lr = 0.0003
+lr = 0.001
 weight_decay = 0
 eps = 0.01
 learning_freq = 1
@@ -21,7 +21,7 @@ dt = 0.01
 timesteps = 300
 beta = .99
 bg_scale = .04
-frame_skips = 2
+frame_skips = 1
 alm_data_path = "data/alm_fr_averaged_1s.mat"
 env = "lick_ramp"
 
