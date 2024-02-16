@@ -128,8 +128,13 @@ def config_parser():
 
     parser.add_argument('--env', 
                         type=str, 
-                        default='lick_ramp', 
-                        help='environment to use (lick_ramp, trajectory)')
+                        default='kinematics', 
+                        help='environment to use (lick_ramp, kinematics)')
+
+    parser.add_argument('--kinematics_folder', 
+                        type=str, 
+                        default='data',
+                        help='folder containing kinematics')
 
     # Saving Parameters
     parser.add_argument('--model_save_path', 

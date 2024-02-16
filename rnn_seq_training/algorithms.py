@@ -69,8 +69,7 @@ def sac(actor,
     mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
     h_train = torch.zeros(size=(batch_size, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
-    y_depression[0, 0] = 1
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()
     y_ones = torch.ones(size=(batch_size, hid_dim), device="cuda")
     y_beta = torch.ones(size=(batch_size, hid_dim), device="cuda")*beta
 
@@ -113,6 +112,7 @@ def sac(actor,
 
     actor_optimizer.zero_grad()
     policy_loss.backward()
+    torch.nn.utils.clip_grad_norm_(actor.parameters(), 1)
     actor_optimizer.step()
 
     if automatic_entropy_tuning:
@@ -126,6 +126,52 @@ def sac(actor,
 
     soft_update(critic_target, critic, .005)
     h_train = h_train.detach()
+
+def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I, z_critic, z_actor):
+
+    lambda_critic = .9
+    lambda_actor = .9
+
+    state = torch.FloatTensor([element[0] for element in tuple]).cuda().unsqueeze(0)
+    action = torch.FloatTensor([element[1] for element in tuple]).cuda()
+    reward = torch.FloatTensor([element[2] for element in tuple]).cuda()
+    next_state = torch.FloatTensor([element[3] for element in tuple]).cuda().unsqueeze(0)
+    mask = torch.FloatTensor([element[4] for element in tuple]).cuda()
+    h_prev = tuple[0][5].cuda()
+    h_next = tuple[0][6].cuda()
+
+    delta = reward[-1] + gamma * mask[-1] * critic(next_state, h_prev) - critic(state, h_prev)
+
+    # Critic Update
+    critic_optim.zero_grad()
+    z_critic_func = {}
+    for param in z_critic:
+        z_critic_func[param] = (gamma * lambda_critic * z_critic[param]).detach()
+    critic_forward = critic(state, h_prev)
+    critic_forward.backward()
+    # update z_critic and gradients
+    for name, param in critic.named_parameters():
+        z_critic[name] = (z_critic_func[name] + param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_critic_func[name] + param.grad)
+
+    # Actor Update
+    actor_optim.zero_grad()
+    z_actor_func = {}
+    for param in z_actor:
+        z_actor_func[param] = (gamma * lambda_actor * z_actor[param]).detach()
+    _, log_prob, _, _ = actor(state, h_prev)
+    cur_log_prob = log_prob[int(action[-1].item())]
+    cur_log_prob.backward()
+    for name, param in actor.named_parameters():
+        z_actor[name] = (z_actor_func[name] + I * param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_actor_func[name] + I * param.grad)
+
+    I = gamma * I
+
+    actor_optim.step()
+    critic_optim.step()
+
+    return I, z_critic, z_actor
 
 def REINFORCE(episode, alm, gamma, log_probs, alm_values):
 

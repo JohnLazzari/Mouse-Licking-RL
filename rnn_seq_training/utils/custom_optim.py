@@ -3,7 +3,7 @@ import torch.optim as optim
 import numpy as np
 
 class CustomAdamOptimizer(optim.Optimizer):
-    def __init__(self, params, lr=0.001, betas=(0.9, 0.999), eps=1e-8, inhib_clip_value=0, excite_clip_value=1e-3, names=None):
+    def __init__(self, params, lr=0.001, betas=(0.9, 0.999), eps=1e-8, inhib_clip_value=-1e-3, excite_clip_value=1e-3, names=None):
         defaults = dict(lr=lr, betas=betas, eps=eps, inhib_clip_value=inhib_clip_value, excite_clip_value=excite_clip_value, names=names)
         super(CustomAdamOptimizer, self).__init__(params, defaults)
 
@@ -17,20 +17,48 @@ class CustomAdamOptimizer(optim.Optimizer):
                 if p.grad is None:
                     continue
 
-                d_p = p.grad.data
+                grad = p.grad.data
+                state = self.state[p]
+                
                 if group['names'][i] == "weight_hh_l0":
-                    eye = torch.eye(d_p.shape[0], device="cuda")
-                    ones = torch.ones(size=(d_p.shape[0], d_p.shape[1]), device="cuda")
+                    eye = torch.eye(grad.shape[0], device="cuda")
+                    ones = torch.ones(size=(grad.shape[0], grad.shape[1]), device="cuda")
                     mask = ones - eye
-                    d_p *= mask
-                p.data.add_(d_p, alpha=-group['lr'])
+                    grad *= mask
+
+                # Initialize state parameters
+                if len(state) == 0:
+                    state['step'] = 0
+                    state['m'] = torch.zeros_like(p.data)
+                    state['v'] = torch.zeros_like(p.data)
+
+                m, v = state['m'], state['v']
+                beta1, beta2 = group['betas']
+                eps = group['eps']
+                lr = group['lr']
+                state['step'] += 1
+
+                # Update biased first and second moment estimates
+                m.mul_(beta1).add_(1 - beta1, grad)
+                v.mul_(beta2).addcmul_(1 - beta2, grad, grad)
+
+                # Bias correction
+                m_hat = m / (1 - beta1 ** state['step'])
+                v_hat = v / (1 - beta2 ** state['step'])
+
+                #if group['names'][i] == "weight_hh_l0":
+                #    print(m_hat / (torch.sqrt(v_hat) + eps))
+
+                # Update parameters
+                p.data.add_(-lr, m_hat / (torch.sqrt(v_hat) + eps))
 
                 # Weight clipping
                 if group['names'][i] == "weight_hh_l0":
-                    p.data = torch.clamp(p.data, -10, group['inhib_clip_value'])
+                    p.data.clamp_(-10, group['inhib_clip_value'])
                     assert (p.data <= 0).all()
                 if group['names'][i] == "weight_ih_l0":
-                    p.data = torch.clamp(p.data, group['excite_clip_value'], 10)
-                    assert (p.data > 0).all()
+                    #print(m_hat / (torch.sqrt(v_hat) + eps))
+                    p.data.clamp_(group['excite_clip_value'], 10)
+                    assert (p.data >= 0).all()
 
         return loss
