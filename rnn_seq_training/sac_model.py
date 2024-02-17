@@ -38,7 +38,7 @@ class Actor_Seq(nn.Module):
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
         # Range of actions from -1 to 1
-        self.action_scale = 1
+        self.action_scale = 0.25
         self.action_bias = 0
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
@@ -50,7 +50,7 @@ class Actor_Seq(nn.Module):
             y_depression = y_depression + (1 / 5) * ( -(y_depression - 1) * (1 - new_h[-1]) - (y_depression - 0.25) * new_h[-1])
             hn = new_h[-1]
             #if y_depression.shape == (1, self.hid_dim):
-            #   print(y_depression)
+            #   print(hn)
         new_h = torch.stack(new_h, dim=1)
 
         mean = self.mean_linear(new_h)

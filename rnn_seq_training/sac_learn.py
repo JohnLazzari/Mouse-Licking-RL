@@ -88,7 +88,7 @@ def sac_learn(
 
     #num_layers specified in the policy model 
     h_prev = torch.ones(size=(1, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()*0.5
     y_beta = torch.ones(size=(1, hid_dim,)).cuda()*0.25
 
     ### STEPS PER EPISODE ###
@@ -126,7 +126,7 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.ones(size=(1, hid_dim), device="cuda")
-            y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
+            y_depression = torch.ones(size=(1, hid_dim)).cuda()*0.5
             state = env.reset(total_episodes) 
 
             # resest lists
