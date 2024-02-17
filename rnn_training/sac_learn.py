@@ -99,7 +99,7 @@ def sac_learn(
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
-            next_state, reward, done = env.step(episode_steps, action, h_prev)
+            next_state, reward, done = env.step(episode_steps, action, h_prev, total_episodes)
             episode_steps += 1
             episode_reward += reward
             if done == True:

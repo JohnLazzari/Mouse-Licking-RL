@@ -15,7 +15,7 @@ action_dim = 4
 inp_dim = 10
 log_steps = 10
 policy_replay_size = 100000
-save_iter = 100000
+save_iter = 10000
 thresh = 1
 dt = 0.01
 timesteps = 300
@@ -27,6 +27,6 @@ env = "kinematics"
 kinematics_folder = "data"
 
 ### MODEL SAVING ###
-model_save_path = ""
-reward_save_path = ""
-steps_save_path = ""
+model_save_path = "checkpoints/kinematics_model"
+reward_save_path = "training_reports/reward_kinematics_model"
+steps_save_path = "training_reports/steps_kinematics_model"

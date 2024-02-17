@@ -156,7 +156,7 @@ class Kinematics_Env(gym.Env):
         self.cue = 0
         self.cue_time = 1 / dt
         self.kinematics_folder = kinematics_folder
-        self.thresh = 0.6
+        self.thresh = 0.1
         self.fixed_steps = 1
         self.max_timesteps = None
         self.cur_cond = None
@@ -200,7 +200,7 @@ class Kinematics_Env(gym.Env):
         self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
-        self.thresh = 0.6
+        self.thresh = 0.1
         self.cortical_state = np.zeros(shape=(self.action_dim,))
 
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
@@ -302,15 +302,15 @@ class Kinematics_Env(gym.Env):
     
     def _get_pred_kinematics(self, action):
         action = np.array(action)
-        self.cortical_state = self._gain_sigmoid(self.cortical_state + action)
+        self.cortical_state = np.maximum(0, self.cortical_state + action)
 
     def _gain_sigmoid(self, x, gain=0.5):
         return 1 / (1 + np.exp(-gain * x))
     
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int) -> (list, int, bool):
 
-        if t % self.fixed_steps == 0 and self.thresh > 0.1:
-            self.thresh -= 0.01
+        #if t % self.fixed_steps == 0 and self.thresh > 0.1:
+        #    self.thresh -= 0.01
         
         self._get_pred_kinematics(action)
         reward = self._get_reward(t)

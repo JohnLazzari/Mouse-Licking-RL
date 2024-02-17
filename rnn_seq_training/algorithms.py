@@ -68,8 +68,8 @@ def sac(actor,
     next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
     mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
 
-    h_train = torch.zeros(size=(batch_size, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, hid_dim)).cuda()
+    h_train = torch.ones(size=(batch_size, hid_dim), device="cuda")
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
     y_ones = torch.ones(size=(batch_size, hid_dim), device="cuda")
     y_beta = torch.ones(size=(batch_size, hid_dim), device="cuda")*beta
 

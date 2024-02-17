@@ -46,7 +46,7 @@ class Actor_Seq(nn.Module):
         x = F.sigmoid(self.fc1(x))
         new_h = []
         for t in range(x.shape[1]):
-            new_h.append(self.gain_sigmoid((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
+            new_h.append(F.sigmoid((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
             y_depression = y_depression + (1 / 5) * ( -(y_depression - 1) * (1 - new_h[-1]) - (y_depression - 0.25) * new_h[-1])
             hn = new_h[-1]
             #if y_depression.shape == (1, self.hid_dim):
@@ -59,9 +59,6 @@ class Actor_Seq(nn.Module):
         
         return mean, std, hn, new_h, y_depression
 
-    def gain_sigmoid(self, x, gain=1):
-        return 1 / (1 + torch.exp(-gain * x))
-    
     def sample(self, state: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling: bool = True, len_seq: list = None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
         hn = hn.cuda()

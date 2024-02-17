@@ -27,6 +27,6 @@ env = "kinematics"
 kinematics_folder = "data"
 
 ### MODEL SAVING ###
-model_save_path = "checkpoints/kinematics_seq"
-reward_save_path = "training_reports/rewards_kinematics_seq"
-steps_save_path = "training_reports/steps_kinematics_seq"
+model_save_path = "checkpoints/kin_seq"
+reward_save_path = "training_reports/rewards_kin_seq"
+steps_save_path = "training_reports/steps_kin_seq"

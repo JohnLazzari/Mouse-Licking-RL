@@ -87,13 +87,10 @@ def sac_learn(
     ep_trajectory = []
 
     #num_layers specified in the policy model 
-    h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, hid_dim)).cuda()
+    h_prev = torch.ones(size=(1, hid_dim), device="cuda")
+    y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
     y_beta = torch.ones(size=(1, hid_dim,)).cuda()*0.25
 
-    # TODO learning for new network isnt correct, y is not updated during the processing of the sequence, need to make a custom rnn
-    # need to make sure I update params every step as opposed to after every episode (too much bad experience)
-    # organize code such that its easy to switch and add things between the standard rnn and new rnn
     ### STEPS PER EPISODE ###
     for t in count():
 
@@ -128,8 +125,8 @@ def sac_learn(
             policy_memory.push(ep_trajectory)
 
             # reset training conditions
-            h_prev = torch.zeros(size=(1, hid_dim), device="cuda")
-            y_depression = torch.ones(size=(1, hid_dim)).cuda()
+            h_prev = torch.ones(size=(1, hid_dim), device="cuda")
+            y_depression = torch.ones(size=(1, hid_dim)).cuda()*.25
             state = env.reset(total_episodes) 
 
             # resest lists
