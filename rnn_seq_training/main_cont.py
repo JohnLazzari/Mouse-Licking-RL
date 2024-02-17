@@ -14,6 +14,8 @@ import config
 
 def main():
 
+    torch.autograd.set_detect_anomaly(True)
+
     ### PARAMETERS ###
     parser = config.config_parser()
     args = parser.parse_args()

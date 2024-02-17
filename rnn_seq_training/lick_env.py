@@ -6,6 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
 import scipy.io as sio
+import matplotlib.pyplot as plt
 
 def NormalizeData(data, min, max):
     return (data - min) / (max - min)
@@ -155,7 +156,8 @@ class Kinematics_Env(gym.Env):
         self.cue = 0
         self.cue_time = 1 / dt
         self.kinematics_folder = kinematics_folder
-        self.thresh = 0.5
+        self.thresh = 0.6
+        self.fixed_steps = 1
         self.max_timesteps = None
         self.cur_cond = None
         self.cortical_state = np.zeros(shape=(action_dim,))
@@ -171,17 +173,22 @@ class Kinematics_Env(gym.Env):
             self.kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
             self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
             # y position is lower than x position, using these min and max values such that the scaling between x and y is accurate
-            min_jaw, max_jaw = np.min(self.kinematics_jaw_y[cond]), np.max(self.kinematics_jaw_x[cond])
+            min_jaw_y, max_jaw_y = np.min(self.kinematics_jaw_y[cond]), np.max(self.kinematics_jaw_y[cond])
+            y_diff = max_jaw_y - min_jaw_y
+            # we want to have them be between 0 and 1 but at a reasonable scale
+            min_jaw_x, max_jaw_x = np.min(self.kinematics_jaw_x[cond]), np.min(self.kinematics_jaw_x[cond]) + y_diff
 
-            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]), min_jaw, max_jaw)
-            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw, max_jaw)
+            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]), min_jaw_y, max_jaw_y)
+            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw_x, max_jaw_x)
 
             self.kinematics_tongue_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_tongue.mat')['condy_tongue_mean']
             self.kinematics_tongue_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_tongue.mat')['condx_tongue_mean']
-            min_tongue, max_tongue = np.min(self.kinematics_tongue_y[cond]), np.max(self.kinematics_tongue_x[cond])
+            min_tongue_y, max_tongue_y = np.min(self.kinematics_tongue_y[cond]), np.max(self.kinematics_tongue_x[cond])
+            y_diff = max_tongue_y - min_tongue_y
+            min_tongue_x, max_tongue_x = np.min(self.kinematics_tongue_x[cond]), np.min(self.kinematics_tongue_x[cond]) + y_diff
 
-            self.kinematics_tongue_y[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_y[cond]), min_tongue, max_tongue)
-            self.kinematics_tongue_x[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_x[cond]), min_tongue, max_tongue)
+            self.kinematics_tongue_y[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_y[cond]), min_tongue_y, max_tongue_y)
+            self.kinematics_tongue_x[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_x[cond]), min_tongue_x, max_tongue_x)
 
             self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
 
@@ -193,6 +200,7 @@ class Kinematics_Env(gym.Env):
         self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
+        self.thresh = 0.6
         self.cortical_state = np.zeros(shape=(self.action_dim,))
 
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
@@ -296,14 +304,13 @@ class Kinematics_Env(gym.Env):
         action = np.array(action)
         self.cortical_state = self._gain_sigmoid(self.cortical_state + action)
 
-    def _gain_sigmoid(self, x, gain=1):
+    def _gain_sigmoid(self, x, gain=0.5):
         return 1 / (1 + np.exp(-gain * x))
     
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int) -> (list, int, bool):
 
-        if episode_num % 2500 == 0 and self.thresh > 0.03:
+        if t % self.fixed_steps == 0 and self.thresh > 0.1:
             self.thresh -= 0.01
-            print(self.thresh)
         
         self._get_pred_kinematics(action)
         reward = self._get_reward(t)

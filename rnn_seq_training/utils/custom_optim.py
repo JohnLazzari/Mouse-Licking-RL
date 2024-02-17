@@ -54,10 +54,10 @@ class CustomAdamOptimizer(optim.Optimizer):
 
                 # Weight clipping
                 if group['names'][i] == "weight_hh_l0":
+                    #print(m_hat / (torch.sqrt(v_hat) + eps))
                     p.data.clamp_(-10, group['inhib_clip_value'])
                     assert (p.data <= 0).all()
                 if group['names'][i] == "weight_ih_l0":
-                    #print(m_hat / (torch.sqrt(v_hat) + eps))
                     p.data.clamp_(group['excite_clip_value'], 10)
                     assert (p.data >= 0).all()
 

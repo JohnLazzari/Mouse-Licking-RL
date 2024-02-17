@@ -23,8 +23,8 @@ class Actor_Seq(nn.Module):
         self.fc1 = nn.Linear(inp_dim, hid_dim)
         self.weight_ih_l0 = nn.Parameter(torch.zeros(size=(hid_dim, hid_dim)))
         self.weight_hh_l0 = nn.Parameter(torch.zeros(size=(hid_dim, hid_dim)))
-        nn.init.uniform_(self.weight_hh_l0, -1, inhib_upper_bound)
-        nn.init.uniform_(self.weight_ih_l0, excite_lower_bound, 1)
+        nn.init.uniform_(self.weight_hh_l0, -0.1, inhib_upper_bound)
+        nn.init.uniform_(self.weight_ih_l0, excite_lower_bound, 0.1)
         with torch.no_grad():
             eye = torch.eye(hid_dim)
             ones = torch.ones(size=(hid_dim, hid_dim))
@@ -43,7 +43,7 @@ class Actor_Seq(nn.Module):
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 
-        x = F.relu(self.fc1(x))
+        x = F.sigmoid(self.fc1(x))
         new_h = []
         for t in range(x.shape[1]):
             new_h.append(self.gain_sigmoid((y_depression * hn) @ self.weight_hh_l0 + x[:, t, :] @ self.weight_ih_l0))
@@ -59,7 +59,7 @@ class Actor_Seq(nn.Module):
         
         return mean, std, hn, new_h, y_depression
 
-    def gain_sigmoid(self, x, gain=4):
+    def gain_sigmoid(self, x, gain=1):
         return 1 / (1 + torch.exp(-gain * x))
     
     def sample(self, state: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, y_ones: torch.Tensor, y_beta: torch.Tensor, sampling: bool = True, len_seq: list = None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
