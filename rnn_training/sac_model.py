@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
+import math
 
 LOG_SIG_MIN = -20
 LOG_SIG_MAX = 2
@@ -15,6 +16,42 @@ def weights_init_(m):
         torch.nn.init.xavier_normal_(m.weight, gain=.5)
         torch.nn.init.constant_(m.bias, 0)
 
+def sparse_(
+    tensor,
+    sparsity,
+    std=0.01
+):
+    r"""Fill the 2D input `Tensor` as a sparse matrix.
+
+    The non-zero elements will be drawn from the normal distribution
+    :math:`\mathcal{N}(0, 0.01)`, as described in `Deep learning via
+    Hessian-free optimization` - Martens, J. (2010).
+
+    Args:
+        tensor: an n-dimensional `torch.Tensor`
+        sparsity: The fraction of elements in each column to be set to zero
+        std: the standard deviation of the normal distribution used to generate
+            the non-zero values
+        generator: the torch Generator to sample from (default: None)
+
+    Examples:
+        >>> w = torch.empty(3, 5)
+        >>> nn.init.sparse_(w, sparsity=0.1)
+    """
+    if tensor.ndimension() != 2:
+        raise ValueError("Only tensors with 2 dimensions are supported")
+
+    rows, cols = tensor.shape
+    num_zeros = int(math.ceil(sparsity * rows))
+
+    with torch.no_grad():
+        tensor.uniform_(-.1, 0)
+        for col_idx in range(cols):
+            row_indices = torch.randperm(rows)
+            zero_indices = row_indices[:num_zeros]
+            tensor[zero_indices, col_idx] = 0
+    return tensor
+
 # Actor RNN
 class Actor(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
@@ -24,7 +61,12 @@ class Actor(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
+        self.fc1 = nn.Linear(inp_dim, hid_dim)
+        self.gru = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
+        sparse_(self.gru.weight_hh_l0, 0.25)
+        nn.init.zeros_(self.gru.bias_hh_l0)
+        self.gru.weight_hh_l0.requires_grad = False
+        self.gru.bias_hh_l0.requires_grad = False
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
@@ -34,6 +76,8 @@ class Actor(nn.Module):
         self.action_bias = 0
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+
+        x = F.relu(self.fc1(x))
 
         if sampling == False:
             x = pack_padded_sequence(x, len_seq,  batch_first=True, enforce_sorted=False)
@@ -91,10 +135,12 @@ class Critic(nn.Module):
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         
-        self.gru1 = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
+        self.fc11 = nn.Linear(inp_dim, hid_dim)
+        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
         self.fc12 = nn.Linear(hid_dim, 1)
 
-        self.gru2 = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
+        self.fc21 = nn.Linear(inp_dim, hid_dim)
+        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None) -> (int, int):
@@ -102,12 +148,14 @@ class Critic(nn.Module):
         x = torch.cat((state, action), dim=-1)
         hn = hn.cuda()
 
-        x1 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
+        x1 = F.relu(self.fc11(x))
+        x1 = pack_padded_sequence(x1, len_seq, batch_first=True, enforce_sorted=False)
         x1, hn1 = self.gru1(x1, hn)
         x1, _ = pad_packed_sequence(x1, batch_first=True)
         x1 = self.fc12(x1)
 
-        x2 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
+        x2 = F.relu(self.fc21(x))
+        x2 = pack_padded_sequence(x2, len_seq, batch_first=True, enforce_sorted=False)
         x2, hn2 = self.gru2(x2, hn)
         x2, _ = pad_packed_sequence(x2, batch_first=True)
         x2 = self.fc22(x2)

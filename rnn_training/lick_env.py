@@ -180,9 +180,9 @@ class Kinematics_Env(gym.Env):
             self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]), min_jaw_y, max_jaw_y)
             self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw_x, max_jaw_x)
 
-            plt.plot(self.kinematics_jaw_y[cond])
-            plt.plot(self.kinematics_jaw_x[cond])
-            plt.show()
+            #plt.plot(self.kinematics_jaw_y[cond])
+            #plt.plot(self.kinematics_jaw_x[cond])
+            #plt.show()
 
             self.kinematics_tongue_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_tongue.mat')['condy_tongue_mean']
             self.kinematics_tongue_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_tongue.mat')['condx_tongue_mean']
@@ -193,9 +193,9 @@ class Kinematics_Env(gym.Env):
             self.kinematics_tongue_y[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_y[cond]), min_tongue_y, max_tongue_y)
             self.kinematics_tongue_x[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_x[cond]), min_tongue_x, max_tongue_x)
 
-            plt.plot(self.kinematics_tongue_y[cond])
-            plt.plot(self.kinematics_tongue_x[cond])
-            plt.show()
+            #plt.plot(self.kinematics_tongue_y[cond])
+            #plt.plot(self.kinematics_tongue_x[cond])
+            #plt.show()
 
             self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
 
@@ -382,7 +382,7 @@ class Kinematics_Jaw_Env(gym.Env):
         dist_y_jaw = abs(self.cortical_state[1] - self.kinematics_jaw_y[self.cur_cond][t])
 
         if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh:
-            reward = 5 * (-dist_x_jaw - dist_y_jaw)
+            reward = -5
             return reward
 
         reward_x_jaw = (1 / 1000**(dist_x_jaw))
@@ -448,7 +448,7 @@ class Kinematics_Jaw_Env(gym.Env):
     
     def _get_pred_kinematics(self, action):
         action = np.array(action)
-        self.cortical_state = np.maximum(0, self.cortical_state + action)
+        self.cortical_state = self.cortical_state + action
 
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int) -> (list, int, bool):
 
