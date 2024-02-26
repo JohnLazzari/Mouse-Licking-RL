@@ -84,6 +84,8 @@ def sac_learn(
     ### GET INITAL STATE + RESET MODEL BY POSE
     state = env.reset(0)
     ep_trajectory = []
+    policy_losses = []
+    critic_losses = []
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
@@ -105,7 +107,7 @@ def sac_learn(
             if done == True:
                 break
 
-        mask = 1 if episode_steps == env.max_timesteps else float(not done)
+        mask = 1.0 if episode_steps == env.max_timesteps else float(not done)
 
         ep_trajectory.append((state, action, reward, next_state, mask))
 
@@ -147,14 +149,18 @@ def sac_learn(
             print("mean reward (10 episodes): %f" % episode_reward)
             print("mean steps (10 episodes): %f" % episode_steps)
             print("best mean reward: %f" % best_mean_episode_reward)
+            print("Policy Loss: %f" % np.mean(np.array(policy_losses)))
+            print("Critic Loss: %f" % np.mean(np.array(critic_losses)))
             sys.stdout.flush()
+
+            policy_losses = []
+            critic_losses = []
 
             if total_episodes % log_steps == 0:
                 # Dump statistics to pickle
                 np.save(f'{reward_save_path}.npy', Statistics["mean_episode_rewards"])
                 np.save(f'{steps_save_path}.npy', Statistics["mean_episode_steps"])
                 print("Saved to %s" % 'training_reports')
-                print('--------------------------\n')
             
             if total_episodes % save_iter == 0:
                 torch.save({
@@ -173,17 +179,20 @@ def sac_learn(
         # Apply Basal Ganglia update (using SAC)
         if len(policy_memory.buffer) > batch_size and total_episodes > learning_starts and total_episodes % learning_freq == 0:
 
-            sac(actor_bg,
-                critic_bg,
-                critic_target_bg,
-                critic_bg_optimizer,
-                actor_bg_optimizer,
-                policy_memory,
-                batch_size,
-                hid_dim,
-                gamma,
-                automatic_entropy_tuning,
-                log_alpha,
-                target_entropy,
-                alpha,
-                alpha_optim)
+            policy_loss, critic_loss = sac(actor_bg,
+                                            critic_bg,
+                                            critic_target_bg,
+                                            critic_bg_optimizer,
+                                            actor_bg_optimizer,
+                                            policy_memory,
+                                            batch_size,
+                                            hid_dim,
+                                            gamma,
+                                            automatic_entropy_tuning,
+                                            log_alpha,
+                                            target_entropy,
+                                            alpha,
+                                            alpha_optim)
+
+            policy_losses.append(policy_loss)
+            critic_losses.append(critic_loss)

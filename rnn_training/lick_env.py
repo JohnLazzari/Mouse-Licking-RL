@@ -20,14 +20,14 @@ class Lick_Env_Cont(gym.Env):
         self.dt = dt
         self.switch_const = 0
         self.cortical_state = 0
-        self.switch = 1
+        self.switch = 0
         self.cue = 0
         self.cue_time = 1 / dt
         self.beta = beta
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
-        self.num_conds = 3
+        self.num_conds = 1
 
         # Load data
         self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
@@ -40,8 +40,10 @@ class Lick_Env_Cont(gym.Env):
         self.time_elapsed_from_lick = 0
         # switch target delay time
         self.switch = episode % self.num_conds
-        self.switch_const = (self.switch + 1) / self.num_conds
-
+        if self.num_conds == 1:
+            self.switch_const = 0.2 #just using for a single condition
+        else:
+            self.switch_const = (self.switch + 1) / self.num_conds
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
@@ -69,7 +71,7 @@ class Lick_Env_Cont(gym.Env):
             # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
             if t <= self.cue_time:
                 #reward -= 0.01 * abs(activity - self.alm_activity[t-1] + 1e-2)
-                reward -= abs(activity)
+                reward -= 0.01 * abs(activity)
                 if action == 1:
                     reward -= 5
 
@@ -99,7 +101,6 @@ class Lick_Env_Cont(gym.Env):
 
         if self.cortical_state >= self.thresh:
             lick = 1
-            self.cortical_state = 1
         else:
             lick = 0
 

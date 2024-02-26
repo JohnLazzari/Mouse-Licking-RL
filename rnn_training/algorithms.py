@@ -89,6 +89,7 @@ def sac(actor,
 
     critic_optimizer.zero_grad()
     qf_loss.backward()
+    torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)
     critic_optimizer.step()
 
     pi_action_bat, log_prob_bat, _, _, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
@@ -104,6 +105,7 @@ def sac(actor,
 
     actor_optimizer.zero_grad()
     policy_loss.backward()
+    torch.nn.utils.clip_grad_norm_(actor.parameters(), 1)
     actor_optimizer.step()
 
     if automatic_entropy_tuning:
@@ -116,7 +118,9 @@ def sac(actor,
         #alpha = log_alpha.exp()
 
     soft_update(critic_target, critic, .005)
-    h_train = h_train.detach()
+
+    return policy_loss.item(), qf_loss.item()
+
 
 def REINFORCE(episode, alm, gamma, log_probs, alm_values):
 
