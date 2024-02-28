@@ -312,7 +312,7 @@ class Kinematics_Jaw_Env(gym.Env):
         self.fixed_steps = 1
         self.max_timesteps = None
         self.cur_cond = None
-        self.cortical_state = np.ones(shape=(action_dim,))*0.1
+        self.cortical_state = np.zeros(shape=(action_dim,))
         self.kinematics_jaw_x = {}
         self.kinematics_jaw_y = {}
         self.kinematics_tongue_x = {}
@@ -343,7 +343,7 @@ class Kinematics_Jaw_Env(gym.Env):
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
         self.thresh = 0.5
-        self.cortical_state = np.ones(shape=(self.action_dim,))*0.1
+        self.cortical_state = np.zeros(shape=(self.action_dim,))
 
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
         state = [0., 
