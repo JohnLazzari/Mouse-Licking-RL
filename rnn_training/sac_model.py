@@ -62,7 +62,7 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.gru = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
+        self.gru = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
         '''
         sparse_(self.gru.weight_hh_l0, 0.25)
         nn.init.zeros_(self.gru.bias_hh_l0)
@@ -88,6 +88,9 @@ class Actor(nn.Module):
 
         if sampling == False:
             gru_x, _ = pad_packed_sequence(gru_x, batch_first=True)
+
+        gru_x = 0.5 * gru_x + 0.5
+        hn = 0.5 * hn + 0.5
 
         mean = self.mean_linear(gru_x)
         std = self.std_linear(gru_x)
@@ -138,11 +141,11 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
+        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
+        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None) -> (int, int):

@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 def NormalizeData(data, min, max):
     return (data - min) / (max - min)
 
+#######################################
+######## Ramping Environment ##########
+#######################################
+
 class Lick_Env_Cont(gym.Env):
     def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
@@ -27,7 +31,7 @@ class Lick_Env_Cont(gym.Env):
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
-        self.num_conds = 1
+        self.num_conds = 3
 
         # Load data
         self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
@@ -54,26 +58,22 @@ class Lick_Env_Cont(gym.Env):
         reward = 0
         if self.cue == 1:
 
-            # Follow the ramping activity while the cue has sounded and the mouse hasnt licked yet
-            # Goal is to further incentivize accurate ramping ramping activity
-            #reward -= 0.01 * abs(activity - self.alm_activity[t-1])
-            # Provide a high reward once ramping is successfully completed after the delay time 
-            # Reward is scaled by how late the mouse licks
             if action == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
             if action == 1 and t < delay_time:
                 reward -= 5
             if action != 1 and t == self.max_timesteps:
                 reward -= 5
+            if self.cortical_state < 0:
+                reward -= 5
 
         elif self.cue == 0:
 
-            # If cue is zero and t is less than cue time, this is pre-cue activity, thus follow true trajectory in order to reduce alm activity before cue
-            if t <= self.cue_time:
-                #reward -= 0.01 * abs(activity - self.alm_activity[t-1] + 1e-2)
-                reward -= 0.01 * abs(activity)
-                if action == 1:
-                    reward -= 5
+            reward -= 0.01 * abs(activity)
+            if action == 1:
+                reward -= 5
+            if self.cortical_state < 0:
+                reward -= 5
 
         return reward
     
@@ -84,6 +84,8 @@ class Lick_Env_Cont(gym.Env):
             done = True
         #if t > delay_time and self.cue == 0 and self.cortical_state <= self.alm_activity[-1]:
         #    done = True
+        if self.cortical_state < 0:
+            done = True
         if action == 1:
             done = True
         return done
@@ -97,7 +99,7 @@ class Lick_Env_Cont(gym.Env):
         return state
     
     def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
-        self.cortical_state = max(0, self.beta * self.cortical_state + action * self.bg_scale)
+        self.cortical_state = self.beta * self.cortical_state + action * self.bg_scale
 
         if self.cortical_state >= self.thresh:
             lick = 1
@@ -115,6 +117,10 @@ class Lick_Env_Cont(gym.Env):
         state = self._get_next_state(next_t, lick)
         return state, reward, done
     
+
+#######################################
+##### Kinematics Environment ##########
+#######################################
 
 class Kinematics_Env(gym.Env):
     def __init__(self, action_dim, dt, kinematics_folder):
@@ -289,6 +295,9 @@ class Kinematics_Env(gym.Env):
         state = self._get_next_state(t)
         return state, reward, done
 
+#######################################
+##### Kinematics Jaw Environment ######
+#######################################
     
 class Kinematics_Jaw_Env(gym.Env):
     def __init__(self, action_dim, dt, kinematics_folder):
