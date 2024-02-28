@@ -126,6 +126,16 @@ def config_parser():
                         default=0.05, 
                         help='scale of bg action')
 
+    parser.add_argument('--action_scale', 
+                        type=float, 
+                        default=0.5, 
+                        help='scale of actor action')
+
+    parser.add_argument('--action_bias', 
+                        type=float, 
+                        default=0.5, 
+                        help='bias of actor action')
+
     parser.add_argument('--env', 
                         type=str, 
                         default='kinematics', 

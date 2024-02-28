@@ -31,7 +31,7 @@ class Lick_Env_Cont(gym.Env):
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
-        self.num_conds = 3
+        self.num_conds = 1
 
         # Load data
         self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
@@ -69,7 +69,7 @@ class Lick_Env_Cont(gym.Env):
 
         elif self.cue == 0:
 
-            reward -= 0.01 * abs(activity)
+            reward -= 0.1 * abs(activity)
             if action == 1:
                 reward -= 5
             if self.cortical_state < 0:

@@ -45,12 +45,14 @@ def sac_learn(
     model_save_path,
     reward_save_path,
     steps_save_path,
+    action_scale,
+    action_bias
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space)      == gym.spaces.Box
 
-    actor_bg = actor(inp_dim, hid_dim, action_dim).cuda()
+    actor_bg = actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
     critic_bg = critic(action_dim+inp_dim, hid_dim).cuda()
     critic_target_bg = critic(action_dim+inp_dim, hid_dim).cuda()
     hard_update(critic_target_bg, critic_bg)
@@ -135,10 +137,20 @@ def sac_learn(
 
             ### 4. Log progress and keep track of statistics
             if len(avg_reward) > 0:
-                mean_episode_reward = np.mean(np.array(avg_reward)[-10:])
+                mean_episode_reward = np.mean(np.array(avg_reward)[-100:])
             if len(avg_steps) > 0:
-                mean_episode_steps = np.mean(np.array(avg_steps)[-10:])
+                mean_episode_steps = np.mean(np.array(avg_steps)[-100:])
             if len(avg_reward) > 10:
+                if mean_episode_reward > best_mean_episode_reward:
+                    torch.save({
+                        'iteration': t,
+                        'agent_state_dict': actor_bg.state_dict(),
+                        'critic_state_dict': critic_bg.state_dict(),
+                        'critic_target_state_dict': critic_target_bg.state_dict(),
+                        'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
+                        'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
+                    }, model_save_path + '.pth')
+
                 best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
 
             Statistics["mean_episode_rewards"].append(mean_episode_reward)
@@ -146,8 +158,8 @@ def sac_learn(
             Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
 
             print("Episode %d" % (total_episodes,))
-            print("mean reward (10 episodes): %f" % episode_reward)
-            print("mean steps (10 episodes): %f" % episode_steps)
+            print("mean reward: %f" % episode_reward)
+            print("mean steps: %f" % episode_steps)
             print("best mean reward: %f" % best_mean_episode_reward)
             print("Policy Loss: %f" % np.mean(np.array(policy_losses)))
             print("Critic Loss: %f" % np.mean(np.array(critic_losses)))
@@ -162,16 +174,6 @@ def sac_learn(
                 np.save(f'{steps_save_path}.npy', Statistics["mean_episode_steps"])
                 print("Saved to %s" % 'training_reports')
             
-            if total_episodes % save_iter == 0:
-                torch.save({
-                    'iteration': t,
-                    'agent_state_dict': actor_bg.state_dict(),
-                    'critic_state_dict': critic_bg.state_dict(),
-                    'critic_target_state_dict': critic_target_bg.state_dict(),
-                    'agent_optimizer_state_dict': actor_bg_optimizer.state_dict(),
-                    'critic_optimizer_state_dict': critic_bg_optimizer.state_dict(),
-                }, model_save_path + str(total_episodes) + '.pth')
-
             # reset tracking variables
             episode_steps = 0
             episode_reward = 0

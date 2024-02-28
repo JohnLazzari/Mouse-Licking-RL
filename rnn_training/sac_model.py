@@ -54,7 +54,7 @@ def sparse_(
 
 # Actor RNN
 class Actor(nn.Module):
-    def __init__(self, inp_dim, hid_dim, action_dim):
+    def __init__(self, inp_dim, hid_dim, action_dim, action_scale, action_bias):
         super(Actor, self).__init__()
 
         self.inp_dim = inp_dim
@@ -73,9 +73,8 @@ class Actor(nn.Module):
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
 
-        # Range of actions from -1 to 1
-        self.action_scale = 1
-        self.action_bias = 0
+        self.action_scale = action_scale
+        self.action_bias = action_bias
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
 

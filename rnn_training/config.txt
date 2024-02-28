@@ -15,18 +15,19 @@ action_dim = 1
 inp_dim = 3
 log_steps = 10
 policy_replay_size = 50000
-save_iter = 5000
 thresh = 1
 dt = 0.01
 timesteps = 300
 beta = .99
 bg_scale = .1
 frame_skips = 2
+action_scale = 0.5
+action_bias = 0.5
 alm_data_path = "data/alm_fr_averaged_1s.mat"
 env = "lick_ramp"
 kinematics_folder = "data"
 
 ### MODEL SAVING ###
-model_save_path = "checkpoints/lick_ramp_relu"
-reward_save_path = "training_reports/reward_lick_ramp_relu"
-steps_save_path = "training_reports/steps_lick_ramp_relu"
+model_save_path = "checkpoints/lick_ramp_switch"
+reward_save_path = "training_reports/reward_lick_ramp_switch"
+steps_save_path = "training_reports/steps_lick_ramp_switch"
