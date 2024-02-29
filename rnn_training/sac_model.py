@@ -61,8 +61,7 @@ class Actor(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.gru = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
+        self.gru = nn.RNN(inp_dim, hid_dim, batch_first=True, num_layers=1)
         '''
         sparse_(self.gru.weight_hh_l0, 0.25)
         nn.init.zeros_(self.gru.bias_hh_l0)
@@ -77,8 +76,6 @@ class Actor(nn.Module):
         self.action_bias = action_bias
 
     def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
-
-        x = F.relu(self.fc1(x))
 
         if sampling == False:
             x = pack_padded_sequence(x, len_seq,  batch_first=True, enforce_sorted=False)
