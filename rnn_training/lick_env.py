@@ -20,7 +20,7 @@ class Lick_Env_Cont(gym.Env):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.thresh = thresh
-        self.max_timesteps = timesteps
+        self.max_timesteps = timesteps-1
         self.dt = dt
         self.switch_const = 0
         self.cortical_state = 0
@@ -32,12 +32,19 @@ class Lick_Env_Cont(gym.Env):
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
         self.num_conds = 1
+        self.alm_activity = {}
 
         # Load data
-        self.alm_activity = sio.loadmat(alm_data_path)['average_total_fr_units_1s']
-        self.alm_activity = np.squeeze(NormalizeData(self.alm_activity, np.min(self.alm_activity), np.max(self.alm_activity)))
+        self.alm_activity[0] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.1s.mat')['psth']
+        self.alm_activity[0] = np.squeeze(NormalizeData(self.alm_activity[0], np.min(self.alm_activity[0]), np.max(self.alm_activity[0])))
 
-    def reset(self, episode: int) -> list:
+        self.alm_activity[1] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.4s.mat')['psth']
+        self.alm_activity[1] = np.squeeze(NormalizeData(self.alm_activity[1], np.min(self.alm_activity[1]), np.max(self.alm_activity[1])))
+
+        self.alm_activity[2] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.7s.mat')['psth']
+        self.alm_activity[2] = np.squeeze(NormalizeData(self.alm_activity[2], np.min(self.alm_activity[2]), np.max(self.alm_activity[2])))
+
+    def reset(self, episode: int):
 
         self.cue = 0
         self.cortical_state = 0
@@ -51,46 +58,44 @@ class Lick_Env_Cont(gym.Env):
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
-    def _get_reward(self, t: int, action: int, activity: int, hn: torch.Tensor) -> int:
+    def _get_reward(self, t: int, lick: int, action: int):
 
-        delay_time = (2 + self.switch * 0.15) / self.dt
+        delay_time = int((2 + self.switch * 0.3) / self.dt) - 1 # scale back since t starts at 0
 
         reward = 0
+        reward -= 0.1 * abs(action[t] - self.alm_activity[self.switch][t])
         if self.cue == 1:
 
-            if action == 1 and t >= delay_time:
+            if lick == 1 and t >= delay_time:
                 reward += 5 * (delay_time / t)
-            if action == 1 and t < delay_time:
+            if lick == 1 and t < delay_time:
                 reward -= 5
-            if action != 1 and t == self.max_timesteps:
+            if lick != 1 and t == self.max_timesteps:
                 reward -= 5
             if self.cortical_state < 0:
                 reward -= 5
 
         elif self.cue == 0:
 
-            reward -= 0.1 * abs(activity)
-            if action == 1:
+            if lick == 1:
                 reward -= 5
             if self.cortical_state < 0:
                 reward -= 5
 
         return reward
     
-    def _get_done(self, t: int, action: int) -> bool:
+    def _get_done(self, t: int, lick: int):
 
         done = False
         if t == self.max_timesteps:
             done = True
-        #if t > delay_time and self.cue == 0 and self.cortical_state <= self.alm_activity[-1]:
-        #    done = True
         if self.cortical_state < 0:
             done = True
-        if action == 1:
+        if lick == 1:
             done = True
         return done
     
-    def _get_next_state(self, t: int, lick: int) -> torch.Tensor:
+    def _get_next_state(self, t: int, lick: int):
 
         if t == self.cue_time:
             self.cue = 1
@@ -98,7 +103,7 @@ class Lick_Env_Cont(gym.Env):
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
     
-    def _get_lick(self, action: torch.Tensor) -> torch.Tensor:
+    def _get_lick(self, action: torch.Tensor):
         self.cortical_state = self.beta * self.cortical_state + action * self.bg_scale
 
         if self.cortical_state >= self.thresh:
@@ -108,199 +113,20 @@ class Lick_Env_Cont(gym.Env):
 
         return lick
     
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episodes: int) -> (list, int, bool):
+    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episodes: int):
         action = action[0]
-        next_t = t+1
         lick = self._get_lick(action)
-        reward = self._get_reward(next_t, lick, action, hn)
-        done = self._get_done(next_t, lick)
-        state = self._get_next_state(next_t, lick)
+        reward = self._get_reward(t, lick, action)
+        done = self._get_done(t, lick)
+        state = self._get_next_state(t, lick)
         return state, reward, done
     
-
-#######################################
-##### Kinematics Environment ##########
-#######################################
-
-class Kinematics_Env(gym.Env):
-    def __init__(self, action_dim, dt, kinematics_folder):
-        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
-        self.action_dim = action_dim
-        self.dt = dt
-        self.cue = 0
-        self.cue_time = 1 / dt
-        self.kinematics_folder = kinematics_folder
-        self.thresh = 0.1
-        self.fixed_steps = 1
-        self.max_timesteps = None
-        self.cur_cond = None
-        self.cortical_state = np.ones(shape=(action_dim,)) * 0.1
-        self.kinematics_jaw_x = {}
-        self.kinematics_jaw_y = {}
-        self.kinematics_tongue_x = {}
-        self.kinematics_tongue_y = {}
-        self.Taxis = {}
-
-        # Load data
-        for cond in range(3):
-
-            self.kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
-            self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
-            # y position is lower than x position, using these min and max values such that the scaling between x and y is accurate
-            min_jaw_y, max_jaw_y = np.min(self.kinematics_jaw_y[cond]), np.max(self.kinematics_jaw_y[cond])
-            y_diff = max_jaw_y - min_jaw_y
-            # we want to have them be between 0 and 1 but at a reasonable scale
-            min_jaw_x, max_jaw_x = np.min(self.kinematics_jaw_x[cond]), np.min(self.kinematics_jaw_x[cond]) + y_diff
-
-            self.kinematics_jaw_y[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_y[cond]), min_jaw_y, max_jaw_y)
-            self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw_x, max_jaw_x)
-
-            #plt.plot(self.kinematics_jaw_y[cond])
-            #plt.plot(self.kinematics_jaw_x[cond])
-            #plt.show()
-
-            self.kinematics_tongue_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_tongue.mat')['condy_tongue_mean']
-            self.kinematics_tongue_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_tongue.mat')['condx_tongue_mean']
-            min_tongue_y, max_tongue_y = np.min(self.kinematics_tongue_y[cond]), np.max(self.kinematics_tongue_y[cond])
-            y_diff = max_tongue_y - min_tongue_y
-            min_tongue_x, max_tongue_x = np.min(self.kinematics_tongue_x[cond]), np.min(self.kinematics_tongue_x[cond]) + y_diff
-
-            self.kinematics_tongue_y[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_y[cond]), min_tongue_y, max_tongue_y)
-            self.kinematics_tongue_x[cond] = NormalizeData(np.squeeze(self.kinematics_tongue_x[cond]), min_tongue_x, max_tongue_x)
-
-            #plt.plot(self.kinematics_tongue_y[cond])
-            #plt.plot(self.kinematics_tongue_x[cond])
-            #plt.show()
-
-            self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
-
-    def reset(self, episode: int) -> list:
-
-        self.cur_cond = episode % 3
-        assert self.kinematics_jaw_x[self.cur_cond].shape == self.kinematics_jaw_y[self.cur_cond].shape
-        assert self.kinematics_tongue_x[self.cur_cond].shape == self.kinematics_tongue_y[self.cur_cond].shape
-        self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
-        self.speed_const = (self.cur_cond + 1) / 3
-        self.cue = 0
-        self.thresh = 0.1
-        self.cortical_state = np.ones(shape=(self.action_dim,)) * 0.1
-
-        # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
-        state = [0., 
-                0., 
-                0.,
-                0.,
-                self.kinematics_jaw_x[self.cur_cond][0], 
-                self.kinematics_jaw_y[self.cur_cond][0], 
-                self.kinematics_tongue_x[self.cur_cond][0], 
-                self.kinematics_tongue_y[self.cur_cond][0], 
-                self.speed_const, 
-                self.cue]
-
-        return state
-    
-    def _get_reward(self, t: int) -> int:
-
-        dist_x_jaw = abs(self.cortical_state[0] - self.kinematics_jaw_x[self.cur_cond][t])
-        dist_y_jaw = abs(self.cortical_state[1] - self.kinematics_jaw_y[self.cur_cond][t])
-
-        dist_x_tongue = abs(self.cortical_state[2] - self.kinematics_tongue_x[self.cur_cond][t])
-        dist_y_tongue = abs(self.cortical_state[3] - self.kinematics_tongue_y[self.cur_cond][t])
-
-        if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh or dist_x_tongue > self.thresh or dist_y_tongue > self.thresh:
-            reward = 5 * (-dist_x_jaw - dist_y_jaw - dist_x_tongue - dist_y_tongue)
-            return reward
-
-        reward_x_jaw = (1 / 1000**(dist_x_jaw))
-        reward_y_jaw = (1 / 1000**(dist_y_jaw))
-
-        reward_x_tongue = (1 / 1000**(dist_x_tongue))
-        reward_y_tongue = (1 / 1000**(dist_y_tongue))
-
-        reward = reward_x_jaw + reward_y_jaw + reward_x_tongue + reward_y_tongue
-
-        # add reward based on cue
-        if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 0.033:
-            reward += 5
-
-        # add reward based on lick
-        if self.cur_cond == 0:
-            if 0.95 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.1:
-                reward += 5
-        elif self.cur_cond == 1:
-            if 1.25 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.4:
-                reward += 5
-        elif self.cur_cond == 2:
-            if 1.55 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.7:
-                reward += 5
-
-        return reward
-    
-    def _get_done(self, t: int) -> bool:
-
-        done = False
-
-        dist_x_jaw = abs(self.cortical_state[0] - self.kinematics_jaw_x[self.cur_cond][t])
-        dist_y_jaw = abs(self.cortical_state[1] - self.kinematics_jaw_y[self.cur_cond][t])
-
-        dist_x_tongue = abs(self.cortical_state[2] - self.kinematics_tongue_x[self.cur_cond][t])
-        dist_y_tongue = abs(self.cortical_state[3] - self.kinematics_tongue_y[self.cur_cond][t])
-
-        if dist_x_jaw > self.thresh or dist_y_jaw > self.thresh or dist_x_tongue > self.thresh or dist_y_tongue > self.thresh:
-            done = True
-        if t == self.max_timesteps-1:
-            done = True
-        return done
-    
-    def _get_next_state(self, t: int) -> torch.Tensor:
-
-        # change cue based on Taxis
-        if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 0.033:
-            self.cue = 1
-
-        # change cue based on condition
-        if self.cur_cond == 0:
-            if 0.95 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.1:
-                self.cue = 0
-        elif self.cur_cond == 1:
-            if 1.25 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.4:
-                self.cue = 0
-        elif self.cur_cond == 2:
-            if 1.55 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.7:
-                self.cue = 0
-
-        state = [self.cortical_state[0], 
-                self.cortical_state[1], 
-                self.cortical_state[2],
-                self.cortical_state[3],
-                self.kinematics_jaw_x[self.cur_cond][t], 
-                self.kinematics_jaw_y[self.cur_cond][t], 
-                self.kinematics_tongue_x[self.cur_cond][t], 
-                self.kinematics_tongue_y[self.cur_cond][t], 
-                self.speed_const, 
-                self.cue]
-
-        return state
-    
-    def _get_pred_kinematics(self, action):
-        action = np.array(action)
-        self.cortical_state = np.maximum(0, self.cortical_state + action)
-
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int) -> (list, int, bool):
-
-        self._get_pred_kinematics(action)
-        reward = self._get_reward(t)
-        done = self._get_done(t)
-        state = self._get_next_state(t)
-        return state, reward, done
-
 #######################################
 ##### Kinematics Jaw Environment ######
 #######################################
     
 class Kinematics_Jaw_Env(gym.Env):
-    def __init__(self, action_dim, dt, kinematics_folder):
+    def __init__(self, action_dim, dt, kinematics_folder, alm_data_path):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.action_dim = action_dim
@@ -308,20 +134,21 @@ class Kinematics_Jaw_Env(gym.Env):
         self.cue = 0
         self.cue_time = 1 / dt
         self.kinematics_folder = kinematics_folder
-        self.thresh = 0.5
+        self.alm_data_path = alm_data_path
+        self.thresh = 0.25
         self.fixed_steps = 1
         self.max_timesteps = None
         self.cur_cond = None
         self.cortical_state = np.zeros(shape=(action_dim,))
         self.kinematics_jaw_x = {}
         self.kinematics_jaw_y = {}
-        self.kinematics_tongue_x = {}
-        self.kinematics_tongue_y = {}
+        self.alm_pcs = {}
         self.Taxis = {}
 
         # Load data
         for cond in range(3):
 
+            # Kinematic Data
             self.kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
             self.kinematics_jaw_x[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}x_jaw.mat')['condx_jaw_mean']
             # y position is lower than x position, using these min and max values such that the scaling between x and y is accurate
@@ -334,20 +161,48 @@ class Kinematics_Jaw_Env(gym.Env):
             self.kinematics_jaw_x[cond] = NormalizeData(np.squeeze(self.kinematics_jaw_x[cond]), min_jaw_x, max_jaw_x)
 
             self.Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
+            
+            # ALM Data
+            alm_timepoints = np.linspace(-1, 2, 300).round(2)
+            kin_timepoints = self.Taxis[cond].round(2)
+            # Get a mask
+            time_mask = []
+            kin_idx = 0
+            for timepoint in alm_timepoints:
+                if timepoint == kin_timepoints[kin_idx] and kin_idx < kin_timepoints.shape[0]:
+                    time_mask.append(True)
+                    if kin_idx < kin_timepoints.shape[0]-1:
+                        kin_idx += 1
+                else:
+                    time_mask.append(False)
 
-    def reset(self, episode: int) -> list:
+            self.alm_pcs[cond] = sio.loadmat(f'{alm_data_path}/alm_5PCs_cond{cond+1}.mat')['projected_data']
+            self.alm_pcs[cond] = NormalizeData(np.squeeze(self.alm_pcs[cond]), np.min(self.alm_pcs[cond]), np.max(self.alm_pcs[cond]))
+            self.alm_pcs[cond] = self.alm_pcs[cond][time_mask]
 
+    def reset(self, episode: int):
+
+        # Get current kinematic condition
         self.cur_cond = episode % 3
+        
+        # Assert the shapes are the same for x and y vals
         assert self.kinematics_jaw_x[self.cur_cond].shape == self.kinematics_jaw_y[self.cur_cond].shape
+
+        # Gather environment variables for episode
         self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
-        self.thresh = 0.5
+        self.thresh = 0.25
         self.cortical_state = np.zeros(shape=(self.action_dim,))
 
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
         state = [0., 
                 0., 
+                self.alm_pcs[self.cur_cond][0, 0],
+                self.alm_pcs[self.cur_cond][0, 1],
+                self.alm_pcs[self.cur_cond][0, 2],
+                self.alm_pcs[self.cur_cond][0, 3],
+                self.alm_pcs[self.cur_cond][0, 4],
                 self.kinematics_jaw_x[self.cur_cond][0], 
                 self.kinematics_jaw_y[self.cur_cond][0], 
                 self.speed_const, 
@@ -355,7 +210,7 @@ class Kinematics_Jaw_Env(gym.Env):
 
         return state
     
-    def _get_reward(self, t: int) -> int:
+    def _get_reward(self, t: int):
 
         dist_x_jaw = abs(self.cortical_state[0] - self.kinematics_jaw_x[self.cur_cond][t])
         dist_y_jaw = abs(self.cortical_state[1] - self.kinematics_jaw_y[self.cur_cond][t])
@@ -369,10 +224,6 @@ class Kinematics_Jaw_Env(gym.Env):
 
         reward = reward_x_jaw + reward_y_jaw
 
-        # add reward based on cue
-        if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 0.033:
-            reward += 5
-
         # add reward based on lick
         if self.cur_cond == 0:
             if 0.95 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 1.1:
@@ -386,7 +237,7 @@ class Kinematics_Jaw_Env(gym.Env):
 
         return reward
     
-    def _get_done(self, t: int) -> bool:
+    def _get_done(self, t: int):
 
         done = False
 
@@ -399,7 +250,7 @@ class Kinematics_Jaw_Env(gym.Env):
             done = True
         return done
     
-    def _get_next_state(self, t: int) -> torch.Tensor:
+    def _get_next_state(self, t: int):
 
         # change cue based on Taxis
         if -0.033 < self.Taxis[self.cur_cond][t] and self.Taxis[self.cur_cond][t] < 0.033:
@@ -418,6 +269,11 @@ class Kinematics_Jaw_Env(gym.Env):
 
         state = [self.cortical_state[0], 
                 self.cortical_state[1], 
+                self.alm_pcs[self.cur_cond][t, 0],
+                self.alm_pcs[self.cur_cond][t, 1],
+                self.alm_pcs[self.cur_cond][t, 2],
+                self.alm_pcs[self.cur_cond][t, 3],
+                self.alm_pcs[self.cur_cond][t, 4],
                 self.kinematics_jaw_x[self.cur_cond][t], 
                 self.kinematics_jaw_y[self.cur_cond][t], 
                 self.speed_const, 
@@ -427,14 +283,10 @@ class Kinematics_Jaw_Env(gym.Env):
     
     def _get_pred_kinematics(self, action):
         action = np.array(action)
+        # Use simple linear dynamics for now
         self.cortical_state = self.cortical_state + action
 
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int) -> (list, int, bool):
-
-        if t < 10:
-            self.thresh = 0.5
-        else:
-            self.thresh = 0.1
+    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int):
 
         self._get_pred_kinematics(action)
         reward = self._get_reward(t)

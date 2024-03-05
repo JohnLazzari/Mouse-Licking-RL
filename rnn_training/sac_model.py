@@ -61,7 +61,7 @@ class Actor(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.gru = nn.RNN(inp_dim, hid_dim, batch_first=True, num_layers=1)
+        self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
         '''
         sparse_(self.gru.weight_hh_l0, 0.25)
         nn.init.zeros_(self.gru.bias_hh_l0)
@@ -75,7 +75,7 @@ class Actor(nn.Module):
         self.action_scale = action_scale
         self.action_bias = action_bias
 
-    def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None):
 
         if sampling == False:
             x = pack_padded_sequence(x, len_seq,  batch_first=True, enforce_sorted=False)
@@ -94,7 +94,7 @@ class Actor(nn.Module):
         
         return mean, std, hn, gru_x
     
-    def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling: bool = True, len_seq: list = None) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
+    def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling: bool = True, len_seq: list = None):
 
         hn = hn.cuda()
         
@@ -137,14 +137,14 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
+        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True, num_layers=1)
+        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
         self.fc22 = nn.Linear(hid_dim, 1)
     
-    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None) -> (int, int):
+    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None):
 
         x = torch.cat((state, action), dim=-1)
         hn = hn.cuda()

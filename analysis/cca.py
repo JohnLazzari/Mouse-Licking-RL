@@ -1,7 +1,7 @@
 from sklearn.cross_decomposition import CCA
+from sklearn.decomposition import PCA
 import numpy as np
 from scipy.io import loadmat
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 import pickle
@@ -9,7 +9,7 @@ import scipy.io as sio
 
 rnn_fr = np.load("results/lick_ramp30000_fr.npy")
 A_exp = sio.loadmat("data/striatum_fr_population_1.1s.mat")['fr_population'][:rnn_fr.shape[0], :]
- 
+
 #First filter the agent's activity with 20ms gaussian as done with experimental activity during preprocessing
 A_agent = gaussian_filter1d(rnn_fr, 10, axis=0)
 
@@ -43,10 +43,7 @@ for k in range(10):
         plt.plot(U_prime[:, 9 - k]/np.max(A_exp[:,9-k]) + k * 4, linewidth=1.5, c=(50 / 255, 205 / 255, 50 / 255))
 
 plt.ylabel('Reconstructed M1 Population Activity', size=14)
-#plt.xticks([0, 226], ['0', '0.5'], size= 14)
 plt.yticks([])
-# plt.legend()
-# plt.savefig('C:/Users/malma/Dropbox/NatureFigs2/Fig2/CCA_619.svg', format='svg', dpi=300, transparent= True)
 plt.title(f"Inverse CCA Train Condition {1}")
 plt.show()
 

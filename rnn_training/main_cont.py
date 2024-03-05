@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sac_model import Actor, Critic
 from sac_learn import OptimizerSpec, sac_learn
 from utils.gym import get_env, get_wrapper_by_name
-from lick_env import Lick_Env_Cont, Kinematics_Env, Kinematics_Jaw_Env
+from lick_env import Lick_Env_Cont, Kinematics_Jaw_Env
 import torch
 import config
 
@@ -20,10 +20,8 @@ def main():
     ### CREATE ENVIRONMENT ###
     torch.manual_seed(args.seed)
     
-    if args.env == "kinematics":
-        env = Kinematics_Env(args.action_dim, args.dt, args.kinematics_folder)
-    elif args.env == "kinematics_jaw":
-        env = Kinematics_Jaw_Env(args.action_dim, args.dt, args.kinematics_folder)
+    if args.env == "kinematics_jaw":
+        env = Kinematics_Jaw_Env(args.action_dim, args.dt, args.kinematics_folder, args.alm_data_path)
     elif args.env == "lick_ramp":
         env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
 
