@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN, RNN_Inhibitory, RNN_Seq
+from models import RNN
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from custom_optim import CustomAdamOptimizer
@@ -15,13 +15,17 @@ def NormalizeData(data, min, max):
 
 def main():
 
-    kinematics_folder = 'data'
+    kinematics_folder = 'data/kinematics'
+    alm_data_path = "data/PCs_PSTH"
+    sparse = False
 
     kinematics_jaw_x = {}
     kinematics_jaw_y = {}
+    alm_pcs = {}
+    Taxis = {}
     x_inp = {}
 
-    # may need to potentially give the rnn some time varying input as well? (that scales with time?)
+    # may need to potentially give the rnn some time varying input as well? (ALM Data)
     for cond in range(3):
 
         kinematics_jaw_y[cond] = sio.loadmat(f'{kinematics_folder}/cond{cond+1}y_jaw.mat')['condy_jaw_mean']
@@ -35,19 +39,35 @@ def main():
         kinematics_jaw_y[cond] = torch.tensor(NormalizeData(np.squeeze(kinematics_jaw_y[cond]), min_jaw_y, max_jaw_y), dtype=torch.float32).unsqueeze(1)
         kinematics_jaw_x[cond] = torch.tensor(NormalizeData(np.squeeze(kinematics_jaw_x[cond]), min_jaw_x, max_jaw_x), dtype=torch.float32).unsqueeze(1)
 
+        Taxis[cond] = sio.loadmat(f'{kinematics_folder}/Taxis_cond{cond+1}.mat')['Taxis_cur'].squeeze()
+
+        # ALM Data
+        alm_timepoints = np.linspace(-1, 2, 300).round(2)
+        kin_timepoints = Taxis[cond].round(2)
+        # Get a mask
+        time_mask = []
+        kin_idx = 0
+        for timepoint in alm_timepoints:
+            if timepoint == kin_timepoints[kin_idx] and kin_idx < kin_timepoints.shape[0]:
+                time_mask.append(True)
+                if kin_idx < kin_timepoints.shape[0]-1:
+                    kin_idx += 1
+            else:
+                time_mask.append(False)
+
+        alm_pcs[cond] = sio.loadmat(f'{alm_data_path}/alm_5PCs_cond{cond+1}.mat')['projected_data']
+        alm_pcs[cond] = NormalizeData(np.squeeze(alm_pcs[cond]), np.min(alm_pcs[cond]), np.max(alm_pcs[cond]))
+        alm_pcs[cond] = torch.tensor(alm_pcs[cond][time_mask], device="cuda", dtype=torch.float32).unsqueeze(2)
+
         x_inp[cond] = torch.tensor([(cond+1)/3], device="cuda", dtype=torch.float32).repeat(kinematics_jaw_y[cond].shape[0]).unsqueeze(1)
+        x_inp[cond] = torch.cat([x_inp[cond], alm_pcs[cond][:, 0], alm_pcs[cond][:, 1], alm_pcs[cond][:, 2], alm_pcs[cond][:, 3], alm_pcs[cond][:, 4]], dim=1)
 
-    rnn_control = RNN(1, 256, 2).cuda()
-    rnn_seq = RNN_Seq(1, 256, 2).cuda()
-    rnn_inhibitory = RNN_Inhibitory(1, 256, 2).cuda()
-
+    rnn_control = RNN(6, 256, 2, sparse=sparse).cuda()
     criterion = nn.MSELoss()
     epochs = 15_000
     lr = 1e-3
     
-    rnn_control_optim = optim.Adam(rnn_control.parameters(), lr=lr)
-    rnn_seq_optim = CustomAdamOptimizer(rnn_seq.parameters(), lr=lr)
-    rnn_inhibitory_optim = optim.Adam(rnn_inhibitory.parameters(), lr=lr)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-3)
 
     ############## Control RNN ######################
 

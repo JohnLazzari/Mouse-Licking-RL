@@ -39,7 +39,7 @@ def thinning(fr):
     spike_times = []
     x_is = []
     for i in range(fr.shape[0]):
-        x_i = np.random.exponential(scale=lambda_max)
+        x_i = np.random.exponential(scale=lambda_max) # keep this as lambda not 1/lambda
         x_is.append(x_i)
         u = 0
         for k in range(i):
@@ -49,14 +49,17 @@ def thinning(fr):
         if rand < p:
             spike_times.append(u)
 
-    print(spike_times)
     return spike_times
 
 rnn_fr = np.load("results/rnn_control_regression_act.npy")
 
-cond_1_act = rnn_fr[0, :110, :]
-cond_2_act = rnn_fr[1, :119, :]
-cond_3_act = rnn_fr[2, :128, :]
+cond_1_act = np.abs(rnn_fr[0, :110, :])
+cond_2_act = np.abs(rnn_fr[1, :119, :])
+cond_3_act = np.abs(rnn_fr[2, :128, :])
+
+print(cond_1_act.shape)
+plt.plot(cond_1_act)
+plt.show()
 
 cond_1_act_sorted, ordering = sort_by_peaks(cond_1_act)
 
@@ -71,13 +74,26 @@ for i, neuron in enumerate(cond_1_act_sorted):
 spike_times = list(chain.from_iterable(spike_times))
 neuron_index = list(chain.from_iterable(neuron_index))
 
-plt.scatter(spike_times, neuron_index)
+plt.scatter(spike_times, neuron_index, s=1)
 plt.show()
 #plt.plot(cond_1_act_sorted.T)
 #plt.show()
 
 rnn_fr = np.load("results/lick_ramp10000_fr.npy")
-rnn_fr = gaussian_filter1d(rnn_fr, 10, axis=0)
-ramp_sorted, ordering = sort_by_peaks(rnn_fr)
-#plt.plot(ramp_sorted.T[:, :30])
-#plt.show()
+ramp_sorted, ordering = sort_by_peaks(np.abs(rnn_fr))
+plt.plot(np.abs(ramp_sorted.T[:, :100]))
+plt.show()
+
+# Currently N x T
+spike_times = []
+neuron_index = []
+for i, neuron in enumerate(ramp_sorted):
+    spike_times.append(thinning(neuron))
+    neuron_index.append([i]*len(spike_times[-1]))
+    assert len(spike_times[-1]) == len(neuron_index[-1])
+
+spike_times = list(chain.from_iterable(spike_times))
+neuron_index = list(chain.from_iterable(neuron_index))
+
+plt.scatter(spike_times, neuron_index, s=1)
+plt.show()
