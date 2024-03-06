@@ -126,16 +126,17 @@ class Lick_Env_Cont(gym.Env):
 #######################################
     
 class Kinematics_Jaw_Env(gym.Env):
-    def __init__(self, action_dim, dt, kinematics_folder, alm_data_path):
+    def __init__(self, action_dim, dt, kinematics_folder, alm_data_path, bg_scale):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.action_dim = action_dim
         self.dt = dt
         self.cue = 0
         self.cue_time = 1 / dt
+        self.bg_scale = bg_scale
         self.kinematics_folder = kinematics_folder
         self.alm_data_path = alm_data_path
-        self.thresh = 0.25
+        self.thresh = 0.1
         self.fixed_steps = 1
         self.max_timesteps = None
         self.cur_cond = None
@@ -192,7 +193,7 @@ class Kinematics_Jaw_Env(gym.Env):
         self.max_timesteps = self.kinematics_jaw_x[self.cur_cond].shape[0]
         self.speed_const = (self.cur_cond + 1) / 3
         self.cue = 0
-        self.thresh = 0.25
+        self.thresh = 0.1
         self.cortical_state = np.zeros(shape=(self.action_dim,))
 
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
@@ -270,7 +271,7 @@ class Kinematics_Jaw_Env(gym.Env):
     def _get_pred_kinematics(self, action):
         action = np.array(action)
         # Use simple linear dynamics for now
-        self.cortical_state = self.cortical_state + action * 0.65
+        self.cortical_state = self.cortical_state + action * self.bg_scale
 
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int):
 

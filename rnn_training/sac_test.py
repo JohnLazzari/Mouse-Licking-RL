@@ -39,7 +39,7 @@ TIMESTEPS = int(3 / DT)
 CHECK_PATH = "checkpoints/kinematics_jaw.pth"
 SAVE_PATH = "results/test_activity/kinematics_jaw_act.npy"
 BETA = .99
-BG_SCALE = .04
+BG_SCALE = 0.5
 FRAMESKIP = 2
 ALM_DATA = "data/PCs_PSTH"
 KINEMATICS_DATA = "data/kinematics"
@@ -129,7 +129,7 @@ def test(
 if __name__ == "__main__":
 
     if ENV == "kinematics_jaw":
-        env = Kinematics_Jaw_Env(ACTION_DIM, DT, KINEMATICS_DATA, ALM_DATA)
+        env = Kinematics_Jaw_Env(ACTION_DIM, DT, KINEMATICS_DATA, ALM_DATA, BG_SCALE)
     elif ENV == "lick_ramp":
         env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
         

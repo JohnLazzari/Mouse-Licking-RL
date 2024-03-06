@@ -21,7 +21,7 @@ def main():
     torch.manual_seed(args.seed)
     
     if args.env == "kinematics_jaw":
-        env = Kinematics_Jaw_Env(args.action_dim, args.dt, args.kinematics_folder, args.alm_data_path)
+        env = Kinematics_Jaw_Env(args.action_dim, args.dt, args.kinematics_folder, args.alm_data_path, args.bg_scale)
     elif args.env == "lick_ramp":
         env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
 

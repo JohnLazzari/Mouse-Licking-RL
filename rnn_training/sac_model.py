@@ -62,12 +62,10 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
-        '''
-        sparse_(self.gru.weight_hh_l0, 0.25)
+        sparse_(self.gru.weight_hh_l0, 0.5)
         nn.init.zeros_(self.gru.bias_hh_l0)
         self.gru.weight_hh_l0.requires_grad = False
         self.gru.bias_hh_l0.requires_grad = False
-        '''
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
