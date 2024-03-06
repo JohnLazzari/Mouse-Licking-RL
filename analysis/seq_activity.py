@@ -51,7 +51,7 @@ def thinning(fr):
 
     return spike_times
 
-rnn_fr = np.load("results/rnn_control_regression_act.npy")
+rnn_fr = np.load("results/test_activity/rnn_control_regression_sparse_act.npy")
 
 cond_1_act = np.abs(rnn_fr[0, :110, :])
 cond_2_act = np.abs(rnn_fr[1, :119, :])
@@ -76,12 +76,10 @@ neuron_index = list(chain.from_iterable(neuron_index))
 
 plt.scatter(spike_times, neuron_index, s=1)
 plt.show()
-#plt.plot(cond_1_act_sorted.T)
-#plt.show()
 
-rnn_fr = np.load("results/lick_ramp10000_fr.npy")
+rnn_fr = np.load("results/test_activity/kinematics_jaw_act.npy")[0]
 ramp_sorted, ordering = sort_by_peaks(np.abs(rnn_fr))
-plt.plot(np.abs(ramp_sorted.T[:, :100]))
+plt.plot(np.abs(ramp_sorted.T))
 plt.show()
 
 # Currently N x T

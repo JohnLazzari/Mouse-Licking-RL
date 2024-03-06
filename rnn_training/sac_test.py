@@ -23,7 +23,6 @@ from sac_model import Actor, Critic
 from sklearn.decomposition import PCA
 from scipy.ndimage import gaussian_filter1d
 
-plt.use('Agg')
 
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -33,6 +32,8 @@ INP_DIM = 11
 HID_DIM = 256
 ACTION_DIM = 2
 THRESH = 1
+ACT_SCALE = 1
+ACT_BIAS = 0
 DT = 0.01
 TIMESTEPS = int(3 / DT)
 CHECK_PATH = "checkpoints/kinematics_jaw.pth"
@@ -52,11 +53,13 @@ def test(
     critic,
     check_path,
     save_path,
-    frameskips
+    frameskips,
+    act_scale,
+    act_bias
 ):
     checkpoint = torch.load(check_path)
 
-    _actor = actor(inp_dim, hid_dim, action_dim).cuda()
+    _actor = actor(inp_dim, hid_dim, action_dim, act_scale, act_bias).cuda()
     _actor.load_state_dict(checkpoint['agent_state_dict'])
 
     episode_reward = 0
@@ -68,7 +71,9 @@ def test(
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
     
-    str_activity[env.switch] = []
+    str_activity[0] = []
+    str_activity[1] = []
+    str_activity[2] = []
 
     ### STEPS PER EPISODE ###
     for conditions in range(3):
@@ -80,7 +85,7 @@ def test(
 
             ### TRACKING REWARD + EXPERIENCE TUPLE###
             for _ in range(frameskips):
-                str_activity[env.switch].append(h_prev.squeeze().cpu().numpy())
+                str_activity[env.cur_cond].append(h_prev.squeeze().cpu().numpy())
                 next_state, reward, done = env.step(episode_steps, action, h_prev, conditions)
                 episode_steps += 1
                 episode_reward += reward
@@ -92,24 +97,24 @@ def test(
 
             if done:
                 h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-                state = env.reset(conditions) 
+                state = env.reset(conditions+1) 
+                episode_reward = 0
+                episode_steps = 0
                 break
 
     # reset tracking variables
-    print(np.array(str_activity[1]).shape)
+    print(np.array(str_activity[0]).shape)
     A_agent = gaussian_filter1d(np.array(str_activity[0]), 2, axis=0)
     psth = np.mean(A_agent, axis=-1)
     plt.plot(psth)
-    plt.savefig("results/testing/cond1_psth.png")
-    plt.close()
+    plt.show()
 
     switch_0_pca = PCA(n_components=3)
     switch_0_projected = switch_0_pca.fit_transform(A_agent)
 
     ax = plt.figure().add_subplot(projection='3d')
     ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
-    plt.savefig("results/testing/cond1_3pcs.png")
-    plt.close()
+    plt.show()
 
     # plot trajectories
     plt.plot(switch_0_projected[:, 0], label="str pc1 1s")
@@ -117,8 +122,7 @@ def test(
     plt.plot(switch_0_projected[:, 2], label="str pc3 1s")
     plt.axvline(100, linestyle='dashed')
     plt.legend()
-    plt.savefig("results/testing/all_conds_1pc.png")
-    plt.close()
+    plt.show()
 
     np.save(save_path, np.array([str_activity[0], str_activity[1], str_activity[2]]))
 
@@ -129,4 +133,4 @@ if __name__ == "__main__":
     elif ENV == "lick_ramp":
         env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
         
-    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP)
+    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP, ACT_SCALE, ACT_BIAS)

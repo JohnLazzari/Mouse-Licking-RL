@@ -198,13 +198,6 @@ class Kinematics_Jaw_Env(gym.Env):
         # [pred_x_pos, pred_y_pos, true_x_pos, true_y_pos, speed_const, cue]
         state = [0., 
                 0., 
-                self.alm_pcs[self.cur_cond][0, 0],
-                self.alm_pcs[self.cur_cond][0, 1],
-                self.alm_pcs[self.cur_cond][0, 2],
-                self.alm_pcs[self.cur_cond][0, 3],
-                self.alm_pcs[self.cur_cond][0, 4],
-                self.kinematics_jaw_x[self.cur_cond][0], 
-                self.kinematics_jaw_y[self.cur_cond][0], 
                 self.speed_const, 
                 self.cue]
 
@@ -269,13 +262,6 @@ class Kinematics_Jaw_Env(gym.Env):
 
         state = [self.cortical_state[0], 
                 self.cortical_state[1], 
-                self.alm_pcs[self.cur_cond][t, 0],
-                self.alm_pcs[self.cur_cond][t, 1],
-                self.alm_pcs[self.cur_cond][t, 2],
-                self.alm_pcs[self.cur_cond][t, 3],
-                self.alm_pcs[self.cur_cond][t, 4],
-                self.kinematics_jaw_x[self.cur_cond][t], 
-                self.kinematics_jaw_y[self.cur_cond][t], 
                 self.speed_const, 
                 self.cue]
 
