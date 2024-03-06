@@ -85,9 +85,6 @@ class Actor(nn.Module):
         if sampling == False:
             gru_x, _ = pad_packed_sequence(gru_x, batch_first=True)
 
-        gru_x = 0.5 * gru_x + 0.5
-        hn = 0.5 * hn + 0.5
-
         mean = self.mean_linear(gru_x)
         std = self.std_linear(gru_x)
         std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)

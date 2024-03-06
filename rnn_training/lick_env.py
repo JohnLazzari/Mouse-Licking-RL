@@ -31,7 +31,7 @@ class Lick_Env_Cont(gym.Env):
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.time_elapsed_from_lick = 0
-        self.num_conds = 1
+        self.num_conds = 3
         self.alm_activity = {}
 
         # Load data
@@ -63,7 +63,7 @@ class Lick_Env_Cont(gym.Env):
         delay_time = int((2 + self.switch * 0.3) / self.dt) - 1 # scale back since t starts at 0
 
         reward = 0
-        reward -= 0.1 * abs(action[t] - self.alm_activity[self.switch][t])
+        reward -= 0.1 * abs(action - self.alm_activity[self.switch][t])
         if self.cue == 1:
 
             if lick == 1 and t >= delay_time:
@@ -284,7 +284,7 @@ class Kinematics_Jaw_Env(gym.Env):
     def _get_pred_kinematics(self, action):
         action = np.array(action)
         # Use simple linear dynamics for now
-        self.cortical_state = self.cortical_state + action
+        self.cortical_state = self.cortical_state + action * 0.65
 
     def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int):
 

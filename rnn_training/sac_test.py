@@ -6,8 +6,9 @@ from itertools import count
 import random
 import gym.spaces
 import scipy.io
-from lick_env import Lick_Env_Cont
+from lick_env import Lick_Env_Cont, Kinematics_Jaw_Env
 import matplotlib.pyplot as plt
+import matplotlib
 from algorithms import select_action
 
 import torch
@@ -17,29 +18,30 @@ import torch.nn.functional as F
 import torch.autograd as autograd
 from torch.nn.utils.rnn import pad_sequence
 
-from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 from sklearn.decomposition import PCA
 from scipy.ndimage import gaussian_filter1d
 
+plt.use('Agg')
+
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
-OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
-
-INP_DIM = 3
+ENV = "kinematics_jaw"
+INP_DIM = 11
 HID_DIM = 256
-ACTION_DIM = 1
+ACTION_DIM = 2
 THRESH = 1
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "../checkpoints/lick_ramp10000.pth"
-SAVE_PATH = "../results/lick_ramp10000_fr.npy"
+CHECK_PATH = "checkpoints/kinematics_jaw.pth"
+SAVE_PATH = "results/test_activity/kinematics_jaw_act.npy"
 BETA = .99
 BG_SCALE = .04
 FRAMESKIP = 2
-ALM_DATA = "../data/alm_fr_averaged_1s.mat"
+ALM_DATA = "data/PCs_PSTH"
+KINEMATICS_DATA = "data/kinematics"
 
 def test(
     env,
@@ -59,7 +61,6 @@ def test(
 
     episode_reward = 0
     episode_steps = 0
-    alm_activity = {}
     str_activity = {}
 
     ### GET INITAL STATE + RESET MODEL BY POSE
@@ -67,11 +68,10 @@ def test(
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
     
-    alm_activity[env.switch] = []
     str_activity[env.switch] = []
 
     ### STEPS PER EPISODE ###
-    for conditions in range(1):
+    for conditions in range(3):
 
         for t in count():
 
@@ -80,9 +80,8 @@ def test(
 
             ### TRACKING REWARD + EXPERIENCE TUPLE###
             for _ in range(frameskips):
-                alm_activity[env.switch].append(state[0])
                 str_activity[env.switch].append(h_prev.squeeze().cpu().numpy())
-                next_state, reward, done = env.step(episode_steps, action, h_prev)
+                next_state, reward, done = env.step(episode_steps, action, h_prev, conditions)
                 episode_steps += 1
                 episode_reward += reward
                 if done:
@@ -92,21 +91,25 @@ def test(
             h_prev = h_current
 
             if done:
+                h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
+                state = env.reset(conditions) 
                 break
 
     # reset tracking variables
     print(np.array(str_activity[1]).shape)
-    A_agent = gaussian_filter1d(np.array(str_activity[1]), 5, axis=0)
+    A_agent = gaussian_filter1d(np.array(str_activity[0]), 2, axis=0)
     psth = np.mean(A_agent, axis=-1)
     plt.plot(psth)
-    plt.show()
+    plt.savefig("results/testing/cond1_psth.png")
+    plt.close()
 
     switch_0_pca = PCA(n_components=3)
     switch_0_projected = switch_0_pca.fit_transform(A_agent)
 
     ax = plt.figure().add_subplot(projection='3d')
     ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
-    plt.show()
+    plt.savefig("results/testing/cond1_3pcs.png")
+    plt.close()
 
     # plot trajectories
     plt.plot(switch_0_projected[:, 0], label="str pc1 1s")
@@ -114,10 +117,16 @@ def test(
     plt.plot(switch_0_projected[:, 2], label="str pc3 1s")
     plt.axvline(100, linestyle='dashed')
     plt.legend()
-    plt.show()
+    plt.savefig("results/testing/all_conds_1pc.png")
+    plt.close()
 
-    np.save(save_path, np.array(str_activity[1]))
+    np.save(save_path, np.array([str_activity[0], str_activity[1], str_activity[2]]))
 
 if __name__ == "__main__":
-    env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
+
+    if ENV == "kinematics_jaw":
+        env = Kinematics_Jaw_Env(ACTION_DIM, DT, KINEMATICS_DATA, ALM_DATA)
+    elif ENV == "lick_ramp":
+        env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
+        
     test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP)
