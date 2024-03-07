@@ -63,7 +63,6 @@ class Lick_Env_Cont(gym.Env):
         delay_time = int((2 + self.switch * 0.3) / self.dt) - 1 # scale back since t starts at 0
 
         reward = 0
-        reward -= 0.1 * abs(action - self.alm_activity[self.switch][t])
         if self.cue == 1:
 
             if lick == 1 and t >= delay_time:

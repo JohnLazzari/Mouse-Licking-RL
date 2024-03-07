@@ -18,8 +18,6 @@ def weights_init_(m):
 
 def sparse_(
     tensor,
-    sparsity,
-    std=0.01
 ):
     r"""Fill the 2D input `Tensor` as a sparse matrix.
 
@@ -42,13 +40,14 @@ def sparse_(
         raise ValueError("Only tensors with 2 dimensions are supported")
 
     rows, cols = tensor.shape
-    num_zeros = int(math.ceil(sparsity * rows))
+    sparsity = np.random.uniform(0.25, 0.75, size=(cols,))
+    num_zeros = np.ceil(sparsity * rows).astype(int)
 
     with torch.no_grad():
-        tensor.uniform_(-.1, 0)
-        for col_idx in range(cols):
+        tensor.uniform_(-.1, .1)
+        for col_idx, col_zeros in enumerate(num_zeros):
             row_indices = torch.randperm(rows)
-            zero_indices = row_indices[:num_zeros]
+            zero_indices = row_indices[:col_zeros]
             tensor[zero_indices, col_idx] = 0
     return tensor
 
@@ -62,7 +61,8 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
-        sparse_(self.gru.weight_hh_l0, 0.5)
+        # Add asynchrony in initialization
+        sparse_(self.gru.weight_hh_l0)
         nn.init.zeros_(self.gru.bias_hh_l0)
         self.gru.weight_hh_l0.requires_grad = False
         self.gru.bias_hh_l0.requires_grad = False
