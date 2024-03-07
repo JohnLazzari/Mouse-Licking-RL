@@ -44,12 +44,85 @@ def sparse_(
     num_zeros = np.ceil(sparsity * rows).astype(int)
 
     with torch.no_grad():
-        tensor.uniform_(-.1, .1)
+        tensor.uniform_(-.1, 0)
         for col_idx, col_zeros in enumerate(num_zeros):
             row_indices = torch.randperm(rows)
             zero_indices = row_indices[:col_zeros]
             tensor[zero_indices, col_idx] = 0
     return tensor
+
+class Actor_Inhibitory(nn.Module):
+    def __init__(self, inp_dim, hid_dim, action_dim, action_scale, action_bias):
+        super(Actor_Inhibitory, self).__init__()
+
+        self.inp_dim = inp_dim
+        self.hid_dim = hid_dim
+        self.action_dim = action_dim
+        
+        self.weight_hh_l0 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.weight_ih_l0 = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
+        # Add asynchrony in initialization
+        sparse_(self.weight_hh_l0)
+        nn.init.xavier_uniform_(self.weight_ih_l0)
+        self.weight_hh_l0.requires_grad = False
+        
+        self.mean_linear = nn.Linear(hid_dim, action_dim)
+        self.std_linear = nn.Linear(hid_dim, action_dim)
+
+        self.action_scale = action_scale
+        self.action_bias = action_bias
+
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None):
+
+        new_hs = []
+        # Assuming batch first is True
+        h_cur = hn
+        for step in range(x.shape[1]):
+            h_cur = torch.sigmoid(h_cur.squeeze(0) @ self.weight_hh_l0 + x[:, step, :] @ self.weight_ih_l0)
+            new_hs.append(h_cur)
+        h_last = h_cur.unsqueeze(0)
+        all_hs = torch.stack(new_hs, dim=1)
+
+        mean = self.mean_linear(all_hs)
+        std = self.std_linear(all_hs)
+        std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
+        
+        return mean, std, h_last, all_hs
+    
+    def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling: bool = True, len_seq: list = None):
+
+        hn = hn.cuda()
+        
+        mean, log_std, h_current, gru_out = self.forward(state, hn, sampling, len_seq)
+        #if sampling == False; then reshape mean and log_std from (B, L_max, A) to (B*Lmax, A)
+
+        mean_size = mean.size()
+        log_std_size = log_std.size()
+
+        mean = mean.reshape(-1, mean.size()[-1])
+        log_std = log_std.reshape(-1, log_std.size()[-1])
+
+        std = log_std.exp()
+        normal = Normal(mean, std)
+        x_t = normal.rsample()
+
+        y_t = torch.tanh(x_t)
+        action = y_t * self.action_scale + self.action_bias
+
+        log_prob = normal.log_prob(x_t)
+
+        # Enforce the action_bounds
+        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
+        log_prob = log_prob.sum(-1, keepdim=True)
+
+        mean = torch.tanh(mean) * self.action_scale + self.action_bias
+
+        if sampling == False:
+            action = action.reshape(mean_size[0], mean_size[1], mean_size[2])
+            log_prob = log_prob.reshape(log_std_size[0], log_std_size[1], 1) 
+            mean = mean.reshape(mean_size[0], mean_size[1], mean_size[2])
+
+        return action, log_prob, mean, h_current, gru_out
 
 # Actor RNN
 class Actor(nn.Module):
@@ -61,11 +134,6 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
-        # Add asynchrony in initialization
-        sparse_(self.gru.weight_hh_l0)
-        nn.init.zeros_(self.gru.bias_hh_l0)
-        self.gru.weight_hh_l0.requires_grad = False
-        self.gru.bias_hh_l0.requires_grad = False
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)

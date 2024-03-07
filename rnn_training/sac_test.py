@@ -27,19 +27,19 @@ from scipy.ndimage import gaussian_filter1d
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
-ENV = "kinematics_jaw"
-INP_DIM = 11
+ENV = "lick_ramp"
+INP_DIM = 3
 HID_DIM = 256
-ACTION_DIM = 2
+ACTION_DIM = 1
 THRESH = 1
-ACT_SCALE = 1
-ACT_BIAS = 0
+ACT_SCALE = 0.5
+ACT_BIAS = 0.5
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "checkpoints/kinematics_jaw.pth"
-SAVE_PATH = "results/test_activity/kinematics_jaw_act.npy"
+CHECK_PATH = "checkpoints/lick_ramp_switch.pth"
+SAVE_PATH = "results/test_activity/lick_ramp_switch_act.npy"
 BETA = .99
-BG_SCALE = 0.5
+BG_SCALE = 0.1
 FRAMESKIP = 2
 ALM_DATA = "data/PCs_PSTH"
 KINEMATICS_DATA = "data/kinematics"
@@ -85,7 +85,7 @@ def test(
 
             ### TRACKING REWARD + EXPERIENCE TUPLE###
             for _ in range(frameskips):
-                str_activity[env.cur_cond].append(h_prev.squeeze().cpu().numpy())
+                str_activity[conditions].append(h_prev.squeeze().cpu().numpy())
                 next_state, reward, done = env.step(episode_steps, action, h_prev, conditions)
                 episode_steps += 1
                 episode_reward += reward
@@ -124,7 +124,7 @@ def test(
     plt.legend()
     plt.show()
 
-    np.save(save_path, np.array([str_activity[0], str_activity[1], str_activity[2]]))
+    np.save(save_path, str_activity[0])
 
 if __name__ == "__main__":
 

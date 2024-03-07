@@ -15,7 +15,7 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic
+from sac_model import Actor, Critic, Actor_Inhibitory
 from algorithms import sac, select_action, hard_update, REINFORCE
 
 USE_CUDA = torch.cuda.is_available()
@@ -29,8 +29,7 @@ def sac_learn(
     inp_dim,
     hid_dim,
     action_dim,
-    actor, 
-    critic,
+    actor_type, 
     optimizer_spec,
     replay_buffer_size,
     batch_size,
@@ -46,15 +45,20 @@ def sac_learn(
     reward_save_path,
     steps_save_path,
     action_scale,
-    action_bias
+    action_bias,
+    model_type
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space)      == gym.spaces.Box
 
-    actor_bg = actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
-    critic_bg = critic(action_dim+inp_dim, hid_dim).cuda()
-    critic_target_bg = critic(action_dim+inp_dim, hid_dim).cuda()
+    if actor_type == "gru":
+        actor_bg = Actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
+    elif actor_type == "sparse":
+        actor_bg = Actor_Inhibitory(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
+
+    critic_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
+    critic_target_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
     hard_update(critic_target_bg, critic_bg)
 
     param_names = []

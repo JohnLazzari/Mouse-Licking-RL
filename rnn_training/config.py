@@ -146,6 +146,11 @@ def config_parser():
                         default='data',
                         help='folder containing kinematics')
 
+    parser.add_argument('--model_type', 
+                        type=str, 
+                        default='gru',
+                        help='whether to use standard GRU, or the sparse inhibitory connectivity (GRU, sparse)')
+
     # Saving Parameters
     parser.add_argument('--model_save_path', 
                         type=str, 

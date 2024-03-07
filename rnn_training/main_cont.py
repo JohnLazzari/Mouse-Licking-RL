@@ -39,8 +39,7 @@ def main():
         args.inp_dim,
         args.hidden_dim,
         args.action_dim,
-        Actor,
-        Critic,
+        args.model_type,
         optimizer_spec,
         args.policy_replay_size,
         args.policy_batch_size,
@@ -56,7 +55,8 @@ def main():
         args.reward_save_path,
         args.steps_save_path,
         args.action_scale,
-        args.action_bias
+        args.action_bias,
+        args.model_type
     )
 
 if __name__ == '__main__':
