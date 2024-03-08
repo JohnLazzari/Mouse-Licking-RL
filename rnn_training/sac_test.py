@@ -41,6 +41,7 @@ SAVE_PATH = "results/test_activity/lick_ramp_switch_act.npy"
 BETA = .99
 BG_SCALE = 0.1
 FRAMESKIP = 2
+MODEL_TYPE = "gru"
 ALM_DATA = "data/PCs_PSTH"
 KINEMATICS_DATA = "data/kinematics"
 
@@ -55,7 +56,8 @@ def test(
     save_path,
     frameskips,
     act_scale,
-    act_bias
+    act_bias,
+    model_type
 ):
     checkpoint = torch.load(check_path)
 
@@ -124,7 +126,7 @@ def test(
     plt.legend()
     plt.show()
 
-    np.save(save_path, str_activity[0])
+    np.save(save_path, str_activity[2])
 
 if __name__ == "__main__":
 
@@ -133,4 +135,4 @@ if __name__ == "__main__":
     elif ENV == "lick_ramp":
         env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
         
-    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP, ACT_SCALE, ACT_BIAS)
+    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, Critic, CHECK_PATH, SAVE_PATH, FRAMESKIP, ACT_SCALE, ACT_BIAS, MODEL_TYPE)

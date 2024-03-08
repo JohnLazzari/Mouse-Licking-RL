@@ -29,25 +29,14 @@ def main():
     ### RUN TRAINING ###
     env = get_env(env, args.seed)
 
-    if args.model_type == "gru":
-        optimizer_spec_actor = OptimizerSpec(
-            constructor=optim.Adam,
-            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
-        )
-        optimizer_spec_critic = OptimizerSpec(
-            constructor=optim.Adam,
-            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
-        )
-    elif args.model_type == "sparse":
-        
-        optimizer_spec_actor = OptimizerSpec(
-            constructor=CustomAdamOptimizer,
-            kwargs=None
-        )
-        optimizer_spec_critic = OptimizerSpec(
-            constructor=optim.Adam,
-            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
-        )
+    optimizer_spec_actor = OptimizerSpec(
+        constructor=optim.Adam,
+        kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+    )
+    optimizer_spec_critic = OptimizerSpec(
+        constructor=optim.Adam,
+        kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+    )
 
     sac_learn(
         env,
@@ -73,7 +62,6 @@ def main():
         args.steps_save_path,
         args.action_scale,
         args.action_bias,
-        args.model_type
     )
 
 if __name__ == '__main__':

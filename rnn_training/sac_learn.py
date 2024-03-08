@@ -15,7 +15,7 @@ from torch.nn.utils.rnn import pad_sequence, pad_packed_sequence, pack_padded_se
 
 from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
-from sac_model import Actor, Critic, Actor_Inhibitory
+from sac_model import Actor, Critic
 from algorithms import sac, select_action, hard_update, REINFORCE
 
 USE_CUDA = torch.cuda.is_available()
@@ -47,17 +47,12 @@ def sac_learn(
     steps_save_path,
     action_scale,
     action_bias,
-    model_type
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space)      == gym.spaces.Box
 
-    if actor_type == "gru":
-        actor_bg = Actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
-    elif actor_type == "sparse":
-        actor_bg = Actor_Inhibitory(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
-
+    actor_bg = Actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
     critic_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
     critic_target_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
     hard_update(critic_target_bg, critic_bg)
@@ -66,14 +61,7 @@ def sac_learn(
     for name, param in actor_bg.named_parameters():
         param_names.append(name)
     
-    if actor_type == "gru":
-        actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), **optimizer_spec_actor.kwargs)
-    elif actor_type == "sparse":
-        names = []
-        for name, _ in actor_bg.named_parameters():
-            names.append(name)
-        actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), names=names)
-
+    actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), **optimizer_spec_actor.kwargs)
     critic_bg_optimizer = optimizer_spec_critic.constructor(critic_bg.parameters(), **optimizer_spec_critic.kwargs)
 
     target_entropy = -env.action_space.shape[0]
