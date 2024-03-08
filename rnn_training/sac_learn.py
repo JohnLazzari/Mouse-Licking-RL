@@ -30,7 +30,8 @@ def sac_learn(
     hid_dim,
     action_dim,
     actor_type, 
-    optimizer_spec,
+    optimizer_spec_actor,
+    optimizer_spec_critic,
     replay_buffer_size,
     batch_size,
     alpha,
@@ -65,8 +66,15 @@ def sac_learn(
     for name, param in actor_bg.named_parameters():
         param_names.append(name)
     
-    actor_bg_optimizer = optimizer_spec.constructor(actor_bg.parameters(), **optimizer_spec.kwargs)
-    critic_bg_optimizer = optimizer_spec.constructor(critic_bg.parameters(), **optimizer_spec.kwargs)
+    if actor_type == "gru":
+        actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), **optimizer_spec_actor.kwargs)
+    elif actor_type == "sparse":
+        names = []
+        for name, _ in actor_bg.named_parameters():
+            names.append(name)
+        actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), names=names)
+
+    critic_bg_optimizer = optimizer_spec_critic.constructor(critic_bg.parameters(), **optimizer_spec_critic.kwargs)
 
     target_entropy = -env.action_space.shape[0]
     log_alpha = torch.zeros(1, requires_grad=True, device="cuda:0")

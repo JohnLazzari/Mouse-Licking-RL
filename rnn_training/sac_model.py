@@ -40,7 +40,7 @@ def sparse_(
         raise ValueError("Only tensors with 2 dimensions are supported")
 
     rows, cols = tensor.shape
-    sparsity = np.random.uniform(0.25, 0.75, size=(cols,))
+    sparsity = np.random.uniform(0.5, 0.85, size=(cols,))
     num_zeros = np.ceil(sparsity * rows).astype(int)
 
     with torch.no_grad():
@@ -63,7 +63,7 @@ class Actor_Inhibitory(nn.Module):
         self.weight_ih_l0 = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
         # Add asynchrony in initialization
         sparse_(self.weight_hh_l0)
-        nn.init.xavier_uniform_(self.weight_ih_l0)
+        nn.init.uniform_(self.weight_ih_l0, a=1e-3, b=np.sqrt(6 / (inp_dim + hid_dim)))
         self.weight_hh_l0.requires_grad = False
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)

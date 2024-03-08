@@ -10,6 +10,7 @@ from utils.gym import get_env, get_wrapper_by_name
 from lick_env import Lick_Env_Cont, Kinematics_Jaw_Env
 import torch
 import config
+from utils.custom_optim import CustomAdamOptimizer
 
 def main():
 
@@ -28,10 +29,25 @@ def main():
     ### RUN TRAINING ###
     env = get_env(env, args.seed)
 
-    optimizer_spec = OptimizerSpec(
-        constructor=optim.Adam,
-        kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
-    )
+    if args.model_type == "gru":
+        optimizer_spec_actor = OptimizerSpec(
+            constructor=optim.Adam,
+            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+        )
+        optimizer_spec_critic = OptimizerSpec(
+            constructor=optim.Adam,
+            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+        )
+    elif args.model_type == "sparse":
+        
+        optimizer_spec_actor = OptimizerSpec(
+            constructor=CustomAdamOptimizer,
+            kwargs=None
+        )
+        optimizer_spec_critic = OptimizerSpec(
+            constructor=optim.Adam,
+            kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+        )
 
     sac_learn(
         env,
@@ -40,7 +56,8 @@ def main():
         args.hidden_dim,
         args.action_dim,
         args.model_type,
-        optimizer_spec,
+        optimizer_spec_actor,
+        optimizer_spec_critic,
         args.policy_replay_size,
         args.policy_batch_size,
         args.alpha,
