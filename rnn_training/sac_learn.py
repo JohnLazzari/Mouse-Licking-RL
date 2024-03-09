@@ -91,12 +91,13 @@ def sac_learn(
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
+    y_depression = torch.ones(size=(1, 1, hid_dim), device="cuda")*0.25
 
     ### STEPS PER EPISODE ###
     for t in count():
 
         with torch.no_grad():
-            action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
+            action, h_current, y_depression = select_action(actor_bg, state, h_prev, y_depression, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
@@ -127,6 +128,7 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
+            y_depression = torch.ones(size=(1, 1, hid_dim), device="cuda")*0.25
             state = env.reset(total_episodes) 
 
             # resest lists
