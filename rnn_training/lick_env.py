@@ -26,12 +26,10 @@ class Lick_Env_Cont(gym.Env):
         self.cortical_state = 0
         self.switch = 0
         self.cue = 0
-        self.cue_time = 1 / dt
         self.beta = beta
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
-        self.time_elapsed_from_lick = 0
-        self.num_conds = 3
+        self.num_conds = 1
         self.alm_activity = {}
 
         # Load data
@@ -46,13 +44,14 @@ class Lick_Env_Cont(gym.Env):
 
     def reset(self, episode: int):
 
-        self.cue = 0
         self.cortical_state = 0
-        self.time_elapsed_from_lick = 0
+        self.cue = 1
         # switch target delay time
         self.switch = episode % self.num_conds
+        self.target_delay_time = int((1 + self.switch * 0.3) / self.dt) # scale back since t starts at 0
+        self.max_timesteps = self.target_delay_time + 20 # add some extra time so it doesnt have to be exact
         if self.num_conds == 1:
-            self.switch_const = 0.2 #just using for a single condition
+            self.switch_const = 0.25 #just using for a single condition
         else:
             self.switch_const = (self.switch + 1) / self.num_conds
         state = [self.cortical_state, self.switch_const, self.cue]
@@ -60,33 +59,22 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_reward(self, t: int, lick: int, action: int):
 
-        delay_time = int((2 + self.switch * 0.3) / self.dt) - 1 # scale back since t starts at 0
-
         reward = 0
-        if self.cue == 1:
-
-            if lick == 1 and t >= delay_time:
-                reward += 5 * (delay_time / t)
-            if lick == 1 and t < delay_time:
-                reward -= 5
-            if lick != 1 and t == self.max_timesteps:
-                reward -= 5
-            if self.cortical_state < 0:
-                reward -= 5
-
-        elif self.cue == 0:
-
-            if lick == 1:
-                reward -= 5
-            if self.cortical_state < 0:
-                reward -= 5
+        if lick == 1 and t >= self.target_delay_time-1:
+            reward += 5 * ((self.target_delay_time-1) / t)
+        if lick == 1 and t < self.target_delay_time-1:
+            reward -= 5
+        if lick != 1 and t == self.max_timesteps-1:
+            reward -= 5
+        if self.cortical_state < 0:
+            reward -= 5
 
         return reward
     
     def _get_done(self, t: int, lick: int):
 
         done = False
-        if t == self.max_timesteps:
+        if t == self.max_timesteps-1:
             done = True
         if self.cortical_state < 0:
             done = True
@@ -96,8 +84,7 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_next_state(self, t: int, lick: int):
 
-        if t == self.cue_time:
-            self.cue = 1
+        self.cue = 0
 
         state = [self.cortical_state, self.switch_const, self.cue]
         return state
@@ -119,6 +106,7 @@ class Lick_Env_Cont(gym.Env):
         done = self._get_done(t, lick)
         state = self._get_next_state(t, lick)
         return state, reward, done
+
     
 #######################################
 ##### Kinematics Jaw Environment ######

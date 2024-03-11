@@ -59,16 +59,16 @@ class Actor(nn.Module):
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         self.action_dim = action_dim
-        self.beta = 0.25
         
         self.weight_hh_l0 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
         self.weight_ih_l0 = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
+        self.bias_hh_l0 = nn.Parameter(torch.empty(size=(hid_dim,)))
+        self.bias_ih_l0 = nn.Parameter(torch.empty(size=(hid_dim,)))
         # Add asynchrony in initialization
-        sparse_(self.weight_hh_l0)
-        inv_eye = -torch.eye(hid_dim, hid_dim) + 1
+        nn.init.xavier_uniform_(self.weight_hh_l0)
         nn.init.xavier_uniform_(self.weight_ih_l0)
-        self.weight_hh_l0.requires_grad = False
-        self.weight_hh_l0 *= inv_eye
+        nn.init.uniform_(self.bias_hh_l0, -0.1, 0.1)
+        nn.init.uniform_(self.bias_ih_l0, -0.1, 0.1)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
@@ -79,11 +79,11 @@ class Actor(nn.Module):
     def forward(self, x: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, sampling=True, len_seq=None):
 
         new_hs = []
+        y_depression = y_depression.squeeze(0)
         # Assuming batch first is True
         h_cur = hn
         for step in range(x.shape[1]):
-            h_cur = torch.sigmoid((y_depression.squeeze(0) * h_cur.squeeze(0)) @ self.weight_hh_l0 + x[:, step, :] @ self.weight_ih_l0)
-            y_depression = y_depression + (1/10) * (-(y_depression - 1) * (1 - h_cur) - (y_depression - self.beta) * h_cur)
+            h_cur = torch.sigmoid(h_cur.squeeze(0) @ self.weight_hh_l0 + self.bias_hh_l0 + x[:, step, :] @ self.weight_ih_l0 + self.bias_ih_l0)
             new_hs.append(h_cur)
         h_last = h_cur.unsqueeze(0)
         all_hs = torch.stack(new_hs, dim=1)
@@ -138,28 +138,54 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim+hid_dim, hid_dim)
+        self.fc12 = nn.Linear(hid_dim, hid_dim)
         #self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc12 = nn.Linear(hid_dim, 1)
+        self.fc13 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim+hid_dim, hid_dim)
+        self.fc22 = nn.Linear(hid_dim, hid_dim)
         #self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc22 = nn.Linear(hid_dim, 1)
+        self.fc23 = nn.Linear(hid_dim, 1)
+
+        self.means_1 = torch.linspace(0, 120, hid_dim)
+        self.means_2 = torch.linspace(0, 150, hid_dim)
+        self.means_3 = torch.linspace(0, 180, hid_dim)
+
+        self.stds = torch.ones(size=(hid_dim,))
+        self.timepoints_1 = torch.linspace(0, 120, 120).unsqueeze(1) # max timestep
+        self.timepoints_2 = torch.linspace(0, 150, 150).unsqueeze(1) # max timestep
+        self.timepoints_3 = torch.linspace(0, 180, 180).unsqueeze(1) # max timestep
+
+        self.time_mask_1 = self.gaussian(self.timepoints_1, self.means_1, self.stds).unsqueeze(0)
+        print(self.time_mask_1[:, 0, :])
+        print(self.time_mask_1[:, 50, :])
+        print(self.time_mask_1[:, 100, :])
+        self.time_mask_2 = self.gaussian(self.timepoints_2, self.means_2, self.stds).unsqueeze(0)
+        self.time_mask_3 = self.gaussian(self.timepoints_3, self.means_3, self.stds).unsqueeze(0)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None):
 
-        x = torch.cat((state, hn, action), dim=-1)
-        hn = hn.cuda()
+        time_mask = self.time_mask_1.repeat(state.shape[0], 1, 1).cuda()
 
-        x1 = F.relu(self.fc11(x))
+        hn = hn.cuda()
+        hn = hn * time_mask[:, :hn.shape[1], :]
+        x = torch.cat((state, hn, action), dim=-1)
+
+        x1 = F.tanh(self.fc11(x))
+        x1 = F.tanh(self.fc12(x1))
         #x1 = pack_padded_sequence(x1, len_seq, batch_first=True, enforce_sorted=False)
         #x1, hn1 = self.gru1(x1, hn)
         #x1, _ = pad_packed_sequence(x1, batch_first=True)
-        x1 = self.fc12(x1)
+        x1 = self.fc13(x1)
 
-        x2 = F.relu(self.fc21(x))
+        x2 = F.tanh(self.fc21(x))
+        x2 = F.tanh(self.fc22(x2))
         #x2 = pack_padded_sequence(x2, len_seq, batch_first=True, enforce_sorted=False)
         #x2, hn2 = self.gru2(x2, hn)
         #x2, _ = pad_packed_sequence(x2, batch_first=True)
-        x2 = self.fc22(x2)
+        x2 = self.fc23(x2)
 
         return x1, x2
+    
+    def gaussian(self, x, means, stds):
+        return (1 / (2*stds)) * torch.exp(-0.5 * (x - means)**2 / stds**2)

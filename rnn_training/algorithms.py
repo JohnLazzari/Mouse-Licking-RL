@@ -6,6 +6,7 @@ from itertools import count
 import random
 import gym.spaces
 from collections import deque
+import copy
 
 import torch
 import torch.nn as nn
@@ -57,7 +58,7 @@ def sac(actor,
         alpha = log_alpha.exp()
 
     # Sample a batch from memory
-    state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
+    state_batch, action_batch, reward_batch, next_state_batch, mask_batch, h_cur_batch, h_next_batch = policy_memory.sample(batch_size)
 
     len_seq = list(map(len, state_batch))
     state_batch = pad_sequence(state_batch, batch_first=True).cuda()
@@ -65,23 +66,23 @@ def sac(actor,
     reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
     next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
     mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
+    h_cur_batch = pad_sequence(h_cur_batch, batch_first=True).cuda()
+    h_next_batch = pad_sequence(h_next_batch, batch_first=True).cuda()
 
     h_train = torch.zeros(size=(1, batch_size, hid_dim))
     y_depression = torch.ones(size=(1, batch_size, hid_dim), device="cuda")*0.25
     with torch.no_grad():
-        next_state_action, next_state_log_pi, _, _, hid_activity_next, _ = actor.sample(next_state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
-        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, hid_activity_next.detach(), len_seq)
+        next_state_action, next_state_log_pi, _, _, h_next_sample, _ = actor.sample(next_state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
+        h_next_copy = copy.deepcopy(h_next_sample.detach())
+        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_next_copy, len_seq)
         min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
         next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
-
-    with torch.no_grad():
-        _, _, _, _, hid_activity_cur, _ = actor.sample(state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
 
     # mask the losses which correspond to padded values (just in case)
     loss_mask = [torch.ones(size=(length, 1)) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
-    qf1, qf2 = critic(state_batch, action_batch, hid_activity_cur.detach(), len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
+    qf1, qf2 = critic(state_batch, action_batch, h_cur_batch, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
 
     qf1 = qf1 * loss_mask
     qf2 = qf2 * loss_mask
@@ -96,8 +97,9 @@ def sac(actor,
     torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)
     critic_optimizer.step()
 
-    pi_action_bat, log_prob_bat, _, _, _, _ = actor.sample(state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
-    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, hid_activity_cur.detach(), len_seq)
+    pi_action_bat, log_prob_bat, _, _, h_cur_sample, _ = actor.sample(state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
+    h_cur_copy = copy.deepcopy(h_cur_sample.detach())
+    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_cur_copy, len_seq)
 
     qf1_pi = qf1_pi * loss_mask
     qf2_pi = qf2_pi * loss_mask

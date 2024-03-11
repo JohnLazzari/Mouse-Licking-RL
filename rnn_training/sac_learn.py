@@ -109,7 +109,13 @@ def sac_learn(
 
         mask = 1.0 if episode_steps == env.max_timesteps else float(not done)
 
-        ep_trajectory.append((state, action, reward, next_state, mask))
+        ep_trajectory.append((state, 
+                                action, 
+                                reward,
+                                next_state, 
+                                mask, 
+                                list(h_prev.squeeze().cpu().detach()), 
+                                list(h_current.squeeze().cpu().detach())))
 
         state = next_state
         h_prev = h_current
