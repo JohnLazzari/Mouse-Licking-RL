@@ -6,7 +6,6 @@ from itertools import count
 import random
 import gym.spaces
 from collections import deque
-import copy
 
 import torch
 import torch.nn as nn
@@ -19,16 +18,16 @@ from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 
-def select_action(policy: Actor, state: list, hn: torch.Tensor, y_depression: torch.Tensor, evaluate: bool):
+def select_action(policy: Actor, state: list, hn: torch.Tensor, evaluate: bool):
     state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).unsqueeze(0).cuda()
     hn = hn.cuda()
 
     if evaluate == False: 
-        action, _, _, hn, _, y_depression = policy.sample(state, hn, y_depression, sampling=True)
+        action, _, _, _, hn = policy.sample(state, hn, sampling=True)
     else:
-        _, _, action, hn, _, y_depression = policy.sample(state, hn, y_depression, sampling=True)
+        _, _, action, _, hn = policy.sample(state, hn, sampling=True)
 
-    return action.detach().cpu().tolist()[0], hn.detach(), y_depression.detach()
+    return action.detach().cpu().tolist()[0], hn.detach()
 
 def soft_update(target: Critic, source: Critic, tau: float):
     for target_param, param in zip(target.parameters(), source.parameters()):
@@ -58,7 +57,7 @@ def sac(actor,
         alpha = log_alpha.exp()
 
     # Sample a batch from memory
-    state_batch, action_batch, reward_batch, next_state_batch, mask_batch, h_cur_batch, h_next_batch = policy_memory.sample(batch_size)
+    state_batch, action_batch, reward_batch, next_state_batch, mask_batch = policy_memory.sample(batch_size)
 
     len_seq = list(map(len, state_batch))
     state_batch = pad_sequence(state_batch, batch_first=True).cuda()
@@ -66,15 +65,11 @@ def sac(actor,
     reward_batch = pad_sequence(reward_batch, batch_first=True).unsqueeze(-1).cuda()
     next_state_batch = pad_sequence(next_state_batch, batch_first=True).cuda()
     mask_batch = pad_sequence(mask_batch, batch_first=True).unsqueeze(-1).cuda()
-    h_cur_batch = pad_sequence(h_cur_batch, batch_first=True).cuda()
-    h_next_batch = pad_sequence(h_next_batch, batch_first=True).cuda()
 
     h_train = torch.zeros(size=(1, batch_size, hid_dim))
-    y_depression = torch.ones(size=(1, batch_size, hid_dim), device="cuda")*0.25
     with torch.no_grad():
-        next_state_action, next_state_log_pi, _, _, h_next_sample, _ = actor.sample(next_state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
-        h_next_copy = copy.deepcopy(h_next_sample.detach())
-        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_next_copy, len_seq)
+        next_state_action, next_state_log_pi, _, _, _ = actor.sample(next_state_batch, h_train, sampling=False, len_seq=len_seq)
+        qf1_next_target, qf2_next_target = critic_target(next_state_batch, next_state_action, h_train, len_seq)
         min_qf_next_target = torch.minimum(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
         next_q_value = reward_batch + mask_batch * gamma * (min_qf_next_target)
 
@@ -82,7 +77,7 @@ def sac(actor,
     loss_mask = [torch.ones(size=(length, 1)) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
-    qf1, qf2 = critic(state_batch, action_batch, h_cur_batch, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
+    qf1, qf2 = critic(state_batch, action_batch, h_train, len_seq)  # Two Q-functions to mitigate positive bias in the policy improvement step
 
     qf1 = qf1 * loss_mask
     qf2 = qf2 * loss_mask
@@ -97,9 +92,8 @@ def sac(actor,
     torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)
     critic_optimizer.step()
 
-    pi_action_bat, log_prob_bat, _, _, h_cur_sample, _ = actor.sample(state_batch, h_train, y_depression, sampling=False, len_seq=len_seq)
-    h_cur_copy = copy.deepcopy(h_cur_sample.detach())
-    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_cur_copy, len_seq)
+    pi_action_bat, log_prob_bat, _, _, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
+    qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_train, len_seq)
 
     qf1_pi = qf1_pi * loss_mask
     qf2_pi = qf2_pi * loss_mask
@@ -120,8 +114,6 @@ def sac(actor,
         alpha_optim.zero_grad()
         alpha_loss.backward()
         alpha_optim.step()
-
-        #alpha = log_alpha.exp()
 
     soft_update(critic_target, critic, .005)
 
@@ -157,3 +149,49 @@ def REINFORCE(episode, alm, gamma, log_probs, alm_values):
     
     alm.alm_values_optim.step()
     alm.alm_optim.step()
+
+def One_Step_AC(tuple, actor, critic, actor_optim, critic_optim, gamma, I, z_critic, z_actor):
+
+    lambda_critic = .9
+    lambda_actor = .9
+
+    state = torch.FloatTensor(tuple[0], device="cuda").unsqueeze(0).unsqueeze(0)
+    action = torch.FloatTensor(tuple[1], device="cuda").unsqueeze(0).unsqueeze(0)
+    reward = torch.FloatTensor(tuple[2], device="cuda").unsqueeze(0)
+    next_state = torch.FloatTensor(tuple[3], device="cuda").unsqueeze(0).unsqueeze(0)
+    mask = torch.FloatTensor(tuple[4], device="cuda").unsqueeze(0)
+    h_prev = tuple[0][5].cuda()
+    h_next = tuple[0][6].cuda()
+
+    delta = reward[-1] + gamma * mask[-1] * critic(next_state, h_prev) - critic(state, h_prev)
+
+    # Critic Update
+    critic_optim.zero_grad()
+    z_critic_func = {}
+    for param in z_critic:
+        z_critic_func[param] = (gamma * lambda_critic * z_critic[param]).detach()
+    critic_forward = critic(state, h_prev)
+    critic_forward.backward()
+    # update z_critic and gradients
+    for name, param in critic.named_parameters():
+        z_critic[name] = (z_critic_func[name] + param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_critic_func[name] + param.grad)
+
+    # Actor Update
+    actor_optim.zero_grad()
+    z_actor_func = {}
+    for param in z_actor:
+        z_actor_func[param] = (gamma * lambda_actor * z_actor[param]).detach()
+    _, log_prob, _, _, _ = actor(state, h_prev)
+    cur_log_prob = log_prob[int(action[-1].item())]
+    cur_log_prob.backward()
+    for name, param in actor.named_parameters():
+        z_actor[name] = (z_actor_func[name] + I * param.grad).detach()
+        param.grad = -delta.detach().squeeze() * (z_actor_func[name] + I * param.grad)
+
+    I = gamma * I
+
+    actor_optim.step()
+    critic_optim.step()
+
+    return I, z_critic, z_actor

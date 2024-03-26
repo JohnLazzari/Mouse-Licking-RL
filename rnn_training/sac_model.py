@@ -40,11 +40,11 @@ def sparse_(
         raise ValueError("Only tensors with 2 dimensions are supported")
 
     rows, cols = tensor.shape
-    sparsity = np.random.uniform(0.5, 0.9, size=(cols,))
+    sparsity = np.random.uniform(0.5, 0.85, size=(cols,))
     num_zeros = np.ceil(sparsity * rows).astype(int)
 
     with torch.no_grad():
-        tensor.uniform_(-.25, 0)
+        tensor.uniform_(-.1, 0)
         for col_idx, col_zeros in enumerate(num_zeros):
             row_indices = torch.randperm(rows)
             zero_indices = row_indices[:col_zeros]
@@ -60,15 +60,7 @@ class Actor(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.weight_hh_l0 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
-        self.weight_ih_l0 = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
-        self.bias_hh_l0 = nn.Parameter(torch.empty(size=(hid_dim,)))
-        self.bias_ih_l0 = nn.Parameter(torch.empty(size=(hid_dim,)))
-        # Add asynchrony in initialization
-        nn.init.xavier_uniform_(self.weight_hh_l0)
-        nn.init.xavier_uniform_(self.weight_ih_l0)
-        nn.init.uniform_(self.bias_hh_l0, -0.1, 0.1)
-        nn.init.uniform_(self.bias_ih_l0, -0.1, 0.1)
+        self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
@@ -76,30 +68,27 @@ class Actor(nn.Module):
         self.action_scale = action_scale
         self.action_bias = action_bias
 
-    def forward(self, x: torch.Tensor, hn: torch.Tensor, y_depression: torch.Tensor, sampling=True, len_seq=None):
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, sampling=True, len_seq=None):
+        
+        if sampling == False:
+            x = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
+        
+        gru_out, hn = self.gru(x, hn)
 
-        new_hs = []
-        y_depression = y_depression.squeeze(0)
-        # Assuming batch first is True
-        h_cur = hn
-        for step in range(x.shape[1]):
-            h_cur = torch.sigmoid(h_cur.squeeze(0) @ self.weight_hh_l0 + self.bias_hh_l0 + x[:, step, :] @ self.weight_ih_l0 + self.bias_ih_l0)
-            new_hs.append(h_cur)
-        h_last = h_cur.unsqueeze(0)
-        all_hs = torch.stack(new_hs, dim=1)
+        if sampling == False:
+            gru_out, _ = pad_packed_sequence(gru_out, batch_first=True)
 
-        mean = self.mean_linear(all_hs)
-        std = self.std_linear(all_hs)
+        mean = self.mean_linear(gru_out)
+        std = self.std_linear(gru_out)
         std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
         
-        return mean, std, h_last, all_hs, y_depression.unsqueeze(0)
+        return mean, std, gru_out, hn
     
-    def sample(self, state: torch.Tensor, hn: torch.Tensor, y_depression, sampling: bool = True, len_seq: list = None):
+    def sample(self, state: torch.Tensor, hn: torch.Tensor, sampling: bool=True, len_seq: list=None):
 
         hn = hn.cuda()
         
-        mean, log_std, h_current, gru_out, y_depression = self.forward(state, hn, y_depression, sampling, len_seq)
-        #if sampling == False; then reshape mean and log_std from (B, L_max, A) to (B*Lmax, A)
+        mean, log_std, gru_out, hn = self.forward(state, hn, sampling, len_seq)
 
         mean_size = mean.size()
         log_std_size = log_std.size()
@@ -127,7 +116,7 @@ class Actor(nn.Module):
             log_prob = log_prob.reshape(log_std_size[0], log_std_size[1], 1) 
             mean = mean.reshape(mean_size[0], mean_size[1], mean_size[2])
 
-        return action, log_prob, mean, h_current, gru_out, y_depression
+        return action, log_prob, mean, gru_out, hn
 
 
 # Critic RNN
@@ -137,55 +126,25 @@ class Critic(nn.Module):
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
         
-        self.fc11 = nn.Linear(inp_dim+hid_dim, hid_dim)
-        self.fc12 = nn.Linear(hid_dim, hid_dim)
-        #self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc13 = nn.Linear(hid_dim, 1)
+        self.gru1 = nn.GRU(inp_dim, hid_dim, batch_first=True)
+        self.fc12 = nn.Linear(hid_dim, 1)
 
-        self.fc21 = nn.Linear(inp_dim+hid_dim, hid_dim)
-        self.fc22 = nn.Linear(hid_dim, hid_dim)
-        #self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True, num_layers=1)
-        self.fc23 = nn.Linear(hid_dim, 1)
-
-        self.means_1 = torch.linspace(0, 120, hid_dim)
-        self.means_2 = torch.linspace(0, 150, hid_dim)
-        self.means_3 = torch.linspace(0, 180, hid_dim)
-
-        self.stds = torch.ones(size=(hid_dim,))
-        self.timepoints_1 = torch.linspace(0, 120, 120).unsqueeze(1) # max timestep
-        self.timepoints_2 = torch.linspace(0, 150, 150).unsqueeze(1) # max timestep
-        self.timepoints_3 = torch.linspace(0, 180, 180).unsqueeze(1) # max timestep
-
-        self.time_mask_1 = self.gaussian(self.timepoints_1, self.means_1, self.stds).unsqueeze(0)
-        print(self.time_mask_1[:, 0, :])
-        print(self.time_mask_1[:, 50, :])
-        print(self.time_mask_1[:, 100, :])
-        self.time_mask_2 = self.gaussian(self.timepoints_2, self.means_2, self.stds).unsqueeze(0)
-        self.time_mask_3 = self.gaussian(self.timepoints_3, self.means_3, self.stds).unsqueeze(0)
+        self.gru2 = nn.GRU(inp_dim, hid_dim, batch_first=True)
+        self.fc22 = nn.Linear(hid_dim, 1)
     
-    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: bool = None):
+    def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: list=None):
 
-        time_mask = self.time_mask_1.repeat(state.shape[0], 1, 1).cuda()
-
+        x = torch.cat((state, action), dim=-1)
         hn = hn.cuda()
-        hn = hn * time_mask[:, :hn.shape[1], :]
-        x = torch.cat((state, hn, action), dim=-1)
 
-        x1 = F.tanh(self.fc11(x))
-        x1 = F.tanh(self.fc12(x1))
-        #x1 = pack_padded_sequence(x1, len_seq, batch_first=True, enforce_sorted=False)
-        #x1, hn1 = self.gru1(x1, hn)
-        #x1, _ = pad_packed_sequence(x1, batch_first=True)
-        x1 = self.fc13(x1)
+        x1 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
+        x1, hn1 = self.gru1(x1, hn)
+        x1, _ = pad_packed_sequence(x1, batch_first=True)
+        x1 = self.fc12(x1)
 
-        x2 = F.tanh(self.fc21(x))
-        x2 = F.tanh(self.fc22(x2))
-        #x2 = pack_padded_sequence(x2, len_seq, batch_first=True, enforce_sorted=False)
-        #x2, hn2 = self.gru2(x2, hn)
-        #x2, _ = pad_packed_sequence(x2, batch_first=True)
-        x2 = self.fc23(x2)
+        x2 = pack_padded_sequence(x, len_seq, batch_first=True, enforce_sorted=False)
+        x2, hn2 = self.gru2(x2, hn)
+        x2, _ = pad_packed_sequence(x2, batch_first=True)
+        x2 = self.fc22(x2)
 
         return x1, x2
-    
-    def gaussian(self, x, means, stds):
-        return (1 / (2*stds)) * torch.exp(-0.5 * (x - means)**2 / stds**2)

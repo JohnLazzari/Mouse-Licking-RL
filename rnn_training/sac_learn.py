@@ -57,10 +57,6 @@ def sac_learn(
     critic_target_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
     hard_update(critic_target_bg, critic_bg)
 
-    param_names = []
-    for name, param in actor_bg.named_parameters():
-        param_names.append(name)
-    
     actor_bg_optimizer = optimizer_spec_actor.constructor(actor_bg.parameters(), **optimizer_spec_actor.kwargs)
     critic_bg_optimizer = optimizer_spec_critic.constructor(critic_bg.parameters(), **optimizer_spec_critic.kwargs)
 
@@ -91,17 +87,16 @@ def sac_learn(
 
     #num_layers specified in the policy model 
     h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-    y_depression = torch.ones(size=(1, 1, hid_dim), device="cuda")*0.25
 
     ### STEPS PER EPISODE ###
     for t in count():
 
         with torch.no_grad():
-            action, h_current, y_depression = select_action(actor_bg, state, h_prev, y_depression, evaluate=False)  # Sample action from policy
+            action, h_current = select_action(actor_bg, state, h_prev, evaluate=False)  # Sample action from policy
 
         ### TRACKING REWARD + EXPERIENCE TUPLE###
         for _ in range(frame_skips):
-            next_state, reward, done = env.step(episode_steps, action, h_prev, total_episodes)
+            next_state, reward, done = env.step(episode_steps, action, total_episodes)
             episode_steps += 1
             episode_reward += reward
             if done == True:
@@ -109,13 +104,7 @@ def sac_learn(
 
         mask = 1.0 if episode_steps == env.max_timesteps else float(not done)
 
-        ep_trajectory.append((state, 
-                                action, 
-                                reward,
-                                next_state, 
-                                mask, 
-                                list(h_prev.squeeze().cpu().detach()), 
-                                list(h_current.squeeze().cpu().detach())))
+        ep_trajectory.append((state, action, reward, next_state, mask))
 
         state = next_state
         h_prev = h_current
@@ -134,7 +123,6 @@ def sac_learn(
 
             # reset training conditions
             h_prev = torch.zeros(size=(1, 1, hid_dim), device="cuda")
-            y_depression = torch.ones(size=(1, 1, hid_dim), device="cuda")*0.25
             state = env.reset(total_episodes) 
 
             # resest lists
@@ -163,8 +151,8 @@ def sac_learn(
             Statistics["best_mean_episode_rewards"].append(best_mean_episode_reward)
 
             print("Episode %d" % (total_episodes,))
-            print("mean reward: %f" % episode_reward)
-            print("mean steps: %f" % episode_steps)
+            print("reward: %f" % episode_reward)
+            print("steps: %f" % episode_steps)
             print("best mean reward: %f" % best_mean_episode_reward)
             print("Policy Loss: %f" % np.mean(np.array(policy_losses)))
             print("Critic Loss: %f" % np.mean(np.array(critic_losses)))

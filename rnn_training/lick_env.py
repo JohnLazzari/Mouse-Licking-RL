@@ -11,12 +11,32 @@ import matplotlib.pyplot as plt
 def NormalizeData(data, min, max):
     return (data - min) / (max - min)
 
+class RNN(nn.Module):
+    def __init__(self, inp_dim, hid_dim, action_dim, sparse=False):
+        super(RNN, self).__init__()
+
+        self.inp_dim = inp_dim
+        self.hid_dim = hid_dim
+        self.action_dim = action_dim
+        
+        self.rnn = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
+
+        self.fc2 = nn.Linear(hid_dim, action_dim)
+
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, len_seq=None):
+
+        rnn_x, hn = self.rnn(x, hn)
+        out = self.fc2(rnn_x)
+        
+        return out, hn, rnn_x
+
 #######################################
 ######## Ramping Environment ##########
 #######################################
 
 class Lick_Env_Cont(gym.Env):
     def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path):
+
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         self.thresh = thresh
@@ -30,81 +50,86 @@ class Lick_Env_Cont(gym.Env):
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
         self.num_conds = 1
+        self.decay = 0.965
+        self.lick = 0
+        self.num_stimuli_cue = 100
+        self.std_stimuli = 0.1
         self.alm_activity = {}
 
-        # Load data
-        self.alm_activity[0] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.1s.mat')['psth']
-        self.alm_activity[0] = np.squeeze(NormalizeData(self.alm_activity[0], np.min(self.alm_activity[0]), np.max(self.alm_activity[0])))
-
-        self.alm_activity[1] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.4s.mat')['psth']
-        self.alm_activity[1] = np.squeeze(NormalizeData(self.alm_activity[1], np.min(self.alm_activity[1]), np.max(self.alm_activity[1])))
-
-        self.alm_activity[2] = sio.loadmat(f'{alm_data_path}/alm_PSTH_1.7s.mat')['psth']
-        self.alm_activity[2] = np.squeeze(NormalizeData(self.alm_activity[2], np.min(self.alm_activity[2]), np.max(self.alm_activity[2])))
-
+        # Load ALM Network
+        self.alm_net = RNN(1, 2, 1)
+        checkpoint = torch.load("checkpoints/rnn_goal_delay.pth")
+        self.alm_net.load_state_dict(checkpoint)
+    
     def reset(self, episode: int):
 
-        self.cortical_state = 0
-        self.cue = 1
+        self.cortical_state = torch.zeros(size=(1, 1, 2))
+        self.cue = 0
+        self.lick = 0
+
         # switch target delay time
         self.switch = episode % self.num_conds
-        self.target_delay_time = int((1 + self.switch * 0.3) / self.dt) # scale back since t starts at 0
+        self.target_delay_time = int((2 + self.switch * 0.6) / self.dt) # scale back since t starts at 0
         self.max_timesteps = self.target_delay_time + 20 # add some extra time so it doesnt have to be exact
-        if self.num_conds == 1:
-            self.switch_const = 0.25 #just using for a single condition
-        else:
-            self.switch_const = (self.switch + 1) / self.num_conds
-        state = [self.cortical_state, self.switch_const, self.cue]
+
+        state = [self.cortical_state[0, 0, 0], self.cortical_state[0, 0, 1], self.cue, self.switch]
+
         return state
     
-    def _get_reward(self, t: int, lick: int, action: int):
+    def _get_reward(self, t: int):
 
         reward = 0
-        if lick == 1 and t >= self.target_delay_time-1:
-            reward += 5 * ((self.target_delay_time-1) / t)
-        if lick == 1 and t < self.target_delay_time-1:
-            reward -= 5
-        if lick != 1 and t == self.max_timesteps-1:
-            reward -= 5
-        if self.cortical_state < 0:
-            reward -= 5
+        if self.lick == 1 and t >= self.target_delay_time-1:
+            reward += ((self.target_delay_time-1) / t)
+        if self.lick != 1 and t == self.max_timesteps-1:
+            reward -= 1
+        if self.lick == 1 and t < self.target_delay_time-1:
+            reward -= 1
 
         return reward
     
-    def _get_done(self, t: int, lick: int):
+    def _get_done(self, t: int):
 
         done = False
         if t == self.max_timesteps-1:
             done = True
-        if self.cortical_state < 0:
-            done = True
-        if lick == 1:
+        if self.lick == 1:
             done = True
         return done
     
-    def _get_next_state(self, t: int, lick: int):
+    def _get_next_state(self, t: int):
 
-        self.cue = 0
+        if t >= 99:
+            self.cue = 1
+        elif t < 99:
+            self.cue = 0
 
-        state = [self.cortical_state, self.switch_const, self.cue]
+        state = [self.cortical_state[0, 0, 0], self.cortical_state[0, 0, 1], self.cue, self.switch]
         return state
     
     def _get_lick(self, action: torch.Tensor):
-        self.cortical_state = self.beta * self.cortical_state + action * self.bg_scale
 
-        if self.cortical_state >= self.thresh:
-            lick = 1
+        action = torch.tensor([action]).unsqueeze(0).unsqueeze(0)
+        with torch.no_grad():
+            out, self.cortical_state, _ = self.alm_net(action, self.cortical_state)
+        out = torch.sigmoid(out).item()
+        num = np.random.uniform(0, 1)
+
+        if num <= out:
+            self.lick = 1
         else:
-            lick = 0
-
-        return lick
+            self.lick = 0
     
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episodes: int):
+    def step(self, t: int, action: torch.Tensor, episodes: int):
+
         action = action[0]
-        lick = self._get_lick(action)
-        reward = self._get_reward(t, lick, action)
-        done = self._get_done(t, lick)
-        state = self._get_next_state(t, lick)
+
+        self._get_lick(action)
+
+        reward = self._get_reward(t)
+        done = self._get_done(t)
+        state = self._get_next_state(t)
+
         return state, reward, done
 
     
@@ -260,7 +285,7 @@ class Kinematics_Jaw_Env(gym.Env):
         # Use simple linear dynamics for now
         self.cortical_state = self.cortical_state + action * self.bg_scale
 
-    def step(self, t: int, action: torch.Tensor, hn: torch.Tensor, episode_num: int):
+    def step(self, t: int, action: torch.Tensor, episode_num: int):
 
         self._get_pred_kinematics(action)
         reward = self._get_reward(t)
