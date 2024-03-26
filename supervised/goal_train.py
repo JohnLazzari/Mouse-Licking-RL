@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN
+from models import RNN, RNN_Delay
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
@@ -49,7 +49,7 @@ def gather_kinematics_data(kinematics_folder):
 def gather_delay_data():
     
     lick_struct = {}
-    x_inp = {}
+    ramp_inp = {}
 
     # Condition 1
     lick_struct[0] = torch.zeros(size=(210,)).unsqueeze(1)
@@ -66,13 +66,15 @@ def gather_delay_data():
     for cond in range(3):
         ramp = torch.linspace(0, 1, int((1.1 + (.3*cond)) / 0.01), dtype=torch.float32).unsqueeze(1)
         baseline = torch.zeros(size=(100, 1))
-        x_inp[cond] = torch.cat((baseline, ramp), dim=0).cuda()
+        ramp_inp[cond] = torch.cat((baseline, ramp), dim=0)
 
     len_seq = [210, 240, 270]
-    x_inp_total = pad_sequence([x_inp[0], x_inp[1], x_inp[2]], batch_first=True).cuda()
-    lick_seq_total = pad_sequence([lick_struct[0], lick_struct[1], lick_struct[2]], batch_first=True).cuda()
+    cue_inp = torch.zeros(size=(3, 270, 1))
+    cue_inp[:, 99, :] = 1
+    ramp_inp_total = pad_sequence([ramp_inp[0], ramp_inp[1], ramp_inp[2]], batch_first=True)
+    lick_seq_total = pad_sequence([lick_struct[0], lick_struct[1], lick_struct[2]], batch_first=True)
 
-    return lick_seq_total, x_inp_total, len_seq
+    return lick_seq_total, ramp_inp_total, cue_inp, len_seq
 
 def gather_population_data(data_folder, region):
 
@@ -85,11 +87,15 @@ def gather_population_data(data_folder, region):
         min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
         data_struct[cond] = torch.tensor(2 * NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data) - 1, dtype=torch.float32)
 
-    data_total = torch.stack([data_struct[0], data_struct[1], data_struct[2]], dim=0).cuda()
+    data_total = torch.stack([data_struct[0], data_struct[1], data_struct[2]], dim=0)
     
     return data_total
 
 def main():
+
+    ####################################
+    #        Training Params           #
+    ####################################
 
     kinematics_folder = 'data/kinematics'
     save_path = "checkpoints/rnn_goal_delay.pth"
@@ -104,7 +110,10 @@ def main():
     region = "striatum"
     data_folder = "data/firing_rates"
 
-    rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
+    if task == "kinematics":
+        rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
+    elif task == "delay":
+        rnn_control = RNN_Delay(inp_dim, hid_dim, out_dim)
 
     if task == "kinematics":
         criterion = nn.MSELoss()
@@ -114,50 +123,55 @@ def main():
     if activity_constraint:
         constraint_criterion = nn.MSELoss()
 
-    epochs = 150_000
-    lr = 5e-4
+    epochs = 250_000
+    lr = 1e-3
 
     if task == "kinematics":
         y_data, x_data, len_seq = gather_kinematics_data(kinematics_folder)
     elif task == "delay":
-        y_data, x_data, len_seq = gather_delay_data()
+        y_data, x_data, cue_inp, len_seq = gather_delay_data()
     
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region)
     
     rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-5)
 
-    ############## Control RNN ######################
+    ####################################
+    #          Train RNN               #
+    ####################################
 
     for epoch in range(epochs):
         
-        hn = torch.zeros(size=(1, 3, hid_dim), device="cuda")
-        out, hn, act = rnn_control(x_data, hn, len_seq)
+        hn = torch.zeros(size=(1, 3, hid_dim))
 
-        if task == "delay":
-            out = torch.sigmoid(out)
+        out, hn, act = rnn_control(x_data, cue_inp, hn, len_seq)
 
         # mask the losses which correspond to padded values (just in case)
         loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
-        loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
+        loss_mask = pad_sequence(loss_mask, batch_first=True)
 
         out = out * loss_mask
         y_data_masked = y_data * loss_mask
+
         if activity_constraint:
             loss = criterion(out, y_data_masked) + 1 * constraint_criterion(act, neural_act)
         else:
             loss = criterion(out, y_data)
 
-        print("Training loss at epoch {}:{}".format(epoch, loss.item()))
+        if epoch % 1000 == 0:
+            print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
         rnn_control_optim.zero_grad()
         loss.backward()
         rnn_control_optim.step()
     
-    # Look at output
+    ####################################
+    #       Output and Save            #
+    ####################################
+
     with torch.no_grad():
 
-        hn = torch.zeros(size=(1, 3, hid_dim), device="cuda")
+        hn = torch.zeros(size=(1, 3, hid_dim))
         out, hn, act = rnn_control(x_data, hn, len_seq)
         act = act.cpu().numpy()
 
