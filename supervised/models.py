@@ -39,21 +39,17 @@ class RNN_Delay(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
-        nn.init.xavier_uniform_(self.weight_l0_hh)
-
+        self.rnn = nn.RNN(inp_dim, hid_dim, batch_first=True, num_layers=1, nonlinearity="relu")
         self.fc2 = nn.Linear(hid_dim, action_dim)
 
-    def forward(self, ramp: torch.Tensor, cue: torch.Tensor, hn: torch.Tensor, len_seq=None):
+    def forward(self, x: torch.Tensor, hn: torch.Tensor, len_seq=None):
 
-        hn_next = hn.squeeze(0)
-        new_hs = []
-        for t in range(ramp.shape[1]):
-            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + ramp[:, t, :] + cue[:, t, :])
-            new_hs.append(hn_next)
-        rnn_out = torch.stack(new_hs, dim=1)
-        hn_last = rnn_out[:, -1, :].unsqueeze(0)
+        x = pack_padded_sequence(x, len_seq,  batch_first=True, enforce_sorted=False)
 
-        out = torch.sigmoid(self.fc2(rnn_out))
+        rnn_x, hn = self.rnn(x, hn)
+
+        rnn_x, _ = pad_packed_sequence(rnn_x, batch_first=True)
+
+        out = torch.sigmoid(self.fc2(rnn_x))
         
-        return out, hn_last, rnn_out
+        return out, hn, rnn_x
