@@ -131,7 +131,6 @@ def main():
         y_data, x_data, len_seq = gather_kinematics_data(kinematics_folder)
     elif task == "delay":
         y_data, x_data, len_seq = gather_delay_data()
-        y_data, x_data, len_seq = gather_delay_data()
     
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region)
@@ -153,9 +152,7 @@ def main():
         out = out * loss_mask
 
         loss = criterion(out, y_data)
-        loss = criterion(out, y_data)
 
-        print("Training loss at epoch {}:{}".format(epoch, loss.item()))
         print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
         rnn_control_optim.zero_grad()
