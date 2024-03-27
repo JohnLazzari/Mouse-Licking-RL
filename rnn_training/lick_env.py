@@ -19,16 +19,26 @@ class RNN(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.rnn = nn.GRU(inp_dim, hid_dim, batch_first=True, num_layers=1)
+        self.weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.weight_l0_ih = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
+        nn.init.xavier_uniform_(self.weight_l0_hh)
+        nn.init.xavier_uniform_(self.weight_l0_ih)
 
         self.fc2 = nn.Linear(hid_dim, action_dim)
 
-    def forward(self, x: torch.Tensor, hn: torch.Tensor, len_seq=None):
+    def forward(self, inp: torch.Tensor, hn: torch.Tensor, len_seq=None):
 
-        rnn_x, hn = self.rnn(x, hn)
-        out = self.fc2(rnn_x)
+        hn_next = hn.squeeze(0)
+        new_hs = []
+        for t in range(inp.shape[1]):
+            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + inp[:, t, :] @ self.weight_l0_ih)
+            new_hs.append(hn_next)
+        rnn_out = torch.stack(new_hs, dim=1)
+        hn_last = rnn_out[:, -1, :].unsqueeze(0)
+
+        out = torch.sigmoid(self.fc2(rnn_out))
         
-        return out, hn, rnn_x
+        return out, hn_last, rnn_out
 
 #######################################
 ######## Ramping Environment ##########
@@ -49,7 +59,7 @@ class Lick_Env_Cont(gym.Env):
         self.beta = beta
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
-        self.num_conds = 1
+        self.num_conds = 2
         self.decay = 0.965
         self.lick = 0
         self.num_stimuli_cue = 100
@@ -57,7 +67,7 @@ class Lick_Env_Cont(gym.Env):
         self.alm_activity = {}
 
         # Load ALM Network
-        self.alm_net = RNN(1, 2, 1)
+        self.alm_net = RNN(2, 2, 1)
         checkpoint = torch.load("checkpoints/rnn_goal_delay.pth")
         self.alm_net.load_state_dict(checkpoint)
     
@@ -99,9 +109,9 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_next_state(self, t: int):
 
-        if t >= 99:
+        if t == 99:
             self.cue = 1
-        elif t < 99:
+        else:
             self.cue = 0
 
         state = [self.cortical_state[0, 0, 0], self.cortical_state[0, 0, 1], self.cue, self.switch]
@@ -110,12 +120,13 @@ class Lick_Env_Cont(gym.Env):
     def _get_lick(self, action: torch.Tensor):
 
         action = torch.tensor([action]).unsqueeze(0).unsqueeze(0)
+        cue = torch.tensor([self.cue]).unsqueeze(0).unsqueeze(0)
+        inp = torch.cat((action, cue), dim=-1)
         with torch.no_grad():
-            out, self.cortical_state, _ = self.alm_net(action, self.cortical_state)
-        out = torch.sigmoid(out).item()
+            out, self.cortical_state, _ = self.alm_net(inp, self.cortical_state)
         num = np.random.uniform(0, 1)
 
-        if num <= out:
+        if num <= out.squeeze().item():
             self.lick = 1
         else:
             self.lick = 0

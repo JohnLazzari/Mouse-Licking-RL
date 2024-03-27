@@ -40,16 +40,18 @@ class RNN_Delay(nn.Module):
         self.action_dim = action_dim
         
         self.weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.weight_l0_ih = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
         nn.init.xavier_uniform_(self.weight_l0_hh)
+        nn.init.xavier_uniform_(self.weight_l0_ih)
 
         self.fc2 = nn.Linear(hid_dim, action_dim)
 
-    def forward(self, ramp: torch.Tensor, cue: torch.Tensor, hn: torch.Tensor, len_seq=None):
+    def forward(self, inp: torch.Tensor, hn: torch.Tensor, len_seq=None):
 
         hn_next = hn.squeeze(0)
         new_hs = []
-        for t in range(ramp.shape[1]):
-            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + ramp[:, t, :] + cue[:, t, :])
+        for t in range(inp.shape[1]):
+            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + inp[:, t, :] @ self.weight_l0_ih)
             new_hs.append(hn_next)
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)

@@ -72,9 +72,10 @@ def gather_delay_data():
     cue_inp = torch.zeros(size=(3, 270, 1))
     cue_inp[:, 99, :] = 1
     ramp_inp_total = pad_sequence([ramp_inp[0], ramp_inp[1], ramp_inp[2]], batch_first=True)
+    total_inp = torch.cat((ramp_inp_total, cue_inp), dim=-1)
     lick_seq_total = pad_sequence([lick_struct[0], lick_struct[1], lick_struct[2]], batch_first=True)
 
-    return lick_seq_total, ramp_inp_total, cue_inp, len_seq
+    return lick_seq_total, total_inp, len_seq
 
 def gather_population_data(data_folder, region):
 
@@ -101,7 +102,7 @@ def main():
     save_path = "checkpoints/rnn_goal_delay.pth"
     task = "delay"
 
-    inp_dim = 1
+    inp_dim = 2
     hid_dim = 2
     out_dim = 1
 
@@ -123,43 +124,36 @@ def main():
     if activity_constraint:
         constraint_criterion = nn.MSELoss()
 
-    epochs = 250_000
+    epochs = 100_000
     lr = 1e-3
 
     if task == "kinematics":
         y_data, x_data, len_seq = gather_kinematics_data(kinematics_folder)
     elif task == "delay":
-        y_data, x_data, cue_inp, len_seq = gather_delay_data()
+        y_data, x_data, len_seq = gather_delay_data()
     
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region)
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-5)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-4)
 
     ####################################
     #          Train RNN               #
     ####################################
+    hn = torch.zeros(size=(1, 3, hid_dim))
+    # mask the losses which correspond to padded values (just in case)
+    loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
+    loss_mask = pad_sequence(loss_mask, batch_first=True)
 
     for epoch in range(epochs):
         
-        hn = torch.zeros(size=(1, 3, hid_dim))
-
-        out, hn, act = rnn_control(x_data, cue_inp, hn, len_seq)
-
-        # mask the losses which correspond to padded values (just in case)
-        loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
-        loss_mask = pad_sequence(loss_mask, batch_first=True)
+        out, hn_new, act = rnn_control(x_data, hn, len_seq)
 
         out = out * loss_mask
-        y_data_masked = y_data * loss_mask
 
-        if activity_constraint:
-            loss = criterion(out, y_data_masked) + 1 * constraint_criterion(act, neural_act)
-        else:
-            loss = criterion(out, y_data)
+        loss = criterion(out, y_data)
 
-        if epoch % 1000 == 0:
-            print("Training loss at epoch {}:{}".format(epoch, loss.item()))
+        print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
         rnn_control_optim.zero_grad()
         loss.backward()
@@ -168,16 +162,6 @@ def main():
     ####################################
     #       Output and Save            #
     ####################################
-
-    with torch.no_grad():
-
-        hn = torch.zeros(size=(1, 3, hid_dim))
-        out, hn, act = rnn_control(x_data, hn, len_seq)
-        act = act.cpu().numpy()
-
-        # plot activity for condition 1
-        plt.plot(act[0])
-        plt.show()
 
     torch.save(rnn_control.state_dict(), save_path)
     

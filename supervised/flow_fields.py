@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from models import RNN
+from models import RNN, RNN_Delay
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 
@@ -15,11 +15,14 @@ def gather_inp_data(num_conditions):
         baseline = torch.zeros(size=(100, 1))
         x_inp[cond] = torch.cat((baseline, ramp), dim=0)
 
+    cue_inp = torch.zeros(size=(3, 270, 1))
+    cue_inp[:, 99, :] = 1
     x_inp_total = pad_sequence([x_inp[0], x_inp[1], x_inp[2]], batch_first=True)
+    total_inp = torch.cat((x_inp_total, cue_inp), dim=-1)
     
-    return x_inp_total
+    return total_inp
 
-def generate_grid(num_points, lower_bound=-1, upper_bound=1):
+def generate_grid(num_points, lower_bound=0, upper_bound=1):
 
     # Num points is along each axis, not in total
     x = np.linspace(lower_bound, upper_bound, num_points)
@@ -48,7 +51,7 @@ def apply_pca(x, num_components=2):
 def main():
     
     # General params
-    inp_dim = 1
+    inp_dim = 2
     hid_dim = 2
     out_dim = 1
     num_points = 100
@@ -62,7 +65,7 @@ def main():
     checkpoint = torch.load(check_path)
 
     # Create RNN
-    rnn = RNN(inp_dim, hid_dim, out_dim)
+    rnn = RNN_Delay(inp_dim, hid_dim, out_dim)
     rnn.load_state_dict(checkpoint)
 
     # Gather data
@@ -74,7 +77,7 @@ def main():
 
     with torch.no_grad():
         h_0 = torch.zeros(size=(1, 3, hid_dim))
-        _, _, act = rnn(x_inp, h_0, [num_timepoints, num_timepoints, num_timepoints])
+        out, _, act = rnn(x_inp, h_0, [num_timepoints, num_timepoints, num_timepoints])
     act_cond1 = act[condition, :, :].numpy()
     plt.plot(np.mean(act_cond1, axis=-1))
     plt.show()
@@ -87,11 +90,11 @@ def main():
     # Go through activities and generate h_t+1
     for inp in range(num_timepoints):
         print(f"input number: {inp}")
-        cur_inp = x_inp[condition, inp, :].unsqueeze(0).unsqueeze(0)
+        cur_x_inp = x_inp[condition, inp, :].unsqueeze(0).unsqueeze(0)
         for h_0 in data_coords:
             with torch.no_grad():
                 h_0 = h_0.unsqueeze(0).unsqueeze(0)
-                _, _, act = rnn(cur_inp, h_0, [1])
+                _, _, act = rnn(cur_x_inp, h_0, [1])
                 next_acts[inp].append(act[0, 0, :].numpy())
 
     # Reshape data back to grid
