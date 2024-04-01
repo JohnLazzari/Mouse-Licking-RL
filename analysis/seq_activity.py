@@ -51,47 +51,11 @@ def thinning(fr):
 
     return spike_times
 
-rnn_fr = np.load("results/test_activity/rnn_control_regression_sparse_act.npy")
-
-cond_1_act = np.abs(rnn_fr[0, :110, :])
-cond_2_act = np.abs(rnn_fr[1, :119, :])
-cond_3_act = np.abs(rnn_fr[2, :128, :])
-
-print(cond_1_act.shape)
-plt.plot(cond_1_act)
-plt.show()
-
-cond_1_act_sorted, ordering = sort_by_peaks(cond_1_act)
-
-# Currently N x T
-spike_times = []
-neuron_index = []
-for i, neuron in enumerate(cond_1_act_sorted):
-    spike_times.append(thinning(neuron))
-    neuron_index.append([i]*len(spike_times[-1]))
-    assert len(spike_times[-1]) == len(neuron_index[-1])
-
-spike_times = list(chain.from_iterable(spike_times))
-neuron_index = list(chain.from_iterable(neuron_index))
-
-plt.scatter(spike_times, neuron_index, s=1)
-plt.show()
-
-rnn_fr = np.load("results/test_activity/kinematics_jaw_act.npy")[0]
+rnn_fr = np.load("results/test_activity/lick_attractor_act.npy")
 ramp_sorted, ordering = sort_by_peaks(np.abs(rnn_fr))
-plt.plot(np.abs(ramp_sorted.T))
+
+plt.plot(ramp_sorted.T)
 plt.show()
 
-# Currently N x T
-spike_times = []
-neuron_index = []
-for i, neuron in enumerate(ramp_sorted):
-    spike_times.append(thinning(neuron))
-    neuron_index.append([i]*len(spike_times[-1]))
-    assert len(spike_times[-1]) == len(neuron_index[-1])
-
-spike_times = list(chain.from_iterable(spike_times))
-neuron_index = list(chain.from_iterable(neuron_index))
-
-plt.scatter(spike_times, neuron_index, s=1)
+plt.imshow(np.abs(ramp_sorted))
 plt.show()

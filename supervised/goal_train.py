@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN, RNN_Delay
+from models import RNN
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
@@ -81,14 +81,13 @@ def gather_population_data(data_folder, region):
 
     data_struct = {}
 
-    # may need to potentially give the rnn some time varying input as well? (ALM Data)
     for cond in range(3):
 
         data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_fr_population_cond{cond+1}.mat')['fr_population']
         min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
         data_struct[cond] = torch.tensor(2 * NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data) - 1, dtype=torch.float32)
 
-    data_total = torch.stack([data_struct[0], data_struct[1], data_struct[2]], dim=0)
+    data_total = torch.stack([data_struct[0], data_struct[1], data_struct[2]], dim=0).cuda()
     
     return data_total
 
@@ -99,22 +98,19 @@ def main():
     ####################################
 
     kinematics_folder = 'data/kinematics'
-    save_path = "checkpoints/rnn_goal_delay.pth"
+    save_path = "checkpoints/rnn_goal_data_delay.pth"
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 2
+    hid_dim = 517
     out_dim = 1
 
     # If doing semi data driven semi goal directed
-    activity_constraint = False
-    region = "striatum"
+    activity_constraint = True
+    region = "alm"
     data_folder = "data/firing_rates"
 
-    if task == "kinematics":
-        rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
-    elif task == "delay":
-        rnn_control = RNN_Delay(inp_dim, hid_dim, out_dim)
+    rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
 
     if task == "kinematics":
         criterion = nn.MSELoss()
@@ -124,7 +120,7 @@ def main():
     if activity_constraint:
         constraint_criterion = nn.MSELoss()
 
-    epochs = 100_000
+    epochs = 50_000
     lr = 1e-3
 
     if task == "kinematics":
@@ -135,11 +131,12 @@ def main():
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region)
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-4)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-5)
 
     ####################################
     #          Train RNN               #
     ####################################
+
     hn = torch.zeros(size=(1, 3, hid_dim))
     # mask the losses which correspond to padded values (just in case)
     loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
@@ -147,11 +144,12 @@ def main():
 
     for epoch in range(epochs):
         
-        out, hn_new, act = rnn_control(x_data, hn, len_seq)
+        out, hn_new, act = rnn_control(x_data, hn)
 
         out = out * loss_mask
 
-        loss = criterion(out, y_data)
+        if activity_constraint:
+            loss = criterion(out, y_data) + constraint_criterion(act, neural_act)
 
         print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 

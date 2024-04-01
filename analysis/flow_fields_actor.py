@@ -61,11 +61,11 @@ class FlowFields():
 def main():
     
     # General params
-    inp_dim = 2
-    hid_dim = 2
-    out_dim = 533
+    inp_dim = 4
+    hid_dim = 256
+    out_dim = 1
     num_points = 100
-    condition = 0 # 0, 1, or 2
+    condition = 0 # 0, 1
     num_timepoints = 300 # 210, 240, or 270
 
     # Saving and Loading params
