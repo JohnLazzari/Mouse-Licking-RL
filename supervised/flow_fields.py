@@ -53,13 +53,10 @@ class FlowFields():
 
         return x, y, coordinates_data
 
-    def apply_pca(self, x):
-        
-        transformed = self.x_pca.fit_transform(x)
-        return transformed
+    def fit_pca(self, x):
+        self.x_pca.fit(x)
     
-    def apply_inverse_pca(self, x):
-        
+    def inverse_pca(self, x):
         inv_transformed = self.x_pca.inverse_transform(x)
         return inv_transformed
 
@@ -67,7 +64,7 @@ def main():
     
     # General params
     inp_dim = 2
-    hid_dim = 517
+    hid_dim = 512
     out_dim = 1
     num_points = 100
     condition = 0 # 0, 1, or 2
@@ -75,7 +72,7 @@ def main():
 
     # Saving and Loading params
     check_path = "checkpoints/rnn_goal_data_delay.pth"
-    save_name = "results/flow_fields/rnn_goal_data_delay_flow"
+    save_name = "results/flow_fields/rnn_goal_data/rnn_goal_data_delay_flow"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -92,11 +89,19 @@ def main():
         h_0 = torch.zeros(size=(1, 3, hid_dim))
         out, _, act = rnn(x_inp, h_0)
 
-    print(act.shape)
     # Plot PSTH of hidden activity
     act_cond1 = act[condition, :, :].numpy()
     plt.plot(np.mean(act_cond1, axis=-1))
     plt.show()
+
+    plt.plot(act_cond1)
+    plt.show()
+
+    if hid_dim > 2:
+        flow_field.fit_pca(act_cond1)
+        grid = flow_field.inverse_pca(data_coords)
+    else:
+        grid = data_coords
 
     # initialize activity dict
     next_acts = {}
@@ -107,7 +112,7 @@ def main():
     for inp in range(num_timepoints):
         print(f"input number: {inp}")
         cur_x_inp = x_inp[condition, inp, :].unsqueeze(0).unsqueeze(0)
-        for h_0 in data_coords:
+        for h_0 in grid:
             with torch.no_grad():
                 h_0 = h_0.unsqueeze(0).unsqueeze(0)
                 _, _, act = rnn(cur_x_inp, h_0)

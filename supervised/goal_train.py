@@ -103,7 +103,7 @@ def main():
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 2
+    hid_dim = 512
     out_dim = 1
 
     # If doing semi data driven semi goal directed
@@ -121,8 +121,8 @@ def main():
     if activity_constraint:
         constraint_criterion = nn.MSELoss()
 
-    epochs = 100_000
-    lr = 1e-3
+    epochs = 150_000
+    lr = 1e-5
 
     if task == "kinematics":
         y_data, x_data, len_seq = gather_kinematics_data(kinematics_folder)
@@ -132,19 +132,22 @@ def main():
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region)
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-6)
 
     ####################################
     #          Train RNN               #
     ####################################
 
     hn = torch.zeros(size=(1, 3, hid_dim)).cuda()
+
     # mask the losses which correspond to padded values (just in case)
     loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
     loss_mask_act = [torch.ones(size=(length, hid_dim), dtype=torch.int) for length in len_seq]
     loss_mask_act = pad_sequence(loss_mask, batch_first=True).cuda()
+
+    best_loss = np.inf
 
     for epoch in range(epochs):
         
@@ -155,21 +158,19 @@ def main():
         if activity_constraint:
             act = act * loss_mask_act
             neural_act = neural_act * loss_mask_act
-            loss = criterion(out, y_data) + 0.1 * constraint_criterion(torch.mean(act, dim=-1), torch.mean(neural_act, dim=-1))
+            loss = criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1), torch.mean(neural_act, dim=-1))
         else:
             loss = criterion(out, y_data)
+        
+        if loss < best_loss:
+            best_loss = loss
+            torch.save(rnn_control.state_dict(), save_path)
 
         print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
         rnn_control_optim.zero_grad()
         loss.backward()
         rnn_control_optim.step()
-    
-    ####################################
-    #       Output and Save            #
-    ####################################
-
-    torch.save(rnn_control.state_dict(), save_path)
     
 if __name__ == "__main__":
     main()

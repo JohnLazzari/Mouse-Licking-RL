@@ -55,17 +55,17 @@ def main():
     save_path = "checkpoints/rnn_data_alm.pth"
     region = "alm"
     inp_dim = 2
-    hid_dim = 2
+    hid_dim = 16
     out_dim = 517 # 533 for striatum and 517 for alm
     epochs = 100_000
-    lr = 1e-3
+    lr = 1e-4
 
     rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
 
     y_data, len_seq = gather_population_data(population_folder, region)
     x_data = gather_inp_data(psth_folder, region)
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-3)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-4)
 
     criterion = nn.MSELoss()
 
@@ -75,6 +75,8 @@ def main():
     loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
+    best_loss = np.inf
+
     for epoch in range(epochs):
         
         out, _, _ = rnn_control(x_data, hn)
@@ -83,11 +85,13 @@ def main():
 
         print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
+        if loss < best_loss:
+            best_loss = loss
+            torch.save(rnn_control.state_dict(), save_path)
+
         rnn_control_optim.zero_grad()
         loss.backward()
         rnn_control_optim.step()
-    
-    torch.save(rnn_control.state_dict(), save_path)
     
 if __name__ == "__main__":
     main()
