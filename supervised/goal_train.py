@@ -77,16 +77,21 @@ def gather_delay_data():
 
     return lick_seq_total, total_inp, len_seq
 
-def gather_population_data(data_folder, region):
+def gather_population_data(data_folder, region, psth=True):
 
     data_struct = {}
     lens = [210, 240, 270]
 
     for cond in range(3):
 
-        data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_fr_population_cond{cond+1}.mat')['fr_population']
-        min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
-        data_struct[cond] = torch.tensor(NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data), dtype=torch.float32)[:lens[cond], :]
+        if psth:
+            data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_PSTH_cond{cond+1}.mat')['psth']
+            min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
+            data_struct[cond] = torch.tensor(NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data), dtype=torch.float32)[:lens[cond]].unsqueeze(-1)
+        else:
+            data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_fr_population_cond{cond+1}.mat')['fr_population']
+            min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
+            data_struct[cond] = torch.tensor(NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data), dtype=torch.float32)[:lens[cond]]
 
     data_total = pad_sequence([data_struct[0], data_struct[1], data_struct[2]], batch_first=True).cuda()
     
@@ -99,17 +104,17 @@ def main():
     ####################################
 
     kinematics_folder = 'data/kinematics'
-    save_path = "checkpoints/rnn_goal_data_delay.pth"
+    save_path = "checkpoints/rnn_goal_data_full_delay.pth"
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 512
+    hid_dim = 32
     out_dim = 1
 
     # If doing semi data driven semi goal directed
     activity_constraint = True
     region = "alm"
-    data_folder = "data/firing_rates"
+    data_folder = "data/PCs_PSTH"
 
     rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
 
@@ -121,8 +126,8 @@ def main():
     if activity_constraint:
         constraint_criterion = nn.MSELoss()
 
-    epochs = 150_000
-    lr = 1e-5
+    epochs = 100_000
+    lr = 1e-3
 
     if task == "kinematics":
         y_data, x_data, len_seq = gather_kinematics_data(kinematics_folder)
@@ -130,7 +135,10 @@ def main():
         y_data, x_data, len_seq = gather_delay_data()
     
     if activity_constraint:
-        neural_act = gather_population_data(data_folder, region)
+        neural_act = gather_population_data(data_folder, region, psth=True)
+    
+    plt.plot(neural_act[0].cpu().numpy())
+    plt.show()
     
     rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-6)
 
@@ -145,7 +153,10 @@ def main():
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
 
     loss_mask_act = [torch.ones(size=(length, hid_dim), dtype=torch.int) for length in len_seq]
-    loss_mask_act = pad_sequence(loss_mask, batch_first=True).cuda()
+    loss_mask_act = pad_sequence(loss_mask_act, batch_first=True).cuda()
+
+    loss_mask_exp = [torch.ones(size=(length, neural_act.shape[-1]), dtype=torch.int) for length in len_seq]
+    loss_mask_exp = pad_sequence(loss_mask_exp, batch_first=True).cuda()
 
     best_loss = np.inf
 
@@ -157,8 +168,8 @@ def main():
 
         if activity_constraint:
             act = act * loss_mask_act
-            neural_act = neural_act * loss_mask_act
-            loss = criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1), torch.mean(neural_act, dim=-1))
+            neural_act = neural_act * loss_mask_exp
+            loss = criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act)
         else:
             loss = criterion(out, y_data)
         

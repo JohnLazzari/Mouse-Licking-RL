@@ -10,9 +10,10 @@ def NormalizeData(data, min, max):
     return (data - min) / (max - min)
 
 class FlowFields():
-    def __init__(self, inp_type):
+    def __init__(self, inp_type, dimensions=2):
         
         self.inp_type = inp_type
+        self.x_pca = PCA(n_components=dimensions)
     
     def gather_inp_data(self, num_conditions, psth_folder=None, inp_region=None):
 
@@ -29,9 +30,9 @@ class FlowFields():
                 min_data, max_data = np.min(x_inp[cond]), np.max(x_inp[cond])
                 x_inp[cond] = torch.tensor(NormalizeData(np.squeeze(x_inp[cond]), min_data, max_data), dtype=torch.float32).unsqueeze(-1)
 
-        cue_inp = torch.zeros(size=(3, 300, 1))
-        cue_inp[:, 99, :] = 1
         x_inp_total = pad_sequence([x_inp[0], x_inp[1], x_inp[2]], batch_first=True)
+        cue_inp = torch.zeros(size=(3, x_inp_total.shape[1], 1))
+        cue_inp[:, 99, :] = 1
         total_inp = torch.cat((x_inp_total, cue_inp), dim=-1)
         
         return total_inp
@@ -52,25 +53,26 @@ class FlowFields():
 
         return x, y, coordinates_data
 
-    def apply_pca(self, x, num_components=2):
-        
-        x_pca = PCA(n_components=num_components)
-        transformed = x_pca.fit_transform(x)
-        return transformed
+    def fit_pca(self, x):
+        self.x_pca.fit(x)
+    
+    def inverse_pca(self, x):
+        inv_transformed = self.x_pca.inverse_transform(x)
+        return inv_transformed
 
 def main():
     
     # General params
-    inp_dim = 4
-    hid_dim = 256
+    inp_dim = 2
+    hid_dim = 512
     out_dim = 1
     num_points = 100
-    condition = 0 # 0, 1
-    num_timepoints = 300 # 210, 240, or 270
+    condition = 0 # 0, 1, or 2
+    num_timepoints = 210 # 210, 240, or 270
 
     # Saving and Loading params
-    check_path = "checkpoints/rnn_data_striatum.pth"
-    save_name = "results/flow_fields/rnn_data_striatum_flow"
+    check_path = "checkpoints/rnn_goal_data_delay.pth"
+    save_name = "results/flow_fields/rnn_goal_data_delay_flow"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -78,19 +80,26 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     # Gather data
-    flow_field = FlowFields(inp_type="psth")
+    flow_field = FlowFields(inp_type="linear")
 
-    x_inp = flow_field.gather_inp_data(3, psth_folder="data/PCs_PSTH", inp_region="alm")
+    x_inp = flow_field.gather_inp_data(3)
     x, y, data_coords = flow_field.generate_grid(num_points)
 
     with torch.no_grad():
         h_0 = torch.zeros(size=(1, 3, hid_dim))
         out, _, act = rnn(x_inp, h_0)
 
+    print(act.shape)
     # Plot PSTH of hidden activity
     act_cond1 = act[condition, :, :].numpy()
     plt.plot(np.mean(act_cond1, axis=-1))
     plt.show()
+
+    if hid_dim > 2:
+        flow_field.fit_pca(act_cond1)
+        grid = flow_field.inverse_pca(data_coords)
+    else:
+        grid = data_coords
 
     # initialize activity dict
     next_acts = {}
@@ -101,7 +110,7 @@ def main():
     for inp in range(num_timepoints):
         print(f"input number: {inp}")
         cur_x_inp = x_inp[condition, inp, :].unsqueeze(0).unsqueeze(0)
-        for h_0 in data_coords:
+        for h_0 in grid:
             with torch.no_grad():
                 h_0 = h_0.unsqueeze(0).unsqueeze(0)
                 _, _, act = rnn(cur_x_inp, h_0)

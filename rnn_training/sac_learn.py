@@ -130,9 +130,9 @@ def sac_learn(
 
             ### 4. Log progress and keep track of statistics
             if len(avg_reward) > 0:
-                mean_episode_reward = np.mean(np.array(avg_reward)[-100:])
+                mean_episode_reward = np.mean(np.array(avg_reward)[-1000:])
             if len(avg_steps) > 0:
-                mean_episode_steps = np.mean(np.array(avg_steps)[-100:])
+                mean_episode_steps = np.mean(np.array(avg_steps)[-1000:])
             if len(avg_reward) > 10:
                 if mean_episode_reward > best_mean_episode_reward:
                     torch.save({

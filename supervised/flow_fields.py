@@ -13,6 +13,7 @@ class FlowFields():
     def __init__(self, inp_type, dimensions=2):
         
         self.inp_type = inp_type
+        self.dimensions = dimensions
         self.x_pca = PCA(n_components=dimensions)
     
     def gather_inp_data(self, num_conditions, psth_folder=None, inp_region=None):
@@ -55,24 +56,31 @@ class FlowFields():
 
     def fit_pca(self, x):
         self.x_pca.fit(x)
+
+    def transform_pca(self, x):
+        transformed = self.x_pca.transform(x)
+        return transformed
     
     def inverse_pca(self, x):
         inv_transformed = self.x_pca.inverse_transform(x)
         return inv_transformed
+    
+    def reset_pca(self):
+        self.x_pca = PCA(n_components=self.dimensions)
 
 def main():
     
     # General params
     inp_dim = 2
-    hid_dim = 512
-    out_dim = 1
+    hid_dim = 2
+    out_dim = 517
     num_points = 100
     condition = 0 # 0, 1, or 2
-    num_timepoints = 210 # 210, 240, or 270
+    num_timepoints = 300 # 210, 240, or 270 (or 300 for data driven networks)
 
     # Saving and Loading params
-    check_path = "checkpoints/rnn_goal_data_delay.pth"
-    save_name = "results/flow_fields/rnn_goal_data/rnn_goal_data_delay_flow"
+    check_path = "checkpoints/rnn_data_alm.pth"
+    save_name = "results/flow_fields/rnn_data_alm/rnn_data_alm_flow"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -80,9 +88,9 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     # Gather data
-    flow_field = FlowFields(inp_type="linear")
+    flow_field = FlowFields(inp_type="psth")
 
-    x_inp = flow_field.gather_inp_data(3)
+    x_inp = flow_field.gather_inp_data(3, psth_folder="data/PCs_PSTH", inp_region="striatum")
     x, y, data_coords = flow_field.generate_grid(num_points)
 
     with torch.no_grad():
@@ -100,6 +108,7 @@ def main():
     if hid_dim > 2:
         flow_field.fit_pca(act_cond1)
         grid = flow_field.inverse_pca(data_coords)
+        grid = torch.tensor(grid)
     else:
         grid = data_coords
 
@@ -123,6 +132,8 @@ def main():
     data_coords = np.reshape(data_coords, (num_points, num_points, data_coords.shape[-1]))
     for i in range(num_timepoints):
         next_acts[i] = np.array(next_acts[i])
+        if hid_dim > 2:
+            next_acts[i] = flow_field.transform_pca(next_acts[i])
         next_acts[i] = np.reshape(next_acts[i], (num_points, num_points, next_acts[i].shape[-1]))
 
     x_vels = {}

@@ -8,7 +8,7 @@ import pickle
 import scipy.io as sio
 from sklearn.metrics import r2_score
 
-RNN_PATH = "results/test_activity/lick_ramp8000_fr.npy"
+RNN_PATH = "results/test_activity/lick_attractor_act.npy"
 DATA_PATH = "data/firing_rates/striatum_fr_population_cond1.mat"
 
 def main():
@@ -18,13 +18,16 @@ def main():
     A_agent = gaussian_filter1d(rnn_fr, 10, axis=0)
 
     ridge = Ridge(alpha=1e-1)
-    print(r2_score(A_exp[:, 0], pred[:, 0]))
     ridge.fit(A_agent, A_exp)
 
     print(ridge.score(A_agent, A_exp))
 
     # Make Prediction
     pred = ridge.predict(A_agent)
+
+    plt.plot(np.mean(pred, axis=-1))
+    plt.plot(np.mean(A_exp, axis=-1))
+    plt.show()
 
     for i in range(A_exp.shape[1]):
         print(r2_score(A_exp[:, i], pred[:, i]))

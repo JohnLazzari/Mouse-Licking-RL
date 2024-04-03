@@ -24,6 +24,7 @@ class RNN(nn.Module):
         nn.init.xavier_uniform_(self.weight_l0_hh)
         nn.init.xavier_uniform_(self.weight_l0_ih)
 
+        self.fc1 = nn.Linear(hid_dim, hid_dim)
         self.fc2 = nn.Linear(hid_dim, action_dim)
 
     def forward(self, inp: torch.Tensor, hn: torch.Tensor, len_seq=None):
@@ -36,7 +37,8 @@ class RNN(nn.Module):
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
 
-        out = torch.sigmoid(self.fc2(rnn_out))
+        out = F.relu(self.fc1(rnn_out))
+        out = torch.sigmoid(self.fc2(out))
         
         return out, hn_last, rnn_out
 
@@ -59,7 +61,7 @@ class Lick_Env_Cont(gym.Env):
         self.beta = beta
         self.bg_scale = bg_scale
         self.alm_data_path = alm_data_path
-        self.num_conds = 2
+        self.num_conds = 1
         self.decay = 0.965
         self.lick = 0
         self.num_stimuli_cue = 100
@@ -67,13 +69,13 @@ class Lick_Env_Cont(gym.Env):
         self.alm_activity = {}
 
         # Load ALM Network
-        self.alm_net = RNN(2, 2, 1)
-        checkpoint = torch.load("checkpoints/rnn_goal_delay.pth")
+        self.alm_net = RNN(2, 32, 1)
+        checkpoint = torch.load("checkpoints/rnn_goal_data_full_delay.pth")
         self.alm_net.load_state_dict(checkpoint)
     
     def reset(self, episode: int):
 
-        self.cortical_state = torch.zeros(size=(1, 1, 2))
+        self.cortical_state = torch.zeros(size=(1, 1, 32))
         self.cue = 0
         self.lick = 0
 
@@ -82,7 +84,7 @@ class Lick_Env_Cont(gym.Env):
         self.target_delay_time = int((2 + self.switch * 0.6) / self.dt) # scale back since t starts at 0
         self.max_timesteps = self.target_delay_time + 20 # add some extra time so it doesnt have to be exact
 
-        state = [self.cortical_state[0, 0, 0], self.cortical_state[0, 0, 1], self.cue, self.switch]
+        state = [*list(self.cortical_state[0, 0, :]), self.cue, (self.switch+1)/(self.num_conds+1)]
 
         return state
     
@@ -114,7 +116,7 @@ class Lick_Env_Cont(gym.Env):
         else:
             self.cue = 0
 
-        state = [self.cortical_state[0, 0, 0], self.cortical_state[0, 0, 1], self.cue, self.switch]
+        state = [*list(self.cortical_state[0, 0, :]), self.cue, (self.switch+1)/(self.num_conds+1)]
         return state
     
     def _get_lick(self, action: torch.Tensor):

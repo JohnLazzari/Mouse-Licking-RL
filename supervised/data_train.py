@@ -55,22 +55,29 @@ def main():
     save_path = "checkpoints/rnn_data_alm.pth"
     region = "alm"
     inp_dim = 2
-    hid_dim = 16
+    hid_dim = 2
     out_dim = 517 # 533 for striatum and 517 for alm
     epochs = 100_000
-    lr = 1e-4
+    lr = 1e-3
 
     rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
 
     y_data, len_seq = gather_population_data(population_folder, region)
     x_data = gather_inp_data(psth_folder, region)
+
+    plt.plot(x_data[0].cpu().numpy())
+    plt.show()
+
+    plt.plot(y_data[0].cpu().numpy())
+    plt.show()
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-4)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-2)
 
     criterion = nn.MSELoss()
 
     ############## Control RNN ######################
     hn = torch.zeros(size=(1, 3, hid_dim), device="cuda")
+
     # mask the losses which correspond to padded values (just in case)
     loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
     loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
