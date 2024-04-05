@@ -37,7 +37,7 @@ class RNN(nn.Module):
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
 
-        out = F.relu(self.fc1(rnn_out))
+        out = self.fc1(rnn_out)
         out = torch.sigmoid(self.fc2(out))
         
         return out, hn_last, rnn_out
@@ -69,15 +69,22 @@ class Lick_Env_Cont(gym.Env):
         self.alm_activity = {}
 
         # Load ALM Network
-        self.alm_net = RNN(2, 32, 1)
-        checkpoint = torch.load("checkpoints/rnn_goal_data_full_delay.pth")
+        self.alm_net = RNN(2, 4, 1)
+        checkpoint = torch.load("checkpoints/rnn_goal_data_delay.pth")
         self.alm_net.load_state_dict(checkpoint)
     
     def reset(self, episode: int):
 
-        self.cortical_state = torch.zeros(size=(1, 1, 32))
+        self.cortical_state = torch.zeros(size=(1, 1, 4))
         self.cue = 0
         self.lick = 0
+
+        action = torch.tensor([0.]).unsqueeze(0).unsqueeze(0)
+        cue = torch.tensor([self.cue]).unsqueeze(0).unsqueeze(0)
+        inp = torch.cat((action, cue), dim=-1)
+        for i in range(2):
+            with torch.no_grad():
+                _, self.cortical_state, _ = self.alm_net(inp, self.cortical_state)
 
         # switch target delay time
         self.switch = episode % self.num_conds

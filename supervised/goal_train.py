@@ -53,15 +53,15 @@ def gather_delay_data():
 
     # Condition 1
     lick_struct[0] = torch.zeros(size=(210,)).unsqueeze(1)
-    lick_struct[0][194:209] = 1
+    lick_struct[0][200:210] = 1
 
     # Condition 2
     lick_struct[1] = torch.zeros(size=(240,)).unsqueeze(1)
-    lick_struct[1][224:239] = 1
+    lick_struct[1][230:240] = 1
 
     # Condition 3
     lick_struct[2] = torch.zeros(size=(270,)).unsqueeze(1)
-    lick_struct[2][254:269] = 1
+    lick_struct[2][260:270] = 1
 
     for cond in range(3):
         ramp = torch.linspace(0, 1, int((1.1 + (.3*cond)) / 0.01), dtype=torch.float32).unsqueeze(1)
@@ -104,11 +104,11 @@ def main():
     ####################################
 
     kinematics_folder = 'data/kinematics'
-    save_path = "checkpoints/rnn_goal_data_full_delay.pth"
+    save_path = "checkpoints/rnn_goal_data_delay.pth"
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 32
+    hid_dim = 4
     out_dim = 1
 
     # If doing semi data driven semi goal directed
@@ -137,7 +137,7 @@ def main():
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region, psth=True)
     
-    plt.plot(neural_act[0].cpu().numpy())
+    plt.plot(neural_act[0, :len_seq[0], :].cpu().numpy())
     plt.show()
     
     rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-6)
@@ -168,12 +168,12 @@ def main():
 
         if activity_constraint:
             act = act * loss_mask_act
-            neural_act = neural_act * loss_mask_exp
-            loss = criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act)
+            neural_act = x_data[:, :, 0:1] * loss_mask_exp
+            loss = 0.001 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act)
         else:
             loss = criterion(out, y_data)
         
-        if loss < best_loss:
+        if loss < best_loss and epoch > 5000:
             best_loss = loss
             torch.save(rnn_control.state_dict(), save_path)
 

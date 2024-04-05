@@ -16,8 +16,8 @@ class RNN(nn.Module):
         
         self.weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
         self.weight_l0_ih = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
-        nn.init.xavier_normal_(self.weight_l0_hh)
-        nn.init.xavier_normal_(self.weight_l0_ih)
+        nn.init.xavier_uniform_(self.weight_l0_hh)
+        nn.init.xavier_uniform_(self.weight_l0_ih)
 
         self.fc1 = nn.Linear(hid_dim, hid_dim)
         self.fc2 = nn.Linear(hid_dim, action_dim)
@@ -32,7 +32,7 @@ class RNN(nn.Module):
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
 
-        out = F.relu(self.fc1(rnn_out))
+        out = self.fc1(rnn_out)
         out = torch.sigmoid(self.fc2(out))
         
         return out, hn_last, rnn_out

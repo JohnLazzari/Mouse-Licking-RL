@@ -72,15 +72,15 @@ def main():
     
     # General params
     inp_dim = 2
-    hid_dim = 2
-    out_dim = 517
+    hid_dim = 4
+    out_dim = 1
     num_points = 100
     condition = 0 # 0, 1, or 2
-    num_timepoints = 300 # 210, 240, or 270 (or 300 for data driven networks)
+    num_timepoints = 210 # 210, 240, or 270 (or 300 for data driven networks)
 
     # Saving and Loading params
-    check_path = "checkpoints/rnn_data_alm.pth"
-    save_name = "results/flow_fields/rnn_data_alm/rnn_data_alm_flow"
+    check_path = "checkpoints/rnn_goal_data_delay.pth"
+    save_name = "results/flow_fields/rnn_goal_data_delay/rnn_goal_data_delay_flow"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -88,7 +88,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     # Gather data
-    flow_field = FlowFields(inp_type="psth")
+    flow_field = FlowFields(inp_type="linear")
 
     x_inp = flow_field.gather_inp_data(3, psth_folder="data/PCs_PSTH", inp_region="striatum")
     x, y, data_coords = flow_field.generate_grid(num_points)
@@ -98,7 +98,7 @@ def main():
         out, _, act = rnn(x_inp, h_0)
 
     # Plot PSTH of hidden activity
-    act_cond1 = act[condition, :, :].numpy()
+    act_cond1 = act[condition, :num_timepoints, :].numpy()
     plt.plot(np.mean(act_cond1, axis=-1))
     plt.show()
 

@@ -47,11 +47,11 @@ def gather_delay_data():
 def main():
 
     inp_dim = 2
-    hid_dim = 32
+    hid_dim = 4
     out_dim = 1
     cond = 0
 
-    check_path = "checkpoints/rnn_goal_data_full_delay.pth"
+    check_path = "checkpoints/rnn_goal_data_delay.pth"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -84,7 +84,7 @@ def main():
         with torch.no_grad():        
             out, hn, act = rnn(x_data[cond:cond+1, t:t+1, :], hn)
             if t > 100 and t < 140:
-                hn = hn * inhibit_strength
+                hn = 0.01 * torch.ones_like(hn)
             acts.append(hn.squeeze().numpy())
     
     acts = np.array(acts)
