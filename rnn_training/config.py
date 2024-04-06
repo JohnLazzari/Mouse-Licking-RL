@@ -106,11 +106,6 @@ def config_parser():
                         default=60, 
                         help='number of timesteps for single episode (num / dt)')
 
-    parser.add_argument('--alm_data_path', 
-                        type=str, 
-                        default='data/alm_fr_averaged_1s.mat',
-                        help='path to folder and file of alm firing rate data to add to reward shaping')
-
     parser.add_argument('--frame_skips', 
                         type=int, 
                         default=2,
@@ -146,10 +141,20 @@ def config_parser():
                         default='data',
                         help='folder containing kinematics')
 
-    parser.add_argument('--model_type', 
+    parser.add_argument('--trajectory', 
+                        type=bool, 
+                        default=False,
+                        help='whether or not to constrain exploration based on the target activity of alm rnn')
+
+    parser.add_argument('--alm_hid_units', 
+                        type=int, 
+                        default=4,
+                        help='number of hidden units in alm rnn')
+
+    parser.add_argument('--full_alm_path', 
                         type=str, 
-                        default='gru',
-                        help='whether to use standard GRU, or the sparse inhibitory connectivity (GRU, sparse)')
+                        default='checkpoints/rnn_goal_data_delay.pth',
+                        help='full path to trained alm rnn')
 
     # Saving Parameters
     parser.add_argument('--model_save_path', 

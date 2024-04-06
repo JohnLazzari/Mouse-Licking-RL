@@ -1,7 +1,7 @@
 ### GENERAL TRAINING PARAMETERS ###
 gamma = 0.99
 tau = 0.005
-lr = 0.0003
+lr = 0.001
 weight_decay = 0
 eps = 0.01
 learning_freq = 1
@@ -23,9 +23,10 @@ bg_scale = .1
 frame_skips = 2
 action_scale = 0.5
 action_bias = 0.5
-alm_data_path = "data/PCs_PSTH"
 env = "lick_ramp"
 kinematics_folder = "data/kinematics"
+full_alm_path = "checkpoints/rnn_goal_data_delay.pth"
+alm_hid_units = 4
 
 ### MODEL SAVING ###
 model_save_path = "checkpoints/lick_attractor"            

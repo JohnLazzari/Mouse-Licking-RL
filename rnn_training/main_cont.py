@@ -24,7 +24,7 @@ def main():
     if args.env == "kinematics_jaw":
         env = Kinematics_Jaw_Env(args.action_dim, args.dt, args.kinematics_folder, args.alm_data_path, args.bg_scale)
     elif args.env == "lick_ramp":
-        env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.alm_data_path)
+        env = Lick_Env_Cont(args.action_dim, args.timesteps, args.thresh, args.dt, args.beta, args.bg_scale, args.trajectory, args.full_alm_path, args.alm_hid_units)
 
     ### RUN TRAINING ###
     env = get_env(env, args.seed)
@@ -44,7 +44,6 @@ def main():
         args.inp_dim,
         args.hidden_dim,
         args.action_dim,
-        args.model_type,
         optimizer_spec_actor,
         optimizer_spec_critic,
         args.policy_replay_size,

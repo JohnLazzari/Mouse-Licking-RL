@@ -29,7 +29,6 @@ def sac_learn(
     inp_dim,
     hid_dim,
     action_dim,
-    actor_type, 
     optimizer_spec_actor,
     optimizer_spec_critic,
     replay_buffer_size,

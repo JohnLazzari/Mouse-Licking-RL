@@ -21,8 +21,12 @@ class RNN(nn.Module):
         
         self.weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
         self.weight_l0_ih = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
+        self.bias_l0_hh = nn.Parameter(torch.empty(size=(hid_dim,)))
+        self.bias_l0_ih = nn.Parameter(torch.empty(size=(hid_dim,)))
         nn.init.xavier_uniform_(self.weight_l0_hh)
         nn.init.xavier_uniform_(self.weight_l0_ih)
+        nn.init.uniform_(self.bias_l0_hh)
+        nn.init.uniform_(self.bias_l0_ih)
 
         self.fc1 = nn.Linear(hid_dim, hid_dim)
         self.fc2 = nn.Linear(hid_dim, action_dim)
@@ -32,7 +36,7 @@ class RNN(nn.Module):
         hn_next = hn.squeeze(0)
         new_hs = []
         for t in range(inp.shape[1]):
-            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + inp[:, t, :] @ self.weight_l0_ih)
+            hn_next = torch.sigmoid(hn_next @ self.weight_l0_hh + inp[:, t, :] @ self.weight_l0_ih + self.bias_l0_hh + self.bias_l0_ih)
             new_hs.append(hn_next)
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
@@ -47,7 +51,7 @@ class RNN(nn.Module):
 #######################################
 
 class Lick_Env_Cont(gym.Env):
-    def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, alm_data_path):
+    def __init__(self, action_dim, timesteps, thresh, dt, beta, bg_scale, trajectory, full_alm_path, alm_hid_units):
 
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
         self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
@@ -60,36 +64,48 @@ class Lick_Env_Cont(gym.Env):
         self.cue = 0
         self.beta = beta
         self.bg_scale = bg_scale
-        self.alm_data_path = alm_data_path
         self.num_conds = 1
         self.decay = 0.965
         self.lick = 0
         self.num_stimuli_cue = 100
         self.std_stimuli = 0.1
+        self.trajectory = trajectory
         self.alm_activity = {}
+        self.alm_hid_units = alm_hid_units
+        self.full_alm_path = full_alm_path
 
         # Load ALM Network
-        self.alm_net = RNN(2, 4, 1)
-        checkpoint = torch.load("checkpoints/rnn_goal_data_delay.pth")
+        self.alm_net = RNN(2, self.alm_hid_units, 1)
+        checkpoint = torch.load(full_alm_path)
         self.alm_net.load_state_dict(checkpoint)
+
+        # Get the underlying trajectory of the ALM network with a perfect ramp
+        # TODO will need to change this when using more conditions
+        # Create ramp input
+        ramp = torch.linspace(0, 1, int((1.1 + (0.6*self.switch)) / self.dt), dtype=torch.float32).unsqueeze(1)
+        baseline = torch.zeros(size=(100, 1))
+        total_ramp = torch.cat((baseline, ramp), dim=0)
+        # Create cue input
+        cue = torch.zeros_like(total_ramp)
+        cue[99] = 1
+        # Concatenate
+        total_inp = torch.cat((total_ramp, cue), dim=-1)
+        h0 = torch.zeros(size=(1, 1, self.alm_hid_units))
+        # Get psth of activity
+        with torch.no_grad():
+            _, _, self.target_act = self.alm_net(total_inp.unsqueeze(0), h0)
+            self.target_act = self.target_act.squeeze()
     
     def reset(self, episode: int):
 
-        self.cortical_state = torch.zeros(size=(1, 1, 4))
+        self.cortical_state = torch.zeros(size=(1, 1, self.alm_hid_units))
         self.cue = 0
         self.lick = 0
-
-        action = torch.tensor([0.]).unsqueeze(0).unsqueeze(0)
-        cue = torch.tensor([self.cue]).unsqueeze(0).unsqueeze(0)
-        inp = torch.cat((action, cue), dim=-1)
-        for i in range(2):
-            with torch.no_grad():
-                _, self.cortical_state, _ = self.alm_net(inp, self.cortical_state)
 
         # switch target delay time
         self.switch = episode % self.num_conds
         self.target_delay_time = int((2 + self.switch * 0.6) / self.dt) # scale back since t starts at 0
-        self.max_timesteps = self.target_delay_time + 20 # add some extra time so it doesnt have to be exact
+        self.max_timesteps = self.target_delay_time + 10 # add some extra time so it doesnt have to be exact
 
         state = [*list(self.cortical_state[0, 0, :]), self.cue, (self.switch+1)/(self.num_conds+1)]
 
@@ -101,9 +117,14 @@ class Lick_Env_Cont(gym.Env):
         if self.lick == 1 and t >= self.target_delay_time-1:
             reward += ((self.target_delay_time-1) / t)
         if self.lick != 1 and t == self.max_timesteps-1:
-            reward -= 1
+            reward = -1
         if self.lick == 1 and t < self.target_delay_time-1:
-            reward -= 1
+            reward = -1
+        if self.trajectory == True:
+            dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
+            if dist > 0.75:
+                reward = -1
+        reward -= 0.1 * torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
 
         return reward
     
@@ -114,6 +135,11 @@ class Lick_Env_Cont(gym.Env):
             done = True
         if self.lick == 1:
             done = True
+        if self.trajectory == True:
+            dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
+            if dist > 0.75:
+                done = True
+
         return done
     
     def _get_next_state(self, t: int):

@@ -77,17 +77,17 @@ def gather_delay_data():
 
     return lick_seq_total, total_inp, len_seq
 
-def gather_population_data(data_folder, region, psth=True):
+def gather_population_data(data_folder, region, linear=True):
 
     data_struct = {}
     lens = [210, 240, 270]
 
     for cond in range(3):
 
-        if psth:
-            data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_PSTH_cond{cond+1}.mat')['psth']
-            min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
-            data_struct[cond] = torch.tensor(NormalizeData(np.squeeze(data_struct[cond]), min_data, max_data), dtype=torch.float32)[:lens[cond]].unsqueeze(-1)
+        if linear:
+            ramp = torch.linspace(0, 1, int((1.1 + (.3*cond)) / 0.01), dtype=torch.float32).unsqueeze(1)
+            baseline = torch.zeros(size=(100, 1))
+            data_struct[cond] = torch.cat((baseline, ramp), dim=0)
         else:
             data_struct[cond] = sio.loadmat(f'{data_folder}/{region}_fr_population_cond{cond+1}.mat')['fr_population']
             min_data, max_data = np.min(data_struct[cond]), np.max(data_struct[cond])
@@ -104,17 +104,18 @@ def main():
     ####################################
 
     kinematics_folder = 'data/kinematics'
-    save_path = "checkpoints/rnn_goal_data_delay.pth"
+    save_path = "checkpoints/rnn_goal_data_full_delay.pth"
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 4
+    hid_dim = 517
     out_dim = 1
 
     # If doing semi data driven semi goal directed
     activity_constraint = True
+    linear = False
     region = "alm"
-    data_folder = "data/PCs_PSTH"
+    data_folder = "data/firing_rates"
 
     rnn_control = RNN(inp_dim, hid_dim, out_dim).cuda()
 
@@ -135,12 +136,12 @@ def main():
         y_data, x_data, len_seq = gather_delay_data()
     
     if activity_constraint:
-        neural_act = gather_population_data(data_folder, region, psth=True)
+        neural_act = gather_population_data(data_folder, region, linear=linear)
     
     plt.plot(neural_act[0, :len_seq[0], :].cpu().numpy())
     plt.show()
     
-    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-6)
+    rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-3)
 
     ####################################
     #          Train RNN               #
@@ -166,10 +167,14 @@ def main():
 
         out = out * loss_mask
 
-        if activity_constraint:
+        if activity_constraint and linear:
             act = act * loss_mask_act
-            neural_act = x_data[:, :, 0:1] * loss_mask_exp
-            loss = 0.001 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act)
+            neural_act = neural_act * loss_mask_exp
+            loss = 1e-3 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act) + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))
+        elif activity_constraint and not linear:
+            act = act * loss_mask_act
+            neural_act = neural_act * loss_mask_exp
+            loss = 1e-3 * criterion(out, y_data) + constraint_criterion(act, neural_act) + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))
         else:
             loss = criterion(out, y_data)
         
@@ -179,8 +184,15 @@ def main():
 
         print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
+        # Zero out and compute gradients of above losses
         rnn_control_optim.zero_grad()
         loss.backward()
+
+        # Implement gradient of complicated trajectory loss
+        d_act = torch.mean(torch.pow(act * (1 - act), 2), dim=(1, 0))
+        rnn_control.weight_l0_hh.grad += (1e-4 * rnn_control.weight_l0_hh * d_act)
+
+        # Take gradient step
         rnn_control_optim.step()
     
 if __name__ == "__main__":
