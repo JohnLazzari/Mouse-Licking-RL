@@ -122,9 +122,10 @@ class Lick_Env_Cont(gym.Env):
             reward = -1
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.75:
+            if dist > 0.1:
                 reward = -1
-        reward -= 0.1 * torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
+            else:
+                reward += (1 / (1000**dist))
 
         return reward
     
@@ -137,7 +138,7 @@ class Lick_Env_Cont(gym.Env):
             done = True
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.75:
+            if dist > 0.1:
                 done = True
 
         return done
