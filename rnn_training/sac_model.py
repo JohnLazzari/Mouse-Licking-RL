@@ -61,9 +61,14 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.gru = nn.RNN(inp_dim, hid_dim, batch_first=True)
+        nn.init.xavier_normal_(self.gru.weight_hh_l0)
+        nn.init.xavier_normal_(self.gru.weight_ih_l0)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
+
+        nn.init.xavier_normal_(self.mean_linear.weight)
+        nn.init.xavier_normal_(self.std_linear.weight)
 
         self.action_scale = action_scale
         self.action_bias = action_bias
@@ -127,11 +132,11 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True)
+        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True)
+        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True)
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: list=None):

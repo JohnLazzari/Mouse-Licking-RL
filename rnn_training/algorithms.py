@@ -51,6 +51,8 @@ def sac(actor,
         target_entropy,
         alpha,
         alpha_optim,
+        striatum_data,
+        policy_type
         ):
 
     if automatic_entropy_tuning:
@@ -92,7 +94,7 @@ def sac(actor,
     torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)
     critic_optimizer.step()
 
-    pi_action_bat, log_prob_bat, _, _, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
+    pi_action_bat, log_prob_bat, _, pi_act, _ = actor.sample(state_batch, h_train, sampling= False, len_seq=len_seq)
     qf1_pi, qf2_pi = critic(state_batch, pi_action_bat, h_train, len_seq)
 
     qf1_pi = qf1_pi * loss_mask
@@ -102,6 +104,10 @@ def sac(actor,
     min_qf_pi = torch.minimum(qf1_pi, qf2_pi)
 
     policy_loss = ((alpha * log_prob_bat) - min_qf_pi).mean() # Jπ = 𝔼st∼D,εt∼N[α * logπ(f(εt;st)|st) − Q(st,f(εt;st))]
+
+    if policy_type == "constrained":
+        striatum_data = torch.tensor(striatum_data, device="cuda", dtype=torch.float32).repeat(batch_size, 1, 1)
+        policy_loss = policy_loss + F.mse_loss(pi_act, striatum_data[:, 100:100+pi_act.shape[1], :])
 
     actor_optimizer.zero_grad()
     policy_loss.backward()

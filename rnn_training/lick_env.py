@@ -115,17 +115,17 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.lick == 1 and t >= self.target_delay_time-1:
-            reward += 5 * ((self.target_delay_time-1) / t)
+            reward += ((self.target_delay_time-1) / t)
         if self.lick != 1 and t == self.max_timesteps-1:
-            reward = -5
+            reward = -1
         if self.lick == 1 and t < self.target_delay_time-1:
-            reward = -5
+            reward = -1
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.1:
-                reward = -5
+            if dist > 0.5:
+                reward = -1
             else:
-                reward += 5 * (1 / (1000**dist))
+                reward += (1 / (1000**dist))
 
         return reward
     
@@ -138,7 +138,7 @@ class Lick_Env_Cont(gym.Env):
             done = True
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.1:
+            if dist > 0.5:
                 done = True
 
         return done

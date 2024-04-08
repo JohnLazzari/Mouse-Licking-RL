@@ -61,6 +61,8 @@ def main():
         args.steps_save_path,
         args.action_scale,
         args.action_bias,
+        args.policy_type,
+        args.update_iters
     )
 
 if __name__ == '__main__':

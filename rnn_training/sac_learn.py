@@ -17,11 +17,16 @@ from utils.replay_buffer import ReplayBuffer
 from utils.gym import get_wrapper_by_name
 from sac_model import Actor, Critic
 from algorithms import sac, select_action, hard_update, REINFORCE
+import scipy.io as sio
+import matplotlib.pyplot as plt
 
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
+
+def NormalizeData(data, min, max):
+    return (data - min) / (max - min)
 
 def sac_learn(
     env,
@@ -46,10 +51,15 @@ def sac_learn(
     steps_save_path,
     action_scale,
     action_bias,
+    policy_type,
+    update_iters
 ):
 
     assert type(env.observation_space) == gym.spaces.Box
     assert type(env.action_space)      == gym.spaces.Box
+
+    striatum_data = sio.loadmat(f'data/firing_rates/striatum_fr_population_cond1.mat')['fr_population']
+    striatum_data = NormalizeData(np.squeeze(striatum_data), np.min(striatum_data), np.max(striatum_data))
 
     actor_bg = Actor(inp_dim, hid_dim, action_dim, action_scale, action_bias).cuda()
     critic_bg = Critic(action_dim+inp_dim, hid_dim).cuda()
@@ -173,20 +183,23 @@ def sac_learn(
         # Apply Basal Ganglia update (using SAC)
         if len(policy_memory.buffer) > batch_size and total_episodes > learning_starts and total_episodes % learning_freq == 0:
 
-            policy_loss, critic_loss = sac(actor_bg,
-                                            critic_bg,
-                                            critic_target_bg,
-                                            critic_bg_optimizer,
-                                            actor_bg_optimizer,
-                                            policy_memory,
-                                            batch_size,
-                                            hid_dim,
-                                            gamma,
-                                            automatic_entropy_tuning,
-                                            log_alpha,
-                                            target_entropy,
-                                            alpha,
-                                            alpha_optim)
+            for it in range(update_iters):
+                policy_loss, critic_loss = sac(actor_bg,
+                                                critic_bg,
+                                                critic_target_bg,
+                                                critic_bg_optimizer,
+                                                actor_bg_optimizer,
+                                                policy_memory,
+                                                batch_size,
+                                                hid_dim,
+                                                gamma,
+                                                automatic_entropy_tuning,
+                                                log_alpha,
+                                                target_entropy,
+                                                alpha,
+                                                alpha_optim,
+                                                striatum_data,
+                                                policy_type)
 
             policy_losses.append(policy_loss)
             critic_losses.append(critic_loss)

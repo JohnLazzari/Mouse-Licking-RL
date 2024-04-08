@@ -156,6 +156,16 @@ def config_parser():
                         default='checkpoints/rnn_goal_data_delay.pth',
                         help='full path to trained alm rnn')
 
+    parser.add_argument('--policy_type', 
+                        type=str, 
+                        default='None',
+                        help='set to constrained if using a semi data driven policy')
+
+    parser.add_argument('--update_iters', 
+                        type=int, 
+                        default=10,
+                        help='Number of times to iterate through weight updates each step')
+
     # Saving Parameters
     parser.add_argument('--model_save_path', 
                         type=str, 

@@ -2,13 +2,13 @@
 gamma = 0.99
 tau = 0.005
 lr = 1e-4
-weight_decay = 1e-4
+weight_decay = 1e-6
 eps = 0.01
 learning_freq = 1
 learning_starts = 100
 alpha = 0.2
 automatic_entropy_tuning = True
-seed = 123456
+seed = 1
 policy_batch_size = 6
 hidden_dim = 32
 action_dim = 1
@@ -26,9 +26,12 @@ action_bias = 0.5
 env = "lick_ramp"
 kinematics_folder = "data/kinematics"
 full_alm_path = "checkpoints/rnn_goal_data_delay.pth"
+policy_type = "None"
 alm_hid_units = 4
+trajectory = True
+update_iters = 5
 
 ### MODEL SAVING ###
-model_save_path = "checkpoints/lick_attractor_lowd"            
-reward_save_path = "training_reports/rewards_lick_attractor_lowd"      
-steps_save_path = "training_reports/steps_lick_attractor_lowd"        
+model_save_path = "checkpoints/lick_attractor_lowd_trajectory"            
+reward_save_path = "training_reports/rewards_lick_attractor_lowd_trajectory"      
+steps_save_path = "training_reports/steps_lick_attractor_lowd_trajectory"        
