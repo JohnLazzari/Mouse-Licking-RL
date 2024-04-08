@@ -60,8 +60,7 @@ class Actor(nn.Module):
         self.hid_dim = hid_dim
         self.action_dim = action_dim
         
-        self.gru = nn.GRU(inp_dim, hid_dim, batch_first=True)
-        self.fc1 = nn.Linear(hid_dim, hid_dim)
+        self.gru = nn.RNN(inp_dim, hid_dim, batch_first=True)
         
         self.mean_linear = nn.Linear(hid_dim, action_dim)
         self.std_linear = nn.Linear(hid_dim, action_dim)
@@ -79,9 +78,8 @@ class Actor(nn.Module):
         if sampling == False:
             gru_out, _ = pad_packed_sequence(gru_out, batch_first=True)
 
-        lin_out = F.relu(self.fc1(gru_out))
-        mean = self.mean_linear(lin_out)
-        std = self.std_linear(lin_out)
+        mean = self.mean_linear(gru_out)
+        std = self.std_linear(gru_out)
         std = torch.clamp(std, min=LOG_SIG_MIN, max=LOG_SIG_MAX)
         
         return mean, std, gru_out, hn
@@ -129,11 +127,11 @@ class Critic(nn.Module):
         self.hid_dim = hid_dim
         
         self.fc11 = nn.Linear(inp_dim, hid_dim)
-        self.gru1 = nn.GRU(hid_dim, hid_dim, batch_first=True)
+        self.gru1 = nn.RNN(hid_dim, hid_dim, batch_first=True)
         self.fc12 = nn.Linear(hid_dim, 1)
 
         self.fc21 = nn.Linear(inp_dim, hid_dim)
-        self.gru2 = nn.GRU(hid_dim, hid_dim, batch_first=True)
+        self.gru2 = nn.RNN(hid_dim, hid_dim, batch_first=True)
         self.fc22 = nn.Linear(hid_dim, 1)
     
     def forward(self, state: torch.Tensor, action: torch.Tensor, hn: torch.Tensor, len_seq: list=None):

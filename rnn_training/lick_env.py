@@ -83,31 +83,31 @@ class Lick_Env_Cont(gym.Env):
         # TODO will need to change this when using more conditions
         # Create ramp input
         ramp = torch.linspace(0, 1, int((1.1 + (0.6*self.switch)) / self.dt), dtype=torch.float32).unsqueeze(1)
-        baseline = torch.zeros(size=(100, 1))
-        total_ramp = torch.cat((baseline, ramp), dim=0)
+        #baseline = torch.zeros(size=(100, 1))
+        #total_ramp = torch.cat((baseline, ramp), dim=0)
         # Create cue input
-        cue = torch.zeros_like(total_ramp)
-        cue[99] = 1
+        cue = torch.zeros_like(ramp)
+        cue[0] = 1
         # Concatenate
-        total_inp = torch.cat((total_ramp, cue), dim=-1)
+        total_inp = torch.cat((ramp, cue), dim=-1)
         h0 = torch.zeros(size=(1, 1, self.alm_hid_units))
         # Get psth of activity
         with torch.no_grad():
             _, _, self.target_act = self.alm_net(total_inp.unsqueeze(0), h0)
             self.target_act = self.target_act.squeeze()
-    
+
     def reset(self, episode: int):
 
         self.cortical_state = torch.zeros(size=(1, 1, self.alm_hid_units))
-        self.cue = 0
+        self.cue = 1
         self.lick = 0
 
         # switch target delay time
         self.switch = episode % self.num_conds
-        self.target_delay_time = int((2 + self.switch * 0.6) / self.dt) # scale back since t starts at 0
+        self.target_delay_time = int((1 + self.switch * 0.6) / self.dt) # scale back since t starts at 0
         self.max_timesteps = self.target_delay_time + 10 # add some extra time so it doesnt have to be exact
 
-        state = [*list(self.cortical_state[0, 0, :]), self.cue, (self.switch+1)/(self.num_conds+1)]
+        state = [*list(self.cortical_state[0, 0, :]), self.cue, self.switch/self.num_conds]
 
         return state
     
@@ -115,17 +115,17 @@ class Lick_Env_Cont(gym.Env):
 
         reward = 0
         if self.lick == 1 and t >= self.target_delay_time-1:
-            reward += ((self.target_delay_time-1) / t)
+            reward += 5 * ((self.target_delay_time-1) / t)
         if self.lick != 1 and t == self.max_timesteps-1:
-            reward = -1
+            reward = -5
         if self.lick == 1 and t < self.target_delay_time-1:
-            reward = -1
+            reward = -5
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
             if dist > 0.1:
-                reward = -1
+                reward = -5
             else:
-                reward += (1 / (1000**dist))
+                reward += 5 * (1 / (1000**dist))
 
         return reward
     
@@ -145,12 +145,12 @@ class Lick_Env_Cont(gym.Env):
     
     def _get_next_state(self, t: int):
 
-        if t == 99:
+        if t == 0:
             self.cue = 1
         else:
             self.cue = 0
 
-        state = [*list(self.cortical_state[0, 0, :]), self.cue, (self.switch+1)/(self.num_conds+1)]
+        state = [*list(self.cortical_state[0, 0, :]), self.cue, self.switch/self.num_conds]
         return state
     
     def _get_lick(self, action: torch.Tensor):

@@ -30,12 +30,12 @@ def main():
     env = get_env(env, args.seed)
 
     optimizer_spec_actor = OptimizerSpec(
-        constructor=optim.Adam,
+        constructor=optim.AdamW,
         kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
     )
     optimizer_spec_critic = OptimizerSpec(
-        constructor=optim.Adam,
-        kwargs=dict(lr=args.lr, weight_decay=args.weight_decay),
+        constructor=optim.AdamW,
+        kwargs=dict(lr=args.lr),
     )
 
     sac_learn(
