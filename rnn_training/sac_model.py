@@ -61,6 +61,7 @@ class Actor(nn.Module):
         self.action_dim = action_dim
         
         self.gru = nn.RNN(inp_dim, hid_dim, batch_first=True)
+
         nn.init.xavier_normal_(self.gru.weight_hh_l0)
         nn.init.xavier_normal_(self.gru.weight_ih_l0)
         

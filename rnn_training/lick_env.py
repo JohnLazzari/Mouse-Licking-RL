@@ -80,7 +80,8 @@ class Lick_Env_Cont(gym.Env):
         self.alm_net.load_state_dict(checkpoint)
 
         # Get the underlying trajectory of the ALM network with a perfect ramp
-        # TODO will need to change this when using more conditions
+        # TODO will need to change this when using more conditions, also make it slightly more than just a ramp, have like 10 or 20 timesteps of silence before cue, 
+        # lastly, do not overwrite models that perform at least decently well, just have new models be new names that do not overwrite others
         # Create ramp input
         ramp = torch.linspace(0, 1, int((1.1 + (0.6*self.switch)) / self.dt), dtype=torch.float32).unsqueeze(1)
         #baseline = torch.zeros(size=(100, 1))
@@ -122,7 +123,7 @@ class Lick_Env_Cont(gym.Env):
             reward = -1
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.5:
+            if dist > 1:
                 reward = -1
             else:
                 reward += (1 / (1000**dist))
@@ -138,7 +139,7 @@ class Lick_Env_Cont(gym.Env):
             done = True
         if self.trajectory == True:
             dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
-            if dist > 0.5:
+            if dist > 1:
                 done = True
 
         return done

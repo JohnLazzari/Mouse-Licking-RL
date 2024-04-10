@@ -111,6 +111,10 @@ def sac(actor,
 
     actor_optimizer.zero_grad()
     policy_loss.backward()
+
+    d_act = torch.mean(torch.pow(1 - torch.pow(pi_act, 2), 2), dim=(1, 0))
+    actor.gru.weight_hh_l0.grad += (1e-4 * actor.gru.weight_hh_l0 * d_act)
+
     torch.nn.utils.clip_grad_norm_(actor.parameters(), 1)
     actor_optimizer.step()
 
