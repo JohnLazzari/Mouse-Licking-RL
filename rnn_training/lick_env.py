@@ -100,7 +100,7 @@ class Lick_Env_Cont(gym.Env):
     def reset(self, episode: int):
 
         self.cortical_state = torch.zeros(size=(1, 1, self.alm_hid_units))
-        self.cue = 1
+        self.cue = 0
         self.lick = 0
 
         # switch target delay time
@@ -115,18 +115,17 @@ class Lick_Env_Cont(gym.Env):
     def _get_reward(self, t: int):
 
         reward = 0
+        dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
         if self.lick == 1 and t >= self.target_delay_time-1:
-            reward += ((self.target_delay_time-1) / t)
+            return ((self.target_delay_time-1) / t)
         if self.lick != 1 and t == self.max_timesteps-1:
-            reward = -1
+            return -1
         if self.lick == 1 and t < self.target_delay_time-1:
-            reward = -1
+            return -1
         if self.trajectory == True:
-            dist = torch.linalg.norm(self.cortical_state.squeeze() - self.target_act[t])
             if dist > 1:
-                reward = -1
-            else:
-                reward += (1 / (1000**dist))
+                return -1
+        reward = (1 / (1000**dist))
 
         return reward
     
