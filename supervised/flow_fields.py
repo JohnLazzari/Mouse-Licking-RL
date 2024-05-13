@@ -72,15 +72,16 @@ def main():
     
     # General params
     inp_dim = 2
-    hid_dim = 4
+    hid_dim = 2
     out_dim = 1
     num_points = 100
     condition = 0 # 0, 1, or 2
     num_timepoints = 210 # 210, 240, or 270 (or 300 for data driven networks)
+    perturbation = "striatum"
 
     # Saving and Loading params
-    check_path = "checkpoints/rnn_goal_data_delay.pth"
-    save_name = "results/flow_fields/rnn_goal_data_delay/rnn_goal_data_delay_flow"
+    check_path = "checkpoints/rnn_goal_data_2n_delay.pth"
+    save_name = "results/flow_fields/rnn_goal_data_delay/rnn_goal_data_2n_delay_flow"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -93,22 +94,38 @@ def main():
     x_inp = flow_field.gather_inp_data(3, psth_folder="data/PCs_PSTH", inp_region="striatum")
     x, y, data_coords = flow_field.generate_grid(num_points)
 
-    with torch.no_grad():
-        h_0 = torch.zeros(size=(1, 3, hid_dim))
-        out, _, act = rnn(x_inp, h_0)
+    # Sample many hidden states to get pcs for dimensionality reduction
+    h = torch.rand(size=(1, 10000, hid_dim))
+    sampled_acts = []
+    for t in range(x_inp.shape[1]):
+        with torch.no_grad():
+            cur_inp = x_inp[condition:condition+1, t:t+1, :].repeat(10000, 1, 1)
+            out, _, act = rnn(cur_inp, h)
+            sampled_acts.append(act)
+    sampled_acts = torch.cat(sampled_acts, dim=1)
+    sampled_acts = torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2]))
 
-    # Plot PSTH of hidden activity
-    act_cond1 = act[condition, :num_timepoints, :].numpy()
-    plt.plot(np.mean(act_cond1, axis=-1))
-    plt.show()
-
-    plt.plot(act_cond1)
-    plt.show()
+    # Get the typical trajectory throughout the task
+    h = torch.zeros(size=(1, 1, hid_dim))
+    act_cond = []
+    inp_idx = 0
+    for t in range(x_inp.shape[1]):
+        with torch.no_grad():
+            cur_inp = x_inp[condition:condition+1, inp_idx:inp_idx+1, :]
+            if perturbation == "striatum" and t > 135 and t < 165:
+                cur_inp = torch.zeros_like(cur_inp)
+                inp_idx = 100
+            out, h, act = rnn(cur_inp, h)
+            if perturbation == "alm" and t > 110 and t < 140:
+                h = torch.zeros_like(h)
+        act_cond.append(h.numpy().squeeze(0))
+        inp_idx += 1
+    act_cond = np.concatenate(act_cond, axis=0)
 
     if hid_dim > 2:
-        flow_field.fit_pca(act_cond1)
+        flow_field.fit_pca(sampled_acts)
         grid = flow_field.inverse_pca(data_coords)
-        grid = torch.tensor(grid)
+        grid = torch.tensor(grid, dtype=torch.float32)
     else:
         grid = data_coords
 
@@ -118,14 +135,19 @@ def main():
         next_acts[i] = []
 
     # Go through activities and generate h_t+1
-    for inp in range(num_timepoints):
-        print(f"input number: {inp}")
-        cur_x_inp = x_inp[condition, inp, :].unsqueeze(0).unsqueeze(0)
+    inp_idx = 0
+    for t in range(num_timepoints):
+        print(f"input number: {t}")
+        cur_x_inp = x_inp[condition, inp_idx, :].unsqueeze(0).unsqueeze(0)
+        if perturbation == "striatum" and t > 135 and t < 165:
+            cur_x_inp = torch.zeros_like(cur_x_inp)
+            inp_idx = 100
         for h_0 in grid:
             with torch.no_grad():
                 h_0 = h_0.unsqueeze(0).unsqueeze(0)
                 _, _, act = rnn(cur_x_inp, h_0)
-                next_acts[inp].append(act[0, 0, :].numpy())
+                next_acts[t].append(act[0, 0, :].numpy())
+        inp_idx += 1
 
     # Reshape data back to grid
     data_coords = data_coords.numpy()
@@ -135,17 +157,23 @@ def main():
         if hid_dim > 2:
             next_acts[i] = flow_field.transform_pca(next_acts[i])
         next_acts[i] = np.reshape(next_acts[i], (num_points, num_points, next_acts[i].shape[-1]))
-
+    
     x_vels = {}
     y_vels = {}
     for i in range(num_timepoints):
         x_vels[i] = next_acts[i][:, :, 0] - data_coords[:, :, 0]
         y_vels[i] = next_acts[i][:, :, 1] - data_coords[:, :, 1]
+
+    # Reduce original trajectory
+    if hid_dim > 2:
+        act_cond = flow_field.transform_pca(act_cond.squeeze().numpy())
     
     for i in range(num_timepoints):
-        plt.streamplot(x, y, x_vels[i], y_vels[i])
-        plt.scatter(act_cond1[int(i * 1), 0], act_cond1[int(i * 1), 1], c="orange")
-        plt.savefig(save_name + f"_cond{condition}_inp{i}.png")
+        plt.streamplot(x, y, x_vels[i], y_vels[i], color="black")
+        plt.scatter(act_cond[int(i * 1), 0], act_cond[int(i * 1), 1], c="blue", edgecolors="face", s=150)
+        plt.yticks([])
+        plt.xticks([])
+        plt.savefig(save_name + f"_perturbation_{perturbation}" + f"_cond{condition}_inp{i}.png")
         plt.close()
     
 if __name__ == "__main__":

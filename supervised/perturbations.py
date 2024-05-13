@@ -44,14 +44,29 @@ def gather_delay_data():
 
     return lick_seq_total, total_inp, len_seq
 
+def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, perturbation_strength=None):
+
+    acts = []
+    hn = torch.zeros(size=(1, 1, hid_dim))
+
+    for t in range(len_seq):
+        with torch.no_grad():        
+            out, hn, act = rnn(x_data[cond:cond+1, t:t+1, :], hn)
+            print(out)
+            if perturbation == True and t > 110 and t < 140:
+                hn = perturbation_strength * hn
+            acts.append(hn.squeeze().numpy())
+    
+    return np.array(acts)
+
 def main():
 
     inp_dim = 2
-    hid_dim = 4
+    hid_dim = 100
     out_dim = 1
     cond = 0
 
-    check_path = "checkpoints/rnn_goal_data_delay.pth"
+    check_path = "checkpoints/rnn_goal_data_100n_delay.pth"
     checkpoint = torch.load(check_path)
     
     # Create RNN
@@ -60,43 +75,35 @@ def main():
 
     y_data, x_data, len_seq = gather_delay_data()
     
-    hn = torch.zeros(size=(1, 1, hid_dim))
-
     # ORIG
-    acts = []
-    for t in range(len_seq[cond]):
-        with torch.no_grad():        
-            out, hn, act = rnn(x_data[cond:cond+1, t:t+1, :], hn)
-            print(out)
-            acts.append(hn.squeeze().numpy())
-    
-    acts = np.array(acts)
-    ramp = np.mean(acts[200:209, :], axis=0)
-    baseline = np.mean(acts[30:40, :], axis=0)
-    d_ramp = ramp - baseline
-    projected_orig = acts @ d_ramp 
+    acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, False)
+    ramp_psth_orig = np.mean(acts[100:209, :], axis=1)
 
     # TEST
-    hn = torch.zeros(size=(1, 1, hid_dim))
-    inhibit_strength = 0.1
-    acts = []
-    for t in range(len_seq[cond]):
-        with torch.no_grad():        
-            out, hn, act = rnn(x_data[cond:cond+1, t:t+1, :], hn)
-            if t > 100 and t < 140:
-                hn = 0.01 * torch.ones_like(hn)
-            acts.append(hn.squeeze().numpy())
+    acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, True, perturbation_strength=0.0)
+    ramp_psth_silenced_1 = np.mean(acts[100:209, :], axis=1)
+
+    acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, True, perturbation_strength=0.25)
+    ramp_psth_silenced_2 = np.mean(acts[100:209, :], axis=1)
+
+    acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, True, perturbation_strength=0.5)
+    ramp_psth_silenced_3 = np.mean(acts[100:209, :], axis=1)
     
-    acts = np.array(acts)
-    ramp = np.mean(acts[200:209, :], axis=0)
-    baseline = np.mean(acts[30:40, :], axis=0)
-    d_ramp = ramp - baseline
-    projected_perturbed = acts @ d_ramp 
-    
-    plt.plot(projected_orig[5:])
-    plt.plot(projected_perturbed[5:])
+    plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
+    x_p1 = np.linspace(0, 1.1, ramp_psth_silenced_1.shape[0])
+    x_p2 = np.linspace(0, 1.1, ramp_psth_silenced_2.shape[0])
+    x_p3 = np.linspace(0, 1.1, ramp_psth_silenced_3.shape[0])
+    x_u = np.linspace(0, 1.1, ramp_psth_orig.shape[0])
+    plt.plot(x_u, ramp_psth_orig, label="Unperturbed Network", linewidth=4, color="#0F45A0")
+    plt.plot(x_p1, ramp_psth_silenced_1, label="Strong Silencing", linewidth=4, color="#317FFF")
+    plt.plot(x_p2, ramp_psth_silenced_2, label="Medium Silencing", linewidth=4, color="#659FFF")
+    plt.plot(x_p3, ramp_psth_silenced_3, label="Weak Silencing", linewidth=4, color="#97BEFF")
+    plt.set_cmap("Blues") 
+    plt.xlabel("Time")
+    plt.ylabel("Firing Rate")
+    plt.title("ALM Activity Without Feedback")
+    plt.legend()
     plt.show()
     
-
 if __name__ == "__main__":
     main()

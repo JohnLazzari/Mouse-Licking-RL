@@ -7,16 +7,23 @@ from scipy.ndimage import gaussian_filter1d
 import pickle
 import scipy.io as sio
 
-RNN_PATH = "results/test_activity/lick_attractor_act.npy"
+RNN_PATH = "results/test_activity/lick_attractor_lowd_act.npy"
 DATA_PATH = "data/firing_rates/striatum_fr_population_cond1.mat"
+plt.rcParams.update({'font.size': 16})
 
 def main():
 
     rnn_fr = np.load(RNN_PATH)
-    A_exp = sio.loadmat(DATA_PATH)['fr_population'][:rnn_fr.shape[0], :]
+    A_exp = sio.loadmat(DATA_PATH)['fr_population'][100:100+rnn_fr.shape[0], :]
 
     #First filter the agent's activity with 20ms gaussian as done with experimental activity during preprocessing
     A_agent = gaussian_filter1d(rnn_fr, 10, axis=0)
+
+    plt.plot(A_exp)
+    plt.show()
+
+    plt.plot(A_agent)
+    plt.show()
 
     #Reduce the activity using PCA to the first 10 components
     PC_agent = PCA(n_components=10)
@@ -26,6 +33,7 @@ def main():
     A_agent = PC_agent.fit_transform(A_agent)
 
     t = np.linspace(-1, rnn_fr.shape[0] * 0.01, rnn_fr.shape[0])
+
     plt.plot(t, A_agent[:, 0])
     plt.ylabel("FR")
     plt.xlabel("Time")
@@ -56,21 +64,23 @@ def main():
 
     for k in range(10):
         if k==0:
-            plt.plot(A_exp[:,9-k]/np.max(A_exp[:,9-k]) + k*4, linewidth=1.5, c = 'k')
-            plt.plot(U_prime[:,9-k]/np.max(A_exp[:,9-k]) + k*4, linewidth= 1.5, c=(50/255, 205/255, 50/255), label= 'Network Reconstruction')
+            plt.plot(A_exp[:,9-k]/np.max(A_exp[:,9-k]) + k*3, linewidth=1.5, c = 'k')
+            plt.plot(U_prime[:,9-k]/np.max(A_exp[:,9-k]) + k*3, linewidth= 1.5, color="#659EFF", label='Network Reconstruction')
         else:
-            plt.plot(A_exp[:, 9 - k]/np.max(A_exp[:,9-k]) + k * 4, linewidth=1.5, c='k')
-            plt.plot(U_prime[:, 9 - k]/np.max(A_exp[:,9-k]) + k * 4, linewidth=1.5, c=(50 / 255, 205 / 255, 50 / 255))
+            plt.plot(A_exp[:, 9 - k]/np.max(A_exp[:,9-k]) + k * 3, linewidth=1.5, c='k')
+            plt.plot(U_prime[:, 9 - k]/np.max(A_exp[:,9-k]) + k * 3, linewidth=1.5, color="#659EFF")
 
-    plt.ylabel('Reconstructed M1 Population Activity', size=14)
+    plt.ylabel('Reconstructed Striatal Population Activity', size=14)
     plt.yticks([])
-    plt.title(f"Inverse CCA Train Condition {1} (CC {round(average, 2)} for 10 PCs)")
+    plt.xticks([])
+    plt.xlabel("Time")
+    plt.title(f"Inverse CCA")
     plt.show()
 
     #Now plot the PCs on the same plot here
     ax = plt.figure(figsize= (6,6), dpi=100).add_subplot(projection='3d')
     ax.plot(A_exp[:,0], A_exp[:, 1], A_exp[:, 2], c = 'k')
-    ax.plot(U_prime[:,0], U_prime[:, 1], U_prime[:, 2], c=(50/255, 205/255, 50/255))
+    ax.plot(U_prime[:,0], U_prime[:, 1], U_prime[:, 2], color="#659EFF")
 
     # Hide grid lines
     ax.grid(False)

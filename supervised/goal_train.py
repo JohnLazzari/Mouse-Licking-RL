@@ -104,16 +104,16 @@ def main():
     ####################################
 
     kinematics_folder = 'data/kinematics'
-    save_path = "checkpoints/rnn_goal_data_full_delay.pth"
+    save_path = "checkpoints/rnn_goal_data_100n_delay.pth"
     task = "delay"
 
     inp_dim = 2
-    hid_dim = 517
+    hid_dim = 100
     out_dim = 1
 
     # If doing semi data driven semi goal directed
     activity_constraint = True
-    linear = False
+    linear = True
     region = "alm"
     data_folder = "data/firing_rates"
 
@@ -137,9 +137,6 @@ def main():
     
     if activity_constraint:
         neural_act = gather_population_data(data_folder, region, linear=linear)
-    
-    plt.plot(neural_act[0, :len_seq[0], :].cpu().numpy())
-    plt.show()
     
     rnn_control_optim = optim.AdamW(rnn_control.parameters(), lr=lr, weight_decay=1e-3)
 
@@ -170,7 +167,7 @@ def main():
         if activity_constraint and linear:
             act = act * loss_mask_act
             neural_act = neural_act * loss_mask_exp
-            loss = 1e-3 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act) + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))
+            loss = 1e-3 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act) + 1e-3 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))
         elif activity_constraint and not linear:
             act = act * loss_mask_act
             neural_act = neural_act * loss_mask_exp
@@ -190,7 +187,7 @@ def main():
 
         # Implement gradient of complicated trajectory loss
         d_act = torch.mean(torch.pow(act * (1 - act), 2), dim=(1, 0))
-        rnn_control.weight_l0_hh.grad += (1e-4 * rnn_control.weight_l0_hh * d_act)
+        rnn_control.weight_l0_hh.grad += (1e-3 * rnn_control.weight_l0_hh * d_act)
 
         # Take gradient step
         rnn_control_optim.step()

@@ -18,23 +18,25 @@ from algorithms import select_action
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
-ENV = "lick_ramp"
-INP_DIM = 4
-HID_DIM = 256
+INP_DIM = 6
+HID_DIM = 64
 ACTION_DIM = 1
 THRESH = 1
 ACT_SCALE = 0.5
 ACT_BIAS = 0.5
 DT = 0.01
 TIMESTEPS = int(3 / DT)
-CHECK_PATH = "checkpoints/lick_attractor.pth"
-SAVE_PATH = "results/test_activity/lick_attractor_act.npy"
 BETA = .99
 BG_SCALE = 0.1
-FRAMESKIP = 2
+FRAMESKIP = 1
 NUM_CONDITIONS = 1
-ALM_DATA = "data/PCs_PSTH"
-KINEMATICS_DATA = "data/kinematics"
+ALM_HID_UNITS = 4
+TRAJECTORY = False
+
+ENV = "lick_ramp"
+CHECK_PATH = "checkpoints/lick_attractor_lowd.pth"
+ALM_NET_PATH = "checkpoints/rnn_goal_data_delay.pth"
+SAVE_PATH = "results/test_activity/lick_attractor_lowd_act.npy"
 
 def test(
     env,
@@ -47,7 +49,8 @@ def test(
     frameskips,
     act_scale,
     act_bias,
-    num_conditions
+    num_conditions,
+    alm_hid_units,
 ):
 
     checkpoint = torch.load(check_path)
@@ -57,6 +60,7 @@ def test(
     episode_reward = 0
     episode_steps = 0
     str_activity = {}
+    str_output = {}
 
     ### STEPS PER EPISODE ###
     for conditions in range(num_conditions):
@@ -66,6 +70,7 @@ def test(
         episode_reward = 0
         episode_steps = 0
         str_activity[conditions] = []
+        str_output[conditions] = []
 
         for t in range(int(env.max_timesteps / frameskips)):
 
@@ -75,6 +80,7 @@ def test(
             ### TRACKING REWARD + EXPERIENCE TUPLE###
             for _ in range(frameskips):
                 str_activity[conditions].append(h_prev.squeeze().cpu().numpy())
+                str_output[conditions].append(action)
                 next_state, reward, done = env.step(episode_steps, action, conditions)
                 episode_steps += 1
                 episode_reward += reward
@@ -87,35 +93,57 @@ def test(
             if done:
                 break
 
-    # reset tracking variables
-    print(np.array(str_activity[0]).shape)
+    # Print STR PSTH
     A_agent = gaussian_filter1d(np.array(str_activity[0]), 2, axis=0)
     psth = np.mean(A_agent, axis=-1)
     plt.plot(psth)
     plt.show()
 
+    # Print the output layer
+    plt.plot(str_output[0])
+    plt.show()
+
+    # Do PCA on STR activity
     switch_0_pca = PCA(n_components=3)
     switch_0_projected = switch_0_pca.fit_transform(A_agent)
 
+    # Show 3D trajectory
     ax = plt.figure().add_subplot(projection='3d')
     ax.plot(switch_0_projected[:, 0], switch_0_projected[:, 1], switch_0_projected[:, 2])
     plt.show()
 
-    # plot trajectories
+    # plot trajectories over each other
     plt.plot(switch_0_projected[:, 0], label="str pc1 1s")
     plt.plot(switch_0_projected[:, 1], label="str pc2 1s")
     plt.plot(switch_0_projected[:, 2], label="str pc3 1s")
-    plt.axvline(100, linestyle='dashed')
+    plt.axvline(1, linestyle='dashed')
     plt.legend()
     plt.show()
 
+    # Save the activity for further testing
     np.save(save_path, str_activity[0])
 
 if __name__ == "__main__":
 
-    if ENV == "kinematics_jaw":
-        env = Kinematics_Jaw_Env(ACTION_DIM, DT, KINEMATICS_DATA, ALM_DATA, BG_SCALE)
-    elif ENV == "lick_ramp":
-        env = Lick_Env_Cont(ACTION_DIM, TIMESTEPS, THRESH, DT, BETA, BG_SCALE, ALM_DATA)
-        
-    test(env, INP_DIM, HID_DIM, ACTION_DIM, Actor, CHECK_PATH, SAVE_PATH, FRAMESKIP, ACT_SCALE, ACT_BIAS, NUM_CONDITIONS)
+    env = Lick_Env_Cont(ACTION_DIM, 
+                        TIMESTEPS, 
+                        THRESH, 
+                        DT, 
+                        BETA, 
+                        BG_SCALE, 
+                        TRAJECTORY, 
+                        ALM_NET_PATH, 
+                        ALM_HID_UNITS)
+
+    test(env, 
+         INP_DIM, 
+         HID_DIM, 
+         ACTION_DIM, 
+         Actor, 
+         CHECK_PATH, 
+         SAVE_PATH, 
+         FRAMESKIP, 
+         ACT_SCALE, 
+         ACT_BIAS, 
+         NUM_CONDITIONS, 
+         ALM_HID_UNITS)

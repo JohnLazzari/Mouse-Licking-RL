@@ -23,8 +23,7 @@ class RNN(nn.Module):
         nn.init.uniform_(self.bias_l0_hh)
         nn.init.uniform_(self.bias_l0_ih)
 
-        self.fc1 = nn.Linear(hid_dim, hid_dim)
-        self.fc2 = nn.Linear(hid_dim, action_dim)
+        self.fc1 = nn.Linear(hid_dim, action_dim)
 
     def forward(self, inp: torch.Tensor, hn: torch.Tensor):
 
@@ -36,7 +35,6 @@ class RNN(nn.Module):
         rnn_out = torch.stack(new_hs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
 
-        out = self.fc1(rnn_out)
-        out = torch.sigmoid(self.fc2(out))
+        out = torch.sigmoid(self.fc1(rnn_out))
         
         return out, hn_last, rnn_out
