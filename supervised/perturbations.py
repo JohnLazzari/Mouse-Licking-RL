@@ -77,6 +77,8 @@ def main():
     
     # ORIG
     acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, False)
+    plt.plot(acts)
+    plt.show()
     ramp_psth_orig = np.mean(acts[100:209, :], axis=1)
 
     # TEST

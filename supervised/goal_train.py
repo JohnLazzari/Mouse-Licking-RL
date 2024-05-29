@@ -167,7 +167,7 @@ def main():
         if activity_constraint and linear:
             act = act * loss_mask_act
             neural_act = neural_act * loss_mask_exp
-            loss = 1e-3 * criterion(out, y_data) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act) + 1e-3 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))
+            loss = 1e-2 * criterion(out, y_data) + torch.mean(torch.pow(act, 2), dim=(1, 2, 0)) + constraint_criterion(torch.mean(act, dim=-1, keepdim=True), neural_act)
         elif activity_constraint and not linear:
             act = act * loss_mask_act
             neural_act = neural_act * loss_mask_exp
@@ -187,7 +187,7 @@ def main():
 
         # Implement gradient of complicated trajectory loss
         d_act = torch.mean(torch.pow(act * (1 - act), 2), dim=(1, 0))
-        rnn_control.weight_l0_hh.grad += (1e-3 * rnn_control.weight_l0_hh * d_act)
+        rnn_control.weight_l0_hh.grad += (1e-2 * rnn_control.weight_l0_hh * d_act)
 
         # Take gradient step
         rnn_control_optim.step()
