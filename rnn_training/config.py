@@ -131,16 +131,6 @@ def config_parser():
                         default=0.5, 
                         help='bias of actor action')
 
-    parser.add_argument('--env', 
-                        type=str, 
-                        default='kinematics', 
-                        help='environment to use (lick_ramp, kinematics)')
-
-    parser.add_argument('--kinematics_folder', 
-                        type=str, 
-                        default='data',
-                        help='folder containing kinematics')
-
     parser.add_argument('--trajectory', 
                         type=bool, 
                         default=False,
@@ -165,6 +155,16 @@ def config_parser():
                         type=int, 
                         default=10,
                         help='Number of times to iterate through weight updates each step')
+
+    parser.add_argument('--update_method', 
+                        type=str, 
+                        default="one_step",
+                        help='RL training method to use (one_step or sac)')
+
+    parser.add_argument('--max_steps', 
+                        type=int, 
+                        default=1000000,
+                        help='maximum number of steps to use for training')
 
     # Saving Parameters
     parser.add_argument('--model_save_path', 

@@ -23,14 +23,14 @@ bg_scale = .1
 frame_skips = 1
 action_scale = 0.5
 action_bias = 0.5
-env = "lick_ramp"
-kinematics_folder = "data/kinematics"
 full_alm_path = "checkpoints/rnn_goal_data_100n_delay.pth"
 policy_type = "None"
 alm_hid_units = 100
 update_iters = 1
+max_steps = 1000000
+update_method = "sac"
 
 ### MODEL SAVING ###
-model_save_path = "checkpoints/lick_attractor_100d"            
-reward_save_path = "training_reports/rewards_lick_attractor_100d"      
-steps_save_path = "training_reports/steps_lick_attractor_100d"        
+model_save_path = "checkpoints/lick_attractor_100d_on_policy"            
+reward_save_path = "training_reports/rewards_lick_attractor_100d_on_policy"      
+steps_save_path = "training_reports/steps_lick_attractor_100d_on_policy"        
