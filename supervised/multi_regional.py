@@ -10,11 +10,11 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_delay_data, get_ramp
 
-SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_delay_difflr_outandramp_strtrained_almramp_bigger_long_conds.pth"
+SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit.pth"
 INP_DIM = 1
 HID_DIM = 512
 OUT_DIM = 1
-EPOCHS = 2500
+EPOCHS = 1000
 LR = 1e-3
 DT = 1e-3
 WEIGHT_DECAY = 1e-4
@@ -72,10 +72,11 @@ def main():
         neural_act = neural_act * loss_mask_exp
 
         # Get loss
-        loss = (1e-4 * criterion(out, neural_act) 
-                + 1e-2 * constraint_criterion(torch.mean(act[:, :, int(HID_DIM/2):], dim=-1, keepdim=True), neural_act)
-                + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))  
-                + constraint_criterion(torch.mean(act[:, :, :int(HID_DIM/2)], dim=-1, keepdim=True), neural_act)
+        loss = (criterion(out, y_data) 
+                #+ 1e-2 * constraint_criterion(torch.mean(act[:, :, int(HID_DIM*(3/4)):], dim=-1, keepdim=True), neural_act)
+                + torch.mean(torch.pow(act, 2), dim=(1, 2, 0))  
+                #+ constraint_criterion(torch.mean(act[:, :, :int(HID_DIM/4)], dim=-1, keepdim=True), neural_act)
+                #+ constraint_criterion(torch.mean(act[:, :, int(HID_DIM/2):int(HID_DIM*(3/4))], dim=-1, keepdim=True), neural_act)
                 )
         
         # Save model
@@ -92,12 +93,15 @@ def main():
         # Penalize complex trajectories
         d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-        rnn.str2str_weight_l0_hh.grad += (1e-4 * rnn.str2str_weight_l0_hh.T * d_act[:int(HID_DIM/2)])
-        rnn.str2alm_weight_l0_hh.grad += (1e-4 * rnn.str2alm_weight_l0_hh.T * d_act[:int(HID_DIM/2)])
-
-        rnn.alm2alm_weight_l0_hh.grad += (1e-4 * rnn.alm2alm_weight_l0_hh.T * d_act[int(HID_DIM/2):])
-        rnn.alm2str_weight_l0_hh.grad += (1e-4 * rnn.alm2str_weight_l0_hh.T * d_act[int(HID_DIM/2):])
-
+        '''
+        rnn.alm2alm_weight_l0_hh.grad += (1e-4 * rnn.alm2alm_weight_l0_hh.T * d_act[int(HID_DIM*(3/4)):])
+        rnn.alm2str_weight_l0_hh.grad += (1e-4 * rnn.alm2str_weight_l0_hh.T * d_act[int(HID_DIM*(3/4)):])
+        rnn.thal2str_weight_l0_hh.grad += (1e-4 * rnn.thal2str_weight_l0_hh.T * d_act[int(HID_DIM*(1/2)):int(HID_DIM*(3/4))])
+        rnn.str2snr_weight_l0_hh.grad += (1e-4 * rnn.str2snr_weight_l0_hh.T * d_act[:int(HID_DIM/4)])
+        rnn.snr2thal_weight_l0_hh.grad += (1e-4 * rnn.snr2thal_weight_l0_hh.T * d_act[int(HID_DIM/4):int(HID_DIM*(1/2))])
+        rnn.thal2alm_weight_l0_hh.grad += (1e-4 * rnn.thal2alm_weight_l0_hh.T * d_act[int(HID_DIM*(1/2)):int(HID_DIM*(3/4))])
+        '''
+        
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
         rnn_optim.step()

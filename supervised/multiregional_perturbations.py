@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from utils import gather_delay_data, get_acts, get_ramp
 
-CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_delay_difflr_outandramp_strtrained_almramp_bigger_long_conds.pth"
+CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit.pth"
 INP_DIM = 1
 HID_DIM = 512
 OUT_DIM = 1
@@ -20,11 +20,11 @@ DT = 1e-3
 def plot_silencing(len_seq, rnn, hid_dim, x_data, title, silenced_region, evaluated_region):
 
     if evaluated_region == "alm":
-        start = int(hid_dim/2)
+        start = int(hid_dim*(3/4))
         end = hid_dim
     elif evaluated_region == "str":
         start = 0
-        end = int(hid_dim/2)
+        end = int(hid_dim/4)
     
     # Original PSTH without silencing
     acts = get_acts(len_seq[0], rnn, hid_dim, x_data, 0, False)
@@ -48,9 +48,9 @@ def plot_silencing(len_seq, rnn, hid_dim, x_data, title, silenced_region, evalua
 
     plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
 
-    x_p1 = np.linspace(0, 1.1, ramp_psth_silenced_1.shape[0])
-    x_p2 = np.linspace(0, 1.6, ramp_psth_silenced_2.shape[0])
-    x_p3 = np.linspace(0, 2.1, ramp_psth_silenced_3.shape[0])
+    x_p1 = np.linspace(0, 1.5, ramp_psth_silenced_1.shape[0])
+    x_p2 = np.linspace(0, 2.0, ramp_psth_silenced_2.shape[0])
+    x_p3 = np.linspace(0, 2.5, ramp_psth_silenced_3.shape[0])
 
     x_u1 = np.linspace(0, 1.1, ramp_psth_orig_1.shape[0])
     x_u2 = np.linspace(0, 1.6, ramp_psth_orig_2.shape[0])
@@ -89,13 +89,12 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     x_data, _, len_seq = gather_delay_data(dt=0.001, hid_dim=HID_DIM)
-
     x_data = x_data.cuda()
     
-    plot_silencing(len_seq, rnn, HID_DIM, x_data, "ALM Silencing: ALM Response", "alm", "alm")
-    plot_silencing(len_seq, rnn, HID_DIM, x_data, "STR Silencing: ALM Response", "str", "alm")
-    plot_silencing(len_seq, rnn, HID_DIM, x_data, "ALM Silencing: STR Response", "alm", "str")
-    plot_silencing(len_seq, rnn, HID_DIM, x_data, "STR Silencing: STR Response", "str", "str")
+    plot_silencing(len_seq, rnn, HID_DIM, x_data, "ALM PSTH", "alm", "alm")
+    plot_silencing(len_seq, rnn, HID_DIM, x_data, "ALM PSTH", "str", "alm")
+    plot_silencing(len_seq, rnn, HID_DIM, x_data, "STR PSTH", "alm", "str")
+    plot_silencing(len_seq, rnn, HID_DIM, x_data, "STR PSTH", "str", "str")
     
 if __name__ == "__main__":
     main()

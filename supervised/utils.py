@@ -90,18 +90,26 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, perturbation_str
     acts = []
     hn = torch.zeros(size=(1, 1, hid_dim)).cuda()
     x = torch.zeros(size=(1, 1, hid_dim)).cuda()
+    inp = x_data[cond:cond+1, 0:1, :]
+    extra_steps = 200
 
-    if region == "alm":
-        region_mask = torch.cat([torch.ones(size=(int(hid_dim/2),)), 
-                                 perturbation_strength * torch.ones(size=(int(hid_dim/2),))]).unsqueeze(0).unsqueeze(0).cuda()
-    elif region == "str":
-        region_mask = torch.cat([perturbation_strength * torch.ones(size=(int(hid_dim/2),)), 
-                                torch.ones(size=(int(hid_dim/2),))]).unsqueeze(0).unsqueeze(0).cuda()
+    if region == "alm" and perturbation == True:
+        region_mask = torch.cat([torch.ones(size=(int(hid_dim*(3/4)),)), 
+                                 perturbation_strength * torch.ones(size=(int(hid_dim/4),))]).unsqueeze(0).unsqueeze(0).cuda()
+        start_silence = 600
+        end_silence = 800
+        len_seq += (end_silence - start_silence) + extra_steps
+    elif region == "str" and perturbation == True:
+        region_mask = torch.cat([perturbation_strength * torch.ones(size=(int(hid_dim/4),)), 
+                                torch.ones(size=(int(hid_dim*(3/4)),))]).unsqueeze(0).unsqueeze(0).cuda()
+        start_silence = 600
+        end_silence = 800
+        len_seq += (end_silence - start_silence) + extra_steps
 
     for t in range(len_seq):
         with torch.no_grad():        
-            _, hn, _, x, _ = rnn(x_data[cond:cond+1, t:t+1, :], hn, x)
-            if perturbation == True and t > 500 and t < 800:
+            _, hn, _, x, _ = rnn(inp, hn, x)
+            if perturbation == True and t > start_silence and t < end_silence:
                 hn = hn * region_mask
                 x = x * region_mask
             acts.append(hn.squeeze().cpu().numpy())
