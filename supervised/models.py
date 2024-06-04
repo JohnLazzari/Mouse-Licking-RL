@@ -26,7 +26,7 @@ class RNN_MultiRegional(nn.Module):
                                     torch.ones(size=(int(hid_dim/4),))]).cuda()
         self.str_mask = torch.cat([torch.ones(size=(int(hid_dim/4),)), 
                                    torch.zeros(size=(int(hid_dim * (3/4)),))]).cuda()
-        self.tonic_inp = torch.cat([torch.zeros([int(hid_dim/4),]), 0.5*torch.ones([int(hid_dim*(1/2)),]), torch.zeros([int(hid_dim/4),])]).cuda()
+        self.tonic_inp = torch.cat([torch.zeros([int(hid_dim/4),]), torch.ones([int(hid_dim*(1/2)),]), torch.zeros([int(hid_dim/4),])]).cuda()
         
         # Inhibitory Connections
         self.str2str_weight_l0_hh = nn.Parameter(torch.empty(size=(int(hid_dim/4), int(hid_dim/4))))
@@ -64,12 +64,12 @@ class RNN_MultiRegional(nn.Module):
         self.str2str_D = -1*torch.eye(int(hid_dim/4)).cuda()
 
         self.alm2alm_D = torch.eye(int(hid_dim/4)).cuda()
-        self.alm2alm_D[int(hid_dim/4)-(int( 0.4*(hid_dim/4) )):, 
-                        int(hid_dim/4)-(int( 0.4*(hid_dim/4) )):] *= -1
+        self.alm2alm_D[int(hid_dim/4)-(int( 0.3*(hid_dim/4) )):, 
+                        int(hid_dim/4)-(int( 0.3*(hid_dim/4) )):] *= -1
         
         # ALM to striatum weights
-        self.alm2str_mask_excitatory = torch.ones(size=(int(hid_dim/4), int(hid_dim/4) - int(0.4*(hid_dim/4))))
-        self.alm2str_mask_inhibitory = torch.zeros(size=(int(hid_dim/4), int(0.4*(hid_dim/4))))
+        self.alm2str_mask_excitatory = torch.ones(size=(int(hid_dim/4), int(hid_dim/4) - int(0.8*(hid_dim/4))))
+        self.alm2str_mask_inhibitory = torch.zeros(size=(int(hid_dim/4), int(0.8*(hid_dim/4))))
         self.alm2str_mask = torch.cat([self.alm2str_mask_excitatory, self.alm2str_mask_inhibitory], dim=1).cuda()
 
         # Striatum to SNr weights
@@ -113,7 +113,6 @@ class RNN_MultiRegional(nn.Module):
         str2str = (self.str2str_mask * F.relu(self.str2str_weight_l0_hh) + self.str2str_fixed) @ self.str2str_D
         alm2alm = F.relu(self.alm2alm_weight_l0_hh) @ self.alm2alm_D
         alm2str = self.alm2str_mask * F.relu(self.alm2str_weight_l0_hh)
-        alm2thal = F.relu(self.alm2thal_weight_l0_hh)
         thal2alm = F.relu(self.thal2alm_weight_l0_hh)
         thal2str = F.relu(self.thal2str_weight_l0_hh)
         str2snr = F.relu(self.str2snr_weight_l0_hh) @ self.str2snr_D
@@ -128,7 +127,7 @@ class RNN_MultiRegional(nn.Module):
 
         # Loop through RNN
         for t in range(size):
-            x_next = (1 - self.t_const) * x_next + self.t_const * ((W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.alm_mask) + self.tonic_inp ) 
+            x_next = (1 - self.t_const) * x_next + self.t_const * ((W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.alm_mask) + self.tonic_inp) 
             hn_next = F.relu(x_next)
             new_hs.append(hn_next)
             new_xs.append(x_next)
