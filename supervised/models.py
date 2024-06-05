@@ -26,6 +26,9 @@ class RNN_MultiRegional(nn.Module):
                                     torch.ones(size=(int(hid_dim/4),))]).cuda()
         self.str_mask = torch.cat([torch.ones(size=(int(hid_dim/4),)), 
                                    torch.zeros(size=(int(hid_dim * (3/4)),))]).cuda()
+        self.thal_mask = torch.cat([torch.zeros(size=(int(hid_dim/2),)),
+                                    torch.ones(size=(int(hid_dim/4),)),
+                                    torch.zeros(size=(int(hid_dim/4),))]).cuda()
         self.tonic_inp = torch.cat([torch.zeros([int(hid_dim/4),]), torch.ones([int(hid_dim*(1/2)),]), torch.zeros([int(hid_dim/4),])]).cuda()
         
         # Inhibitory Connections
@@ -44,15 +47,18 @@ class RNN_MultiRegional(nn.Module):
         self.str2snr_weight_l0_hh = nn.Parameter(torch.empty(size=(int(hid_dim/4), int(hid_dim/4))))
         # Inhibitory Connections
         self.snr2thal_weight_l0_hh = nn.Parameter(torch.empty(size=(int(hid_dim/4), int(hid_dim/4))))
+        # Mix
+        self.thalgating_weights = nn.Parameter(torch.empty(size=(int(hid_dim/4), int(hid_dim/4))))
 
-        nn.init.uniform_(self.str2str_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 0.1)
-        nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 0.1)
+        nn.init.uniform_(self.str2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.thalgating_weights, 0, 0.01)
 
         # Implement Necessary Masks
         # Striatum recurrent weights
@@ -60,7 +66,7 @@ class RNN_MultiRegional(nn.Module):
         nn.init.sparse_(sparse_matrix, 0.85)
         sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
         self.str2str_mask = torch.zeros_like(self.str2str_weight_l0_hh).cuda()
-        self.str2str_fixed = torch.empty_like(self.str2str_weight_l0_hh).uniform_(0, 0.1).cuda() * sparse_mask
+        self.str2str_fixed = torch.empty_like(self.str2str_weight_l0_hh).uniform_(0, 0.001).cuda() * sparse_mask
         self.str2str_D = -1*torch.eye(int(hid_dim/4)).cuda()
 
         self.alm2alm_D = torch.eye(int(hid_dim/4)).cuda()
@@ -89,7 +95,7 @@ class RNN_MultiRegional(nn.Module):
         self.fc1 = nn.Linear(hid_dim, action_dim)
 
         # Time constants for networks (not sure what would be biologically plausible?)
-        self.t_const = 0.01*torch.ones(size=(hid_dim,)).cuda()
+        self.t_const = 0.1*torch.ones(size=(hid_dim,)).cuda()
 
     def forward(self, inp, hn, x):
 
@@ -110,25 +116,28 @@ class RNN_MultiRegional(nn.Module):
         new_xs = []
 
         # Get full weights for training
-        str2str = (self.str2str_mask * torch.square(self.str2str_weight_l0_hh) + self.str2str_fixed) @ self.str2str_D
-        alm2alm = torch.square(self.alm2alm_weight_l0_hh) @ self.alm2alm_D
-        alm2str = self.alm2str_mask * torch.square(self.alm2str_weight_l0_hh)
-        thal2alm = torch.square(self.thal2alm_weight_l0_hh)
-        thal2str = torch.square(self.thal2str_weight_l0_hh)
-        str2snr = torch.square(self.str2snr_weight_l0_hh) @ self.str2snr_D
-        snr2thal = torch.square(self.snr2thal_weight_l0_hh) @ self.snr2thal_D
+        str2str = (self.str2str_mask * F.relu(self.str2str_weight_l0_hh) + self.str2str_fixed) @ self.str2str_D
+        alm2alm = F.relu(self.alm2alm_weight_l0_hh) @ self.alm2alm_D
+        alm2str = self.alm2str_mask * F.relu(self.alm2str_weight_l0_hh)
+        thal2alm = F.relu(self.thal2alm_weight_l0_hh)
+        thal2str = F.relu(self.thal2str_weight_l0_hh)
+        str2snr = F.relu(self.str2snr_weight_l0_hh) @ self.str2snr_D
+        snr2thal = F.relu(self.snr2thal_weight_l0_hh) #@ self.snr2thal_D
+        thal_gating = F.relu(self.thalgating_weights) @ self.str2snr_D
 
         # Concatenate into single weight matrix
         W_str = torch.cat([str2str, self.zeros, thal2str, alm2str], dim=1)
-        W_snr = torch.cat([str2snr, self.zeros, self.zeros, self.zeros], dim=1)
-        W_thal = torch.cat([self.zeros, snr2thal, self.zeros, self.zeros], dim=1)
+        W_snr = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros], dim=1)
+        W_thal = torch.cat([snr2thal, self.zeros, self.zeros, self.zeros], dim=1)
         W_alm = torch.cat([self.zeros, self.zeros, thal2alm, alm2alm], dim=1)
         W_rec = torch.cat([W_str, W_snr, W_thal, W_alm], dim=0)
 
         # Loop through RNN
         for t in range(size):
-            x_next = (1 - self.t_const) * x_next + self.t_const * ((W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.alm_mask) + self.tonic_inp) 
-            hn_next = F.relu(x_next)
+            gate = torch.cat([F.sigmoid(thal_gating @ x_next[:, int(self.hid_dim/2):int(self.hid_dim*(3/4))].T).T, 
+                                torch.ones(size=(hn_next.shape[0], int(self.hid_dim*(3/4))), device="cuda")], dim=1)
+            x_next = x_next + self.t_const * gate * (-x_next + (W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.alm_mask)) 
+            hn_next = F.relu(x_next) 
             new_hs.append(hn_next)
             new_xs.append(x_next)
         

@@ -13,7 +13,7 @@ from utils import gather_delay_data, get_acts, get_ramp
 
 CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit.pth"
 INP_DIM = 1
-HID_DIM = 2048
+HID_DIM = 512
 OUT_DIM = 1
 DT = 1e-3
 CONDS = 3
