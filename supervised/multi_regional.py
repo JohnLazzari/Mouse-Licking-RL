@@ -15,7 +15,7 @@ INP_DIM = 1
 HID_DIM = 2048
 OUT_DIM = 1
 EPOCHS = 2500
-LR = 1e-3
+LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-4
 
@@ -77,10 +77,11 @@ def main():
         neural_act = neural_act * loss_mask_exp
 
         # Get loss
-        loss = (#1e-3 * criterion(out, y_data) 
-                1e-4 * constraint_criterion(torch.mean(act[:, :, alm_units_start+(int(HID_DIM/4)-int(0.8*(HID_DIM/4))):], dim=-1, keepdim=True), neural_act)
+        loss = (1e-3 * criterion(out, y_data) 
+                + constraint_criterion(torch.mean(act[:, :, alm_units_start+(int(HID_DIM/4)-int(0.8*(HID_DIM/4))):], dim=-1, keepdim=True), neural_act)
                 + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))  
                 + constraint_criterion(torch.mean(act[:, :, str_units_start:snr_units_start], dim=-1, keepdim=True), neural_act)
+                #+ constraint_criterion(torch.mean(act[:, :, thal_units_start:alm_units_start], dim=-1, keepdim=True), neural_act)
                 )
         
         # Save model
