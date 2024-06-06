@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from utils import gather_delay_data, get_acts, get_ramp
 
-CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit.pth"
+CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_gating.pth"
 INP_DIM = 1
 HID_DIM = 512
 OUT_DIM = 1

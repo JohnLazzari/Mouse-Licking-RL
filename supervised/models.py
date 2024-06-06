@@ -58,7 +58,7 @@ class RNN_MultiRegional(nn.Module):
         nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 0.01)
         nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 0.01)
         nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 0.01)
-        nn.init.uniform_(self.thalgating_weights, 0, 0.01)
+        nn.init.uniform_(self.thalgating_weights, -0.01, 0.01)
 
         # Implement Necessary Masks
         # Striatum recurrent weights
@@ -123,7 +123,6 @@ class RNN_MultiRegional(nn.Module):
         thal2str = F.relu(self.thal2str_weight_l0_hh)
         str2snr = F.relu(self.str2snr_weight_l0_hh) @ self.str2snr_D
         snr2thal = F.relu(self.snr2thal_weight_l0_hh) #@ self.snr2thal_D
-        thal_gating = F.relu(self.thalgating_weights) @ self.str2snr_D
 
         # Concatenate into single weight matrix
         W_str = torch.cat([str2str, self.zeros, thal2str, alm2str], dim=1)
@@ -134,9 +133,9 @@ class RNN_MultiRegional(nn.Module):
 
         # Loop through RNN
         for t in range(size):
-            gate = torch.cat([F.sigmoid(thal_gating @ x_next[:, int(self.hid_dim/2):int(self.hid_dim*(3/4))].T).T, 
+            gate = torch.cat([F.sigmoid(self.thalgating_weights @ x_next[:, int(self.hid_dim/2):int(self.hid_dim*(3/4))].T).T, 
                                 torch.ones(size=(hn_next.shape[0], int(self.hid_dim*(3/4))), device="cuda")], dim=1)
-            x_next = x_next + self.t_const * gate * (-x_next + (W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.alm_mask)) 
+            x_next = x_next + self.t_const * gate * (-x_next + (W_rec @ hn_next.T).T + (inp[:, t, :] @ self.inp_weight * self.str_mask)) 
             hn_next = F.relu(x_next) 
             new_hs.append(hn_next)
             new_xs.append(x_next)

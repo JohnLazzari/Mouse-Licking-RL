@@ -10,7 +10,7 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_delay_data, get_ramp
 
-SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit.pth"
+SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_gating.pth"
 INP_DIM = 1
 HID_DIM = 512
 OUT_DIM = 1
