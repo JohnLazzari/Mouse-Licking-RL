@@ -12,8 +12,8 @@ from utils import gather_delay_data, get_ramp
 
 def loss_constraint(criterion, constraint_criterion, act, out, neural_act, y_data, hid_dim, alm_start, str_start, thal_start):
     
-    loss = (#criterion(out, y_data) 
-            constraint_criterion(torch.mean(act[:, :, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act)
+    loss = (1e-2 * criterion(out, y_data) 
+            + constraint_criterion(torch.mean(act[:, :, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act)
             + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))  
             + constraint_criterion(torch.mean(act[:, :, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act)
             + constraint_criterion(torch.mean(act[:, :, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act)

@@ -32,19 +32,19 @@ def gather_delay_data(dt, hid_dim):
 
     # Condition 1: 0.3 for 1.1s
     inp[0] = torch.cat([
-        0.03*torch.ones(size=(int(0.5 / dt), int(hid_dim*0.04))),
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
         0.25*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.04)))
         ])
 
     # Condition 2: 0.6 for 1.6
     inp[1] = torch.cat([
-        0.02*torch.ones(size=(int(0.5 / dt), int(hid_dim*0.04))),
+        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
         0.2*torch.ones(size=(int(1.6 / dt), int(hid_dim*0.04)))
         ])
 
     # Condition 3: 0.9 for 2.1s
     inp[2] = torch.cat([
-        0.01*torch.ones(size=(int(0.5 / dt), int(hid_dim*0.04))),
+        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
         0.15*torch.ones(size=(int(2.1 / dt), int(hid_dim*0.04)))
         ])
 
@@ -55,17 +55,17 @@ def gather_delay_data(dt, hid_dim):
     lick = torch.ones(size=(int(0.1 / dt), 1))
 
     # Condition 1: 1-1.1 lick
-    no_lick = torch.zeros(size=(int(1.5 / dt), 1))
+    no_lick = torch.zeros(size=(int(2.0 / dt), 1))
     total_lick = torch.cat([no_lick, lick], dim=0)
     lick_target[0] = total_lick
 
     # Condition 2: 1.5-1.6 lick
-    no_lick = torch.zeros(size=(int(2.0 / dt), 1))
+    no_lick = torch.zeros(size=(int(2.5 / dt), 1))
     total_lick = torch.cat([no_lick, lick], dim=0)
     lick_target[1] = total_lick
 
     # Condition 3: 2-2.1 lick
-    no_lick = torch.zeros(size=(int(2.5 / dt), 1))
+    no_lick = torch.zeros(size=(int(3.0 / dt), 1))
     total_lick = torch.cat([no_lick, lick], dim=0)
     lick_target[2] = total_lick
 
@@ -73,7 +73,7 @@ def gather_delay_data(dt, hid_dim):
     total_target = pad_sequence([lick_target[0], lick_target[1], lick_target[2]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [int(1.6 / dt), int(2.1 / dt), int(2.6 / dt)]
+    len_seq = [int(2.1 / dt), int(2.6 / dt), int(3.1 / dt)]
 
     return total_inp, total_target, len_seq
 
@@ -85,7 +85,7 @@ def get_ramp(dt):
         dt: timescale in seconds (0.001 is ms)
     '''
     all_ramps = {}
-    baseline = torch.zeros(size=(int(0.5 / dt),), dtype=torch.float32).unsqueeze(1)
+    baseline = torch.zeros(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
     for cond in range(3):
         all_ramps[cond] = torch.cat([
             baseline,
@@ -120,7 +120,7 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, regi
     else:
         str_mask = rnn.str_mask
 
-    ITI_steps = 500
+    ITI_steps = 1000
     extra_steps = 0
     start_silence = 600 + ITI_steps
     end_silence = 1100 + ITI_steps
@@ -143,6 +143,7 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, regi
                     inp = 0*x_data[cond:cond+1, 0:1, :]
                 elif region == "str":
                     inhib_stim = -0.25 * str_mask
+                    #inhib_stim = 1 * str_mask
             else:
                 inhib_stim = 0
                     

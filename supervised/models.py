@@ -30,6 +30,9 @@ class RNN_MultiRegional(nn.Module):
         self.str_d1_mask = torch.cat([torch.ones(size=(int(hid_dim/2),)), 
                                     torch.zeros(size=(int(hid_dim/2),)),
                                     torch.zeros(size=(hid_dim * 5,))]).cuda()
+        self.str_d2_mask = torch.cat([torch.zeros(size=(int(hid_dim/2),)), 
+                                    torch.ones(size=(int(hid_dim/2),)),
+                                    torch.zeros(size=(hid_dim * 5,))]).cuda()
         self.strthal_mask = torch.cat([torch.zeros(size=(int(hid_dim/4),)),
                                     torch.ones(size=(int(hid_dim/2),)), 
                                     torch.zeros(size=(int(hid_dim/4),)),
@@ -121,11 +124,15 @@ class RNN_MultiRegional(nn.Module):
         self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
 
         # Behavioral output layer
-        self.fc1 = nn.Parameter(torch.empty(size=(hid_dim * 6, hid_dim)))
+        self.fc1 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.fc1_bias = nn.Parameter(torch.empty(size=(hid_dim,)))
         self.fc2 = nn.Parameter(torch.empty(size=(hid_dim, action_dim)))
+        self.fc2_bias = nn.Parameter(torch.empty(size=(action_dim,)))
 
         nn.init.uniform_(self.fc1, 0, 0.01)
         nn.init.uniform_(self.fc2, 0, 0.01)
+        nn.init.uniform_(self.fc1_bias, 0, 0.01)
+        nn.init.uniform_(self.fc2_bias, 0, 0.01)
 
         # Time constants for networks (not sure what would be biologically plausible?)
         self.t_const = 0.01
@@ -204,7 +211,7 @@ class RNN_MultiRegional(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = (rnn_out * self.alm_mask) @ fc1
+        out = F.relu(rnn_out[:, :, self.hid_dim*5:] @ fc1)
         out = F.sigmoid(out @ fc2)
         
         return out, hn_last, rnn_out, x_last, x_out

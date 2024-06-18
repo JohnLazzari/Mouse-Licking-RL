@@ -60,8 +60,8 @@ def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region,
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(0, 1.1 + 0.5 * cond + (500 * dt), ramp_psth_silenced[cond].shape[0] - 500)
-        xs_u[cond] = np.linspace(0, 1.1 + 0.5 * cond, ramp_psth_orig[cond].shape[0] - 500)
+        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.5 * cond + (500 * dt), ramp_psth_silenced[cond].shape[0] - 500)
+        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.5 * cond, ramp_psth_orig[cond].shape[0] - 500)
 
     for cond in range(conds):
         plt.plot(xs_u[cond], ramp_psth_orig[cond][500:], label=f"Unperturbed Network Cond {cond + 1}", linewidth=4)
