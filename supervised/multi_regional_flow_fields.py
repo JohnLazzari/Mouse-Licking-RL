@@ -15,7 +15,9 @@ DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
 MODEL_TYPE = "constraint" # constraint, no_constraint, no_constraint_thal
-PERTURBATION = ""
+REGION = "str2thal" # str, alm, or str2thal
+TIME_SKIPS = 500
+PERTURBATION = "alm"
 CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
 SAVE_NAME = "results/flow_fields/multi_regional_d1d2/multi_regional_d1d2_flow"
 
@@ -25,7 +27,7 @@ class FlowFields():
         self.dimensions = dimensions
         self.x_pca = PCA(n_components=dimensions)
     
-    def generate_grid(self, num_points, lower_bound=0, upper_bound=1):
+    def generate_grid(self, num_points, lower_bound=-10, upper_bound=25):
 
         # Num points is along each axis, not in total
         x = np.linspace(lower_bound, upper_bound, num_points)
@@ -57,11 +59,17 @@ class FlowFields():
 
 def main():
     
+    ITI_steps = 1000
+    extra_steps = 0
+    start_silence = 600 + ITI_steps
+    end_silence = 1100 + ITI_steps
     checkpoint = torch.load(CHECK_PATH)
     
     # Create RNN
     rnn = RNN_MultiRegional(INP_DIM, HID_DIM, OUT_DIM).cuda()
     rnn.load_state_dict(checkpoint)
+    alm_mask = rnn.alm_mask
+    str_mask = rnn.str_d1_mask
 
     # Gather data
     flow_field = FlowFields()
@@ -78,24 +86,31 @@ def main():
     xn = hn
 
     sampled_acts = []
+    sampled_acts_region = []
+
     for t in range(len_seq[CONDITION]):
+
         with torch.no_grad():
+
             cur_inp = x_data[CONDITION:CONDITION+1, t:t+1, :]
             _, hn, act, _, _ = rnn(cur_inp, hn, xn, 0, noise=False)
             sampled_acts.append(act)
-    sampled_acts = torch.cat(sampled_acts, dim=1)
-    sampled_acts = torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2]))
 
-    flow_field.fit_pca(sampled_acts.detach().cpu().numpy())
+            if REGION == "str":
+                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, :int(HID_DIM/2)])
+            elif REGION == "str2thal":
+                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, :HID_DIM*5])
+            elif REGION == "alm":
+                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, HID_DIM*5:])
+
+    sampled_acts, sampled_acts_region = torch.cat(sampled_acts, dim=1), torch.cat(sampled_acts_region)
+    sampled_acts, sampled_acts_region = (torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2])), 
+                                         torch.reshape(sampled_acts_region, shape=(sampled_acts_region.shape[0] * sampled_acts_region.shape[1], sampled_acts_region.shape[2])))
+
+    sampled_acts_region = sampled_acts_region.detach().cpu().numpy()
+    flow_field.fit_pca(sampled_acts_region)
     grid = flow_field.inverse_pca(data_coords)
-    grid = torch.tensor(grid, dtype=torch.float32)
-
-    alm_mask = rnn.alm_mask
-    str_mask = rnn.str_d1_mask
-    ITI_steps = 1000
-    extra_steps = 0
-    start_silence = 600 + ITI_steps
-    end_silence = 1100 + ITI_steps
+    grid = grid.clone().detach()
 
     if PERTURBATION == "striatum" or PERTURBATION == "alm":
         len_seq_act = len_seq[CONDITION] + (end_silence - start_silence) + extra_steps
@@ -104,11 +119,14 @@ def main():
 
     # initialize activity dict
     next_acts = {}
-    for i in range(len_seq_act):
+    for i in range(0, len_seq_act, TIME_SKIPS):
         next_acts[i] = []
 
+    standard_hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    xn = hn
+
     # Go through activities and generate h_t+1
-    for t in range(0, len_seq_act, 100):
+    for t in range(0, len_seq_act, TIME_SKIPS):
 
         print(f"input number: {t}")
 
@@ -126,34 +144,56 @@ def main():
         else:
             inhib_stim = 0
 
+        _, standard_hn, standard_act, _, _ = rnn(inp, standard_hn, xn, inhib_stim, noise=False)
+
         for h_0 in grid:
+
             with torch.no_grad():
-                h_0 = h_0.unsqueeze(0).unsqueeze(0).cuda()
+
+                h_0 = h_0.unsqueeze(0).cuda()
+
+                if REGION == "str":
+                    h_0 = torch.cat([h_0, standard_act[0, 0:1, int(HID_DIM/2):]], dim=1).unsqueeze(0)
+                elif REGION == "str2thal":
+                    h_0 = torch.cat([h_0, standard_act[0, 0:1, HID_DIM*5:]], dim=1).unsqueeze(0)
+                elif REGION == "alm":
+                    h_0 = torch.cat([standard_act[0, 0:1, :HID_DIM*5], h_0], dim=1).unsqueeze(0)
+
                 _, _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
-                next_acts[t].append(act[0, 0, :HID_DIM].detach().cpu().numpy())
+
+                if REGION == "str": 
+                    next_acts[t].append(act[0, 0, :int(HID_DIM/2)].detach().cpu().numpy())
+                elif REGION == "str2thal": 
+                    next_acts[t].append(act[0, 0, :HID_DIM*5].detach().cpu().numpy())
+                elif REGION == "alm":
+                    next_acts[t].append(act[0, 0, HID_DIM*5:].detach().cpu().numpy())
 
     # Reshape data back to grid
     data_coords = data_coords.numpy()
     data_coords = np.reshape(data_coords, (NUM_POINTS, NUM_POINTS, data_coords.shape[-1]))
-    for i in range(len_seq_act):
-        next_acts[i] = flow_field.transform_pca(next_acts[i])
+
+    for i in range(0, len_seq_act, TIME_SKIPS):
+
+        next_acts[i] = flow_field.transform_pca(np.array(next_acts[i]))
         next_acts[i] = np.reshape(next_acts[i], (NUM_POINTS, NUM_POINTS, next_acts[i].shape[-1]))
+    
+    sampled_acts_region = flow_field.transform_pca(sampled_acts_region)
     
     x_vels = {}
     y_vels = {}
-    for i in range(len_seq_act):
+
+    for i in range(0, len_seq_act, TIME_SKIPS):
+
         x_vels[i] = next_acts[i][:, :, 0] - data_coords[:, :, 0]
         y_vels[i] = next_acts[i][:, :, 1] - data_coords[:, :, 1]
 
-    # Reduce original trajectory
-    act_cond = flow_field.transform_pca(act_cond.squeeze().numpy())
-    
-    for i in range(len_seq_act):
+    for i in range(0, len_seq_act, TIME_SKIPS):
+
         plt.streamplot(x, y, x_vels[i], y_vels[i], color="black")
-        plt.scatter(act_cond[int(i * 1), 0], act_cond[int(i * 1), 1], c="blue", edgecolors="face", s=150)
+        plt.scatter(sampled_acts_region[i, 0], sampled_acts_region[i, 1])
         plt.yticks([])
         plt.xticks([])
-        plt.savefig(SAVE_NAME + f"_perturbation_{PERTURBATION}" + f"_cond{CONDITION}_inp{i}.png")
+        plt.savefig(SAVE_NAME + f"_perturbation_{PERTURBATION}_region_{REGION}_cond{CONDITION}_inp{i}.png")
         plt.close()
     
 if __name__ == "__main__":

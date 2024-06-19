@@ -11,13 +11,17 @@ import matplotlib.pyplot as plt
 from utils import gather_delay_data, get_ramp
 
 def loss_constraint(criterion, constraint_criterion, act, out, neural_act, y_data, hid_dim, alm_start, str_start, thal_start):
-    
-    loss = (1e-2 * criterion(out, y_data) 
-            + constraint_criterion(torch.mean(act[:, :, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act)
-            + 1e-4 * torch.mean(torch.pow(act, 2), dim=(1, 2, 0))  
-            + constraint_criterion(torch.mean(act[:, :, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act)
-            + constraint_criterion(torch.mean(act[:, :, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act)
+
+    loss_stabilize = 1e-4 * torch.mean(torch.pow(act[:, :500, :], 2), dim=(1, 2, 0))
+
+    loss_delay = (1e-1 * criterion(out[:, 500:, :], y_data[:, 500:, :]) 
+            + constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
+            + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+            + constraint_criterion(torch.mean(act[:, 500:, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
+            + constraint_criterion(torch.mean(act[:, 500:, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
             )
+    
+    loss = loss_stabilize + loss_delay
 
     return loss
 
@@ -55,21 +59,13 @@ def simple_dynamics_constraint(act, rnn, hid_dim):
 
     # Putting all weights together
     W_rec = torch.cat([W_str, W_gpe, W_stn, W_snr, W_thal, W_alm], dim=0)
-
-    W_str_grad = torch.cat([rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.thal2str_weight_l0_hh.grad, rnn.alm2str_weight_l0_hh.grad], dim=1)          # STR
-    W_gpe_grad = torch.cat([rnn.str2gpe_weight_l0_hh.grad, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros], dim=1)     # GPE
-    W_stn_grad = torch.cat([rnn.zeros, rnn.gpe2stn_weight_l0_hh.grad, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros], dim=1)     # STN
-    W_snr_grad = torch.cat([rnn.str2snr_weight_l0_hh.grad, rnn.zeros, rnn.stn2snr_weight_l0_hh.grad, rnn.zeros, rnn.zeros, rnn.zeros], dim=1)        # SNR
-    W_thal_grad = torch.cat([rnn.zeros, rnn.zeros, rnn.zeros, rnn.snr2thal_weight_l0_hh.grad, rnn.zeros, rnn.zeros], dim=1)   # Thal
-    W_alm_grad = torch.cat([rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.thal2alm_weight_l0_hh.grad, rnn.alm2alm_weight_l0_hh.grad], dim=1)       # ALM
-
-    # Putting all weights together
-    W_rec_grad = torch.cat([W_str_grad, W_gpe_grad, W_stn_grad, W_snr_grad, W_thal_grad, W_alm_grad], dim=0)
     
     # Penalize complex trajectories
     d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-    W_rec_grad += (1e-4 * W_rec.T * d_act)
+    update = 1e-4 * W_rec.T * d_act
+
+    
 
 def simple_dynamics_no_constraint(act, rnn, alm_start, str_start):
     
