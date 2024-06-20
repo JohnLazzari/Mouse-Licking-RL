@@ -17,7 +17,8 @@ NUM_POINTS = 100
 MODEL_TYPE = "constraint" # constraint, no_constraint, no_constraint_thal
 REGION = "str2thal" # str, alm, or str2thal
 TIME_SKIPS = 500
-PERTURBATION = "alm"
+PERTURBATION = False
+PERTURBED_REGION = "alm" # str or alm
 CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
 SAVE_NAME = "results/flow_fields/multi_regional_d1d2/multi_regional_d1d2_flow"
 
@@ -86,8 +87,9 @@ def main():
     xn = hn
 
     sampled_acts = []
-    sampled_acts_region = []
 
+
+    # Get original trajectory
     for t in range(len_seq[CONDITION]):
 
         with torch.no_grad():
@@ -96,34 +98,64 @@ def main():
             _, hn, act, _, _ = rnn(cur_inp, hn, xn, 0, noise=False)
             sampled_acts.append(act)
 
-            if REGION == "str":
-                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, :int(HID_DIM/2)])
-            elif REGION == "str2thal":
-                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, :HID_DIM*5])
-            elif REGION == "alm":
-                sampled_acts_region.append(act[CONDITION:CONDITION+1, :, HID_DIM*5:])
+    sampled_acts = torch.cat(sampled_acts, dim=1)
+    sampled_acts = torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2])) 
+    sampled_acts = sampled_acts.detach().cpu().numpy()
 
-    sampled_acts, sampled_acts_region = torch.cat(sampled_acts, dim=1), torch.cat(sampled_acts_region)
-    sampled_acts, sampled_acts_region = (torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2])), 
-                                         torch.reshape(sampled_acts_region, shape=(sampled_acts_region.shape[0] * sampled_acts_region.shape[1], sampled_acts_region.shape[2])))
+    if REGION == "str":
+        flow_field.fit_pca(sampled_acts[:, :int(HID_DIM/2)])
+    elif REGION == "alm":
+        flow_field.fit_pca(sampled_acts[:, HID_DIM*5:])
+    elif REGION == "str2thal":
+        flow_field.fit_pca(sampled_acts[:, :HID_DIM*5])
 
-    sampled_acts_region = sampled_acts_region.detach().cpu().numpy()
-    flow_field.fit_pca(sampled_acts_region)
     grid = flow_field.inverse_pca(data_coords)
-    grid = grid.clone().detach()
+    grid = torch.tensor(grid, device="cuda").clone()
 
-    if PERTURBATION == "striatum" or PERTURBATION == "alm":
+    if PERTURBATION == True:
         len_seq_act = len_seq[CONDITION] + (end_silence - start_silence) + extra_steps
     else:
         len_seq_act = len_seq[CONDITION]
+
+
+    # Get perturbed trajectory
+    perturbed_acts = []
+    hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    xn = hn
+
+    for t in range(len_seq_act):
+
+        if t < ITI_steps:
+            inp = x_data[CONDITION:CONDITION+1, 0:1, :]
+        else:
+            inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
+
+        with torch.no_grad():        
+
+            if PERTURBED_REGION == "alm" and t > start_silence and t < end_silence:
+                    inhib_stim = -10 * alm_mask
+                    inp = 0*x_data[CONDITION:CONDITION+1, 0:1, :]
+            elif PERTURBED_REGION == "str" and t > start_silence and t < end_silence:
+                inhib_stim = -0.25 * str_mask
+                #inhib_stim = 1 * str_mask
+            else:
+                inhib_stim = 0
+                    
+            _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
+            perturbed_acts.append(hn)
 
     # initialize activity dict
     next_acts = {}
     for i in range(0, len_seq_act, TIME_SKIPS):
         next_acts[i] = []
 
-    standard_hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
     xn = hn
+
+    if PERTURBATION == True:
+        hidden_input = torch.concatenate(perturbed_acts, dim=1).clone().cuda()
+    else:
+        hidden_input = torch.tensor(sampled_acts).clone().unsqueeze(0).cuda()
 
     # Go through activities and generate h_t+1
     for t in range(0, len_seq_act, TIME_SKIPS):
@@ -134,17 +166,9 @@ def main():
             inp = x_data[CONDITION:CONDITION+1, 0:1, :]
         else:
             inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
-
-        if PERTURBATION == "alm" and t > start_silence and t < end_silence:
-            inhib_stim = -10 * alm_mask
-            inp = 0*x_data[CONDITION:CONDITION+1, 0:1, :]
-        elif PERTURBATION == "striatum" and t > start_silence and t < end_silence:
-            inhib_stim = -0.25 * str_mask
-            #inhib_stim = 1 * str_mask
-        else:
-            inhib_stim = 0
-
-        _, standard_hn, standard_act, _, _ = rnn(inp, standard_hn, xn, inhib_stim, noise=False)
+        
+        if PERTURBATION == True and t > start_silence and t < end_silence:
+            inp = 0 * x_data[CONDITION:CONDITION+1, 0:1, :]
 
         for h_0 in grid:
 
@@ -153,11 +177,11 @@ def main():
                 h_0 = h_0.unsqueeze(0).cuda()
 
                 if REGION == "str":
-                    h_0 = torch.cat([h_0, standard_act[0, 0:1, int(HID_DIM/2):]], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([h_0, hidden_input[0, 0:1, int(HID_DIM/2):]], dim=1).unsqueeze(0)
                 elif REGION == "str2thal":
-                    h_0 = torch.cat([h_0, standard_act[0, 0:1, HID_DIM*5:]], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([h_0, hidden_input[0, 0:1, HID_DIM*5:]], dim=1).unsqueeze(0)
                 elif REGION == "alm":
-                    h_0 = torch.cat([standard_act[0, 0:1, :HID_DIM*5], h_0], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([hidden_input[0, 0:1, :HID_DIM*5], h_0], dim=1).unsqueeze(0)
 
                 _, _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
 
@@ -177,7 +201,12 @@ def main():
         next_acts[i] = flow_field.transform_pca(np.array(next_acts[i]))
         next_acts[i] = np.reshape(next_acts[i], (NUM_POINTS, NUM_POINTS, next_acts[i].shape[-1]))
     
-    sampled_acts_region = flow_field.transform_pca(sampled_acts_region)
+    if REGION == "str":
+        sampled_acts_region = flow_field.transform_pca(sampled_acts[:, :int(HID_DIM/2)])
+    elif REGION == "alm":
+        sampled_acts_region = flow_field.transform_pca(sampled_acts[:, HID_DIM*5:])
+    elif REGION == "str2thal":
+        sampled_acts_region = flow_field.transform_pca(sampled_acts[:, :HID_DIM*5])
     
     x_vels = {}
     y_vels = {}
