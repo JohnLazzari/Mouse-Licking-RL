@@ -103,54 +103,68 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, regi
 
     acts = []
 
-    if model_type == "constraint":
-        hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
-    elif model_type == "no_constraint":
-        hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
-    elif model_type == "no_constraint_thal":
-        hn = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
-
     alm_mask = rnn.alm_mask
 
-    if model_type == "constraint":
+    if model_type == "d1d2":
         str_mask = rnn.str_d1_mask
     else:
         str_mask = rnn.str_mask
 
     ITI_steps = 1000
-    extra_steps = 0
+    extra_steps_silence = 500
+    extra_steps_control = 700
     start_silence = 600 + ITI_steps
     end_silence = 1100 + ITI_steps
+
+    if model_type == "d1d2":
+        hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
+    elif model_type == "stralm":
+        hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
+    elif model_type == "d1":
+        hn = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
     
     if perturbation == True:
-        len_seq += (end_silence - start_silence) + extra_steps
 
-    for t in range(len_seq):
+        if region == "alm":
+            
+            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_silence = -10 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
-        if t < ITI_steps:
-            inp = x_data[cond:cond+1, 0:1, :]
-        else:
-            inp = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :]
+            inp_pre = x_data[cond:cond+1, :start_silence, :].detach().clone()
+            inp_silence = torch.zeros(size=(1, end_silence - start_silence, x_data.shape[-1]), device="cuda")
+            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, 1).detach().clone()
+            inp = torch.cat([inp_pre, inp_silence, inp_post], dim=1)
+        
+        elif region == "str":
 
-        with torch.no_grad():        
+            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_silence = -0.35 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
-            if perturbation == True and t > start_silence and t < end_silence:
-                if region == "alm":
-                    inhib_stim = -10 * alm_mask
-                    inp = 0*x_data[cond:cond+1, 0:1, :]
-                elif region == "str":
-                    inhib_stim = -0.25 * str_mask
-                    #inhib_stim = 1 * str_mask
-            else:
-                inhib_stim = 0
-                    
-            _, hn, _, x, _ = rnn(inp, hn, x, inhib_stim, noise=False)
-            acts.append(hn.squeeze().cpu().numpy())
+            inp_pre = x_data[cond:cond+1, :len_seq, :].detach().clone()
+            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, end_silence - start_silence + extra_steps_silence, 1).detach().clone()
+            inp = torch.cat([inp_pre, inp_post], dim=1)
+        
+    else:
+
+        inhib_stim = torch.zeros(size=(1, len_seq + extra_steps_control, hn.shape[-1]), device="cuda")
+        inp_task = x_data[cond:cond+1, :len_seq, :].detach().clone()
+        inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps_control, 1).detach().clone()
+        #inp_post = torch.zeros(size=(1, extra_steps_control, inp_task.shape[-1]), device="cuda")
+        inp = torch.cat([inp_task, inp_post], dim=1)
+
+    with torch.no_grad():        
+
+        _, _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
+        acts = acts.squeeze().cpu().numpy()
     
-    return np.array(acts)
+    return acts
 
 def get_masks(out_dim, hid_dim, neural_act, len_seq, regions):
 
@@ -165,3 +179,16 @@ def get_masks(out_dim, hid_dim, neural_act, len_seq, regions):
     loss_mask_exp = pad_sequence(loss_mask_exp, batch_first=True).cuda()
 
     return loss_mask, loss_mask_act, loss_mask_exp
+
+def get_ramp_mode(baseline, peak):
+    
+    # baseline and peak should be of shape [neurons]
+    diff_vec = peak - baseline
+    diff_vec = diff_vec / np.linalg.norm(diff_vec)
+    return diff_vec
+
+def project_ramp_mode(samples, ramp_mode):
+    
+    # samples should be [time, neurons], ramp_mode should be [neurons]
+    projected = samples @ ramp_mode
+    return projected

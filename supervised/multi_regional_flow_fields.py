@@ -15,12 +15,13 @@ DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
 MODEL_TYPE = "constraint" # constraint, no_constraint, no_constraint_thal
-REGION = "str2thal" # str, alm, or str2thal
-TIME_SKIPS = 500
+REGION = "alm" # str, alm, or str2thal
+TIME_SKIPS = 100
 PERTURBATION = False
 PERTURBED_REGION = "alm" # str or alm
 CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
 SAVE_NAME = "results/flow_fields/multi_regional_d1d2/multi_regional_d1d2_flow"
+SAVE_NAME_EPS = "results/flow_fields/multi_regional_d1d2_eps/multi_regional_d1d2_flow"
 
 class FlowFields():
     def __init__(self, dimensions=2):
@@ -69,6 +70,7 @@ def main():
     # Create RNN
     rnn = RNN_MultiRegional(INP_DIM, HID_DIM, OUT_DIM).cuda()
     rnn.load_state_dict(checkpoint)
+
     alm_mask = rnn.alm_mask
     str_mask = rnn.str_d1_mask
 
@@ -83,7 +85,7 @@ def main():
     x, y, data_coords = flow_field.generate_grid(num_points=NUM_POINTS)
 
     # Sample many hidden states to get pcs for dimensionality reduction
-    hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    hn = torch.zeros(size=(1, 1, HID_DIM*6)).cuda()
     xn = hn
 
     sampled_acts = []
@@ -110,7 +112,7 @@ def main():
         flow_field.fit_pca(sampled_acts[:, :HID_DIM*5])
 
     grid = flow_field.inverse_pca(data_coords)
-    grid = torch.tensor(grid, device="cuda").clone()
+    grid = torch.tensor(grid, device="cuda").clone().detach()
 
     if PERTURBATION == True:
         len_seq_act = len_seq[CONDITION] + (end_silence - start_silence) + extra_steps
@@ -120,7 +122,7 @@ def main():
 
     # Get perturbed trajectory
     perturbed_acts = []
-    hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    hn = torch.zeros(size=(1, 1, HID_DIM*6)).cuda()
     xn = hn
 
     for t in range(len_seq_act):
@@ -144,18 +146,19 @@ def main():
             _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
             perturbed_acts.append(hn)
 
+
     # initialize activity dict
     next_acts = {}
     for i in range(0, len_seq_act, TIME_SKIPS):
         next_acts[i] = []
 
-    hn = torch.rand(size=(1, 1, HID_DIM*6)).cuda()
+    hn = torch.zeros(size=(1, 1, HID_DIM*6)).cuda()
     xn = hn
 
     if PERTURBATION == True:
-        hidden_input = torch.concatenate(perturbed_acts, dim=1).clone().cuda()
+        hidden_input = torch.concatenate(perturbed_acts, dim=1).clone().detach().cuda()
     else:
-        hidden_input = torch.tensor(sampled_acts).clone().unsqueeze(0).cuda()
+        hidden_input = torch.tensor(sampled_acts).clone().detach().unsqueeze(0).cuda()
 
     # Go through activities and generate h_t+1
     for t in range(0, len_seq_act, TIME_SKIPS):
@@ -169,7 +172,7 @@ def main():
         
         if PERTURBATION == True and t > start_silence and t < end_silence:
             inp = 0 * x_data[CONDITION:CONDITION+1, 0:1, :]
-
+        
         for h_0 in grid:
 
             with torch.no_grad():
@@ -177,13 +180,13 @@ def main():
                 h_0 = h_0.unsqueeze(0).cuda()
 
                 if REGION == "str":
-                    h_0 = torch.cat([h_0, hidden_input[0, 0:1, int(HID_DIM/2):]], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([h_0, hidden_input[0, t:t+1, int(HID_DIM/2):]], dim=1).unsqueeze(0)
                 elif REGION == "str2thal":
-                    h_0 = torch.cat([h_0, hidden_input[0, 0:1, HID_DIM*5:]], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([h_0, hidden_input[0, t:t+1, HID_DIM*5:]], dim=1).unsqueeze(0)
                 elif REGION == "alm":
-                    h_0 = torch.cat([hidden_input[0, 0:1, :HID_DIM*5], h_0], dim=1).unsqueeze(0)
+                    h_0 = torch.cat([hidden_input[0, t:t+1, :HID_DIM*5], h_0], dim=1).unsqueeze(0)
 
-                _, _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
+                _, _, act, _, _ = rnn(inp, h_0, xn, 0, noise=False)
 
                 if REGION == "str": 
                     next_acts[t].append(act[0, 0, :int(HID_DIM/2)].detach().cpu().numpy())
@@ -223,6 +226,7 @@ def main():
         plt.yticks([])
         plt.xticks([])
         plt.savefig(SAVE_NAME + f"_perturbation_{PERTURBATION}_region_{REGION}_cond{CONDITION}_inp{i}.png")
+        plt.savefig(SAVE_NAME_EPS + f"_perturbation_{PERTURBATION}_region_{REGION}_cond{CONDITION}_inp{i}.eps")
         plt.close()
     
 if __name__ == "__main__":

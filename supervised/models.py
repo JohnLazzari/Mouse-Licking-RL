@@ -6,9 +6,9 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 import numpy as np
 import math
 
-class RNN_MultiRegional(nn.Module):
+class RNN_MultiRegional_D1D2(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
-        super(RNN_MultiRegional, self).__init__()
+        super(RNN_MultiRegional_D1D2, self).__init__()
         
         '''
             Multi-Regional RNN model, implements interaction between striatum and ALM
@@ -129,17 +129,17 @@ class RNN_MultiRegional(nn.Module):
         self.fc1_bias = nn.Parameter(torch.empty(size=(hid_dim,)))
         self.fc2_bias = nn.Parameter(torch.empty(size=(action_dim,)))
 
-        nn.init.uniform_(self.fc1, -0.1, 0.1)
-        nn.init.uniform_(self.fc2, -0.1, 0.1)
-        nn.init.uniform_(self.fc1_bias, -0.1, 0.1)
-        nn.init.uniform_(self.fc2_bias, -0.1, 0.1)
+        nn.init.uniform_(self.fc1, 0, 0.001)
+        nn.init.uniform_(self.fc2, 0, 0.001)
+        nn.init.uniform_(self.fc1_bias, 0, 0.001)
+        nn.init.uniform_(self.fc2_bias, 0, 0.001)
 
         # Time constants for networks (not sure what would be biologically plausible?)
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.005
-        self.sigma_input = 0.05
+        self.sigma_recur = 0.001
+        self.sigma_input = 0.001
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -195,7 +195,7 @@ class RNN_MultiRegional(nn.Module):
                 perturb_inp = 0
 
             hn_next = F.relu(hn_next 
-                      + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ inp_weight * self.strthal_mask) + inhib_stim + self.tonic_inp) 
+                      + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ inp_weight * self.strthal_mask) + inhib_stim[:, t, :] + self.tonic_inp) 
                       + perturb_hid)
             
             new_hs.append(hn_next)
@@ -210,14 +210,14 @@ class RNN_MultiRegional(nn.Module):
 
         # Behavioral output layer
         out = F.relu(rnn_out[:, :, self.hid_dim*5:] @ self.fc1 + self.fc1_bias)
-        out = F.sigmoid(out @ self.fc2 + self.fc2_bias)
+        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
 
 
-class RNN_MultiRegional_NoConstraint(nn.Module):
+class RNN_MultiRegional_STRALM(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
-        super(RNN_MultiRegional_NoConstraint, self).__init__()
+        super(RNN_MultiRegional_STRALM, self).__init__()
         
         '''
             Multi-Regional RNN model, implements interaction between striatum and ALM
@@ -243,21 +243,47 @@ class RNN_MultiRegional_NoConstraint(nn.Module):
         self.str2alm_weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
         self.inp_weight = nn.Parameter(torch.empty(size=(inp_dim, hid_dim * 2)))
 
-        nn.init.uniform_(self.str2str_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.alm2alm_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.alm2str_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.str2alm_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.inp_weight, -0.01, 0.01)
+        nn.init.uniform_(self.str2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.str2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.inp_weight, 0, 0.01)
+
+        # Implement Necessary Masks
+        # Striatum recurrent weights
+        sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
+        nn.init.sparse_(sparse_matrix, 0.9)
+        sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
+        self.str2str_mask = torch.zeros_like(self.str2str_weight_l0_hh).cuda()
+        self.str2str_fixed = torch.empty_like(self.str2str_weight_l0_hh).uniform_(0, 0.001).cuda() * sparse_mask
+        self.str2str_D = -1*torch.eye(hid_dim).cuda()
+
+        self.alm2alm_D = torch.eye(hid_dim).cuda()
+        self.alm2alm_D[hid_dim-int(0.3*hid_dim):, 
+                        hid_dim-int(0.3*hid_dim):] *= -1
+        
+        # ALM to striatum weights
+        self.alm2str_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
+        self.alm2str_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
+        self.alm2str_mask = torch.cat([self.alm2str_mask_excitatory, self.alm2str_mask_inhibitory], dim=1).cuda()
 
         # Behavioral output layer
-        self.fc1 = nn.Linear(hid_dim * 2, action_dim)
+        self.fc1 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.fc2 = nn.Parameter(torch.empty(size=(hid_dim, action_dim)))
+        self.fc1_bias = nn.Parameter(torch.empty(size=(hid_dim,)))
+        self.fc2_bias = nn.Parameter(torch.empty(size=(action_dim,)))
+
+        nn.init.uniform_(self.fc1, 0, 0.001)
+        nn.init.uniform_(self.fc2, 0, 0.001)
+        nn.init.uniform_(self.fc1_bias, 0, 0.001)
+        nn.init.uniform_(self.fc2_bias, 0, 0.001)
 
         # Time constants for networks (not sure what would be biologically plausible?)
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.005
-        self.sigma_input = 0.05
+        self.sigma_recur = 0.01
+        self.sigma_input = 0.01
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -277,9 +303,14 @@ class RNN_MultiRegional_NoConstraint(nn.Module):
         new_hs = []
         new_xs = []
 
+        str2str = (self.str2str_mask * F.relu(self.str2str_weight_l0_hh) + self.str2str_fixed) @ self.str2str_D
+        str2alm = F.relu(self.str2alm_weight_l0_hh)
+        alm2alm = F.relu(self.alm2alm_weight_l0_hh) @ self.alm2alm_D
+        alm2str = self.alm2str_mask * F.relu(self.alm2str_weight_l0_hh)
+
         # Concatenate into single weight matrix
-        W_str = torch.cat([self.str2str_weight_l0_hh, self.alm2str_weight_l0_hh], dim=1)
-        W_alm = torch.cat([self.str2alm_weight_l0_hh, self.alm2alm_weight_l0_hh], dim=1)
+        W_str = torch.cat([str2str, alm2str], dim=1)
+        W_alm = torch.cat([str2alm, alm2alm], dim=1)
         W_rec = torch.cat([W_str, W_alm], dim=0)
 
         # Loop through RNN
@@ -292,11 +323,9 @@ class RNN_MultiRegional_NoConstraint(nn.Module):
                 perturb_hid = 0
                 perturb_inp = 0
 
-            x_next = (x_next + 
-                      self.t_const * (-x_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_mask) + inhib_stim) 
+            hn_next = F.relu(hn_next + 
+                      self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_mask) + inhib_stim[:, t, :]) 
                       + perturb_hid)
-            
-            hn_next = F.relu(x_next)
 
             new_hs.append(hn_next)
             new_xs.append(x_next)
@@ -309,14 +338,15 @@ class RNN_MultiRegional_NoConstraint(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = self.fc1(rnn_out * self.alm_mask)
+        out = F.relu(rnn_out[:, :, self.hid_dim:] @ self.fc1 + self.fc1_bias)
+        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
 
 
-class RNN_MultiRegional_NoConstraintThal(nn.Module):
+class RNN_MultiRegional_D1(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
-        super(RNN_MultiRegional_NoConstraintThal, self).__init__()
+        super(RNN_MultiRegional_D1, self).__init__()
         
         '''
             Multi-Regional RNN model, implements interaction between striatum and ALM
@@ -352,12 +382,34 @@ class RNN_MultiRegional_NoConstraintThal(nn.Module):
         # Inhibitory Connections
         self.str2thal_weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
 
-        nn.init.uniform_(self.str2str_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.thal2alm_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.thal2str_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.alm2alm_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.alm2str_weight_l0_hh, -0.01, 0.01)
-        nn.init.uniform_(self.str2thal_weight_l0_hh, -0.01, 0.01)
+        nn.init.uniform_(self.str2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 0.01)
+        nn.init.uniform_(self.str2thal_weight_l0_hh, 0, 0.01)
+
+        # Implement Necessary Masks
+        # Striatum recurrent weights
+        sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
+        nn.init.sparse_(sparse_matrix, 0.9)
+        sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
+        self.str2str_mask = torch.zeros_like(self.str2str_weight_l0_hh).cuda()
+        self.str2str_fixed = torch.empty_like(self.str2str_weight_l0_hh).uniform_(0, 0.001).cuda() * sparse_mask
+        self.str2str_D = -1*torch.eye(hid_dim).cuda()
+
+        self.alm2alm_D = torch.eye(hid_dim).cuda()
+        self.alm2alm_D[hid_dim-int(0.3*hid_dim):, 
+                        hid_dim-int(0.3*hid_dim):] *= -1
+        
+        # ALM to striatum weights
+        self.alm2str_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
+        self.alm2str_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
+        self.alm2str_mask = torch.cat([self.alm2str_mask_excitatory, self.alm2str_mask_inhibitory], dim=1).cuda()
+
+        # Thal to STR mask
+        self.thal2str_mask = torch.cat([torch.zeros(size=(int(hid_dim/2), hid_dim)),
+                                        torch.ones(size=(int(hid_dim/2), hid_dim))], dim=0).cuda()
 
         # Input weights
         self.inp_weight = nn.Parameter(torch.empty(size=(inp_dim, hid_dim * 3)))
@@ -367,14 +419,22 @@ class RNN_MultiRegional_NoConstraintThal(nn.Module):
         self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
 
         # Behavioral output layer
-        self.fc1 = nn.Linear(hid_dim * 3, action_dim)
+        self.fc1 = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
+        self.fc2 = nn.Parameter(torch.empty(size=(hid_dim, action_dim)))
+        self.fc1_bias = nn.Parameter(torch.empty(size=(hid_dim,)))
+        self.fc2_bias = nn.Parameter(torch.empty(size=(action_dim,)))
+
+        nn.init.uniform_(self.fc1, 0, 0.001)
+        nn.init.uniform_(self.fc2, 0, 0.001)
+        nn.init.uniform_(self.fc1_bias, 0, 0.001)
+        nn.init.uniform_(self.fc2_bias, 0, 0.001)
 
         # Time constants for networks (not sure what would be biologically plausible?)
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.001
-        self.sigma_input = 0.15
+        self.sigma_recur = 0.01
+        self.sigma_input = 0.01
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -394,10 +454,17 @@ class RNN_MultiRegional_NoConstraintThal(nn.Module):
         new_hs = []
         new_xs = []
 
+        str2str = (self.str2str_mask * F.relu(self.str2str_weight_l0_hh) + self.str2str_fixed) @ self.str2str_D
+        str2thal = F.relu(self.str2thal_weight_l0_hh)
+        alm2alm = F.relu(self.alm2alm_weight_l0_hh) @ self.alm2alm_D
+        alm2str = self.alm2str_mask * F.relu(self.alm2str_weight_l0_hh)
+        thal2str = self.thal2str_mask * F.relu(self.thal2str_weight_l0_hh)
+        thal2alm = F.relu(self.thal2alm_weight_l0_hh)
+
         # Concatenate into single weight matrix
-        W_str = torch.cat([self.str2str_weight_l0_hh, self.thal2str_weight_l0_hh, self.alm2str_weight_l0_hh], dim=1)
-        W_thal = torch.cat([self.str2thal_weight_l0_hh, self.zeros, self.zeros], dim=1)
-        W_alm = torch.cat([self.zeros, self.thal2alm_weight_l0_hh, self.alm2alm_weight_l0_hh], dim=1)
+        W_str = torch.cat([str2str, thal2str, alm2str], dim=1)
+        W_thal = torch.cat([str2thal, self.zeros, self.zeros], dim=1)
+        W_alm = torch.cat([self.zeros, thal2alm, alm2alm], dim=1)
         W_rec = torch.cat([W_str, W_thal, W_alm], dim=0)
 
         # Loop through RNN
@@ -410,11 +477,9 @@ class RNN_MultiRegional_NoConstraintThal(nn.Module):
                 perturb_hid = 0
                 perturb_inp = 0
 
-            x_next = (x_next + 
-                      self.t_const * (-x_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.strthal_mask) + inhib_stim) 
+            hn_next = F.relu(hn_next + 
+                      self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.strthal_mask) + inhib_stim[:, t, :]) 
                       + perturb_hid)
-
-            hn_next = F.relu(x_next)
 
             new_hs.append(hn_next)
             new_xs.append(x_next)
@@ -427,6 +492,7 @@ class RNN_MultiRegional_NoConstraintThal(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = self.fc1(rnn_out * self.alm_mask)
+        out = F.relu(rnn_out[:, :, self.hid_dim*2:] @ self.fc1 + self.fc1_bias)
+        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
