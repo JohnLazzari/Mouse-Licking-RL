@@ -95,7 +95,7 @@ def get_ramp(dt):
     total_ramp = pad_sequence([all_ramps[0], all_ramps[1], all_ramps[2]], batch_first=True)
     return total_ramp
 
-def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, region="None"):
+def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim_strength, region="None", precue=False):
 
     '''
         If silencing multi-regional model, get the activations with and without silencing
@@ -131,7 +131,7 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, regi
         if region == "alm":
             
             inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
-            inhib_stim_silence = -10 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
+            inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
             inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
             inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
@@ -142,10 +142,18 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, regi
         
         elif region == "str":
 
-            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
-            inhib_stim_silence = -0.35 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
-            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
-            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
+            # Only precue for striatal silencing for now
+            if precue:
+                inhib_stim_stabilize = torch.zeros(size=(1, int(ITI_steps/2), hn.shape[-1]), device="cuda")
+                inhib_stim_precue = stim_strength * torch.ones(size=(1, int(ITI_steps/2), hn.shape[-1]), device="cuda") * str_mask
+                inhib_stim_pre = torch.zeros(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda")
+                inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+                inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
+            else:
+                inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+                inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
+                inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+                inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
             inp_pre = x_data[cond:cond+1, :len_seq, :].detach().clone()
             inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, end_silence - start_silence + extra_steps_silence, 1).detach().clone()

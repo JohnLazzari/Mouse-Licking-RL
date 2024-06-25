@@ -18,15 +18,16 @@ font = {'size' : 26}
 plt.rcParams['figure.figsize'] = [10, 8]
 plt.rc('font', **font)
 
-CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1.pth"
+CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
 HID_DIM = 256
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
 DT = 1e-3
 CONDS = 3
-MODEL_TYPE = "d1" # d1d2, d1, stralm
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm
+PRECUE = False
 
-def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region, evaluated_region, dt, use_label=False):
+def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region, evaluated_region, dt, stim_strength, use_label=False, precue=False):
 
     ITI_steps = 1000
 
@@ -34,9 +35,8 @@ def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region,
         start = hid_dim*5
         end = hid_dim*6
     elif MODEL_TYPE == "d1d2" and evaluated_region == "str":
-        # Only silence D1
-        start = 0
-        end = int(hid_dim/2)
+        start = int(hid_dim/2)
+        end = hid_dim
     elif MODEL_TYPE == "stralm" and evaluated_region == "alm":
         start = hid_dim
         end = hid_dim*2
@@ -56,7 +56,7 @@ def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region,
     for cond in range(conds):
 
         # activity without silencing
-        acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, False, MODEL_TYPE)
+        acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, False, MODEL_TYPE, stim_strength)
 
         baseline_orig_control = np.mean(acts[500:1000, start:end], axis=0)
         peak_orig_control = np.mean(acts[1100 + 500*cond - 400 + ITI_steps:1100 + 500*cond + ITI_steps, start:end], axis=0)
@@ -67,7 +67,7 @@ def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region,
         ramp_orig[cond] = projected_orig
 
         # activity with silencing
-        acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, True, MODEL_TYPE, region=silenced_region)
+        acts = get_acts(len_seq[cond], rnn, hid_dim, x_data, cond, True, MODEL_TYPE, stim_strength, region=silenced_region, precue=precue)
         projected_silenced = project_ramp_mode(acts[:, start:end], ramp_mode)
         ramp_silenced[cond] = projected_silenced
 
@@ -100,7 +100,7 @@ def plot_silencing(len_seq, conds, rnn, hid_dim, x_data, title, silenced_region,
     plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
 
     for cond in range(conds):
-        plt.plot(xs_p[cond], ramp_silenced[cond][500:], linewidth=8, color=(1-cond*0.25, 0.1, 0.1))
+        plt.plot(xs_p[cond], ramp_silenced[cond][500:], linewidth=8, color=(0.1, 0.1, 1-cond*0.25))
 
     plt.xticks([])
     plt.tick_params(left=False, bottom=False) 
@@ -123,10 +123,10 @@ def main():
     x_data, _, len_seq = gather_delay_data(dt=0.001, hid_dim=HID_DIM)
     x_data = x_data.cuda()
     
-    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "ALM PSTH", "alm", "alm", DT, use_label=True)
-    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "ALM PSTH", "str", "alm", DT)
-    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "STR PSTH", "alm", "str", DT)
-    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "STR PSTH", "str", "str", DT)
+    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "ALM PSTH", silenced_region="alm", evaluated_region="alm", dt=DT, stim_strength=-10, use_label=True)
+    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "ALM PSTH", silenced_region="str", evaluated_region="alm", dt=DT, stim_strength=-0.35, precue=PRECUE)
+    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "STR PSTH", silenced_region="alm", evaluated_region="str", dt=DT, stim_strength=-10)
+    plot_silencing(len_seq, CONDS, rnn, HID_DIM, x_data, "STR PSTH", silenced_region="str", evaluated_region="str", dt=DT, stim_strength=-0.35, precue=PRECUE)
     
 if __name__ == "__main__":
     main()

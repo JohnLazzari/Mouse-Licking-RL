@@ -5,6 +5,7 @@ from torch.distributions import Normal
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 class RNN_MultiRegional_D1D2(nn.Module):
     def __init__(self, inp_dim, hid_dim, action_dim):
@@ -209,8 +210,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = F.relu(rnn_out[:, :, self.hid_dim*5:] @ self.fc1 + self.fc1_bias)
-        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
+        out = F.relu(rnn_out[:, :, self.hid_dim*5:] @ self.fc1)
+        out = F.hardtanh(out @ self.fc2, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
 

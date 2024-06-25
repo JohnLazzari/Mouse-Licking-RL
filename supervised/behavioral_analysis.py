@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN_MultiRegional, RNN_MultiRegional_NoConstraint, RNN_MultiRegional_NoConstraintThal
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -18,31 +18,33 @@ OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
 DT = 1e-3
 CONDS = 3
-MODEL_TYPE = "constraint"
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm
 REGION_PERTURB = "alm"
-CONDITION = 0
+CONDITION = 2
 
-def get_lick_samples(rnn, x_data, model_type, num_samples=100):
+def get_lick_samples(rnn, x_data, model_type, num_samples=10):
 
     decision_times = []
     for sample in tqdm.tqdm(range(num_samples)):
 
-        if model_type == "constraint":
+        if model_type == "d1d2":
             hn = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
             x = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
-        elif model_type == "no_constraint":
+            inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM * 6), device="cuda")
+        elif model_type == "stralm":
             hn = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
             x = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-        elif model_type == "no_constraint_thal":
+            inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM * 2), device="cuda")
+        elif model_type == "d1":
             hn = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
             x = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
+            inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM * 3), device="cuda")
 
         with torch.no_grad():
-            out, _, _, _, _ = rnn(x_data, hn, x, 0, noise=True)
+            out, _, acts, _, _ = rnn(x_data, hn, x, inhib_stim, noise=True)
+            acts = acts.cpu().numpy()
+            out = out.cpu().numpy()
         
-        plt.plot(out[CONDITION, :, :].detach().cpu().numpy())
-        plt.show()
-
         for i, logit in enumerate(out[CONDITION, 1200:, :]):
             num = np.random.uniform(0, 1)
             if num < logit:
@@ -51,62 +53,66 @@ def get_lick_samples(rnn, x_data, model_type, num_samples=100):
     
     return decision_times
 
-def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, num_samples=100):
+def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, num_samples=10):
     
-    # TODO, change output of behavior from sigmoid to hardtanh and regress 0 to 1 output (or keep cross entropy if that works), make silencing faster by vectorizing instead of looping
-
     decision_times = []
 
-    if model_type == "constraint":
+    if model_type == "d1d2":
         hn = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
         x = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
-    elif model_type == "no_constraint":
+    elif model_type == "stralm":
         hn = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
         x = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-    elif model_type == "no_constraint_thal":
+    elif model_type == "d1":
         hn = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
         x = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
 
     alm_mask = rnn.alm_mask
 
-    if model_type == "constraint":
+    if model_type == "d1d2":
         str_mask = rnn.str_d1_mask
     else:
         str_mask = rnn.str_mask
 
     ITI_steps = 1000
-    extra_steps = 0
+    extra_steps_silence = 500
     start_silence = 600 + ITI_steps
     end_silence = 1100 + ITI_steps
-    
-    len_seq += (end_silence - start_silence) + extra_steps
 
     for sample in tqdm.tqdm(range(num_samples)):
 
-        logits = []
+        if region == "alm":
+            
+            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_silence = -10 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
-        for t in range(len_seq):
+            inp_pre = x_data[CONDITION:CONDITION+1, :start_silence, :].detach().clone()
+            inp_silence = torch.zeros(size=(1, end_silence - start_silence, x_data.shape[-1]), device="cuda")
+            inp_post = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, 1).detach().clone()
+            inp = torch.cat([inp_pre, inp_silence, inp_post], dim=1)
+        
+        elif region == "str":
 
-            if t < ITI_steps:
-                inp = x_data[CONDITION:CONDITION+1, 0:1, :]
-            else:
-                inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
+            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_silence = -0.35 * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
-            with torch.no_grad():        
+            inp_pre = x_data[CONDITION:CONDITION+1, :len_seq, :].detach().clone()
+            inp_post = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :].repeat(1, end_silence - start_silence + extra_steps_silence, 1).detach().clone()
+            inp = torch.cat([inp_pre, inp_post], dim=1)
+        
+        extended_len_seq = inp.shape[1]
 
-                if region == "alm" and t > start_silence and t < end_silence:
-                    inhib_stim = -10 * alm_mask
-                    inp = 0*x_data[CONDITION:CONDITION+1, 0:1, :]
-                elif region == "str" and t > start_silence and t < end_silence:
-                    inhib_stim = -0.25 * str_mask
-                    #inhib_stim = 1 * str_mask
-                else:
-                    inhib_stim = 0
-                        
-                out, hn, _, x, _ = rnn(inp, hn, x, inhib_stim, noise=False)
-                logits.append(out.squeeze().cpu().numpy())
+        with torch.no_grad():        
 
-        logits = np.array(logits)
+            logits, _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=True)
+            acts = acts.squeeze().cpu().numpy()
+            logits = logits.squeeze().cpu().numpy()
+            plt.plot(logits)
+            plt.show()
 
         for i, logit in enumerate(logits[1200:]):
             num = np.random.uniform(0, 1)
@@ -114,7 +120,7 @@ def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, num_
                 decision_times.append(i * DT + 1e-2)
                 break
     
-    return decision_times, len_seq
+    return decision_times, extended_len_seq
 
 def calculate_ecdf(decision_times, len_seq):
     
@@ -142,12 +148,12 @@ def main():
     checkpoint = torch.load(CHECK_PATH)
     
     # Create RNN
-    if MODEL_TYPE == "constraint":
-        rnn = RNN_MultiRegional(INP_DIM, HID_DIM, OUT_DIM).cuda()
-    elif MODEL_TYPE == "no_constraint":
-        rnn = RNN_MultiRegional_NoConstraint(INP_DIM, HID_DIM, OUT_DIM).cuda()
-    elif MODEL_TYPE == "no_constraint_thal":
-        rnn = RNN_MultiRegional_NoConstraintThal(INP_DIM, HID_DIM, OUT_DIM).cuda()
+    if MODEL_TYPE == "d1d2":
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
+    elif MODEL_TYPE == "d1":
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM).cuda()
+    elif MODEL_TYPE == "stralm":
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM).cuda()
 
     rnn.load_state_dict(checkpoint)
 

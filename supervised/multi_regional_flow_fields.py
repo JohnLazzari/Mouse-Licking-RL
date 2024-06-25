@@ -17,14 +17,14 @@ LR = 1e-4
 DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
-MODEL_TYPE = "stralm" # constraint, no_constraint, no_constraint_thal
-REGION = "alm" # str, alm, or str2thal
-TIME_SKIPS = 500
-PERTURBATION = False
-PERTURBED_REGION = "alm" # str or alm
-CHECK_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_stralm.pth"
-SAVE_NAME = "results/flow_fields/multi_regional_stralm/multi_regional_stralm_flow"
-SAVE_NAME_EPS = "results/flow_fields/multi_regional_stralm_eps/multi_regional_stralm_flow"
+MODEL_TYPE = "d1d2" # constraint, no_constraint, no_constraint_thal
+REGION = "snr" # str, alm, or str2thal
+TIME_SKIPS = 100
+PERTURBATION = True
+PERTURBED_REGION = "str" # str or alm
+CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow_d2silencing"
+SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow_d2silencing"
 
 class FlowFields():
     def __init__(self, dimensions=2):
@@ -81,7 +81,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     alm_mask = rnn.alm_mask
-    str_mask = rnn.str_mask
+    str_mask = rnn.str_d2_mask
 
     if MODEL_TYPE == "d1d2":
 
@@ -114,8 +114,7 @@ def main():
 
     x, y, data_coords = flow_field.generate_grid(num_points=NUM_POINTS)
 
-    # Sample many hidden states to get pcs for dimensionality reduction
-    hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
+    hn = torch.zeros(size=(1, 3, total_num_units)).cuda()
     xn = hn
 
     inhib_stim = torch.zeros(size=(1, x_data.shape[1], hn.shape[-1]), device="cuda")
@@ -132,6 +131,8 @@ def main():
         flow_field.fit_pca(sampled_acts[:, str_start:str_start+HID_DIM])
     elif REGION == "alm":
         flow_field.fit_pca(sampled_acts[:, alm_start:alm_start+HID_DIM])
+    elif REGION == "snr":
+        flow_field.fit_pca(sampled_acts[:, snr_start:snr_start+HID_DIM])
     elif REGION == "str2thal":
         flow_field.fit_pca(sampled_acts[:, str_start:alm_start])
 
@@ -139,35 +140,37 @@ def main():
     grid = torch.tensor(grid, device="cuda").clone().detach()
 
     if PERTURBATION == True:
-        len_seq_act = len_seq[CONDITION] + (end_silence - start_silence) + extra_steps
+        len_seq_act = len_seq[CONDITION]
     else:
         len_seq_act = len_seq[CONDITION]
     
     # Get perturbed trajectory
-    perturbed_acts = []
-    hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-    xn = hn
+    if PERTURBATION  == True:
 
-    for t in range(len_seq_act):
+        perturbed_acts = []
+        hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
+        xn = hn
 
-        if t < ITI_steps:
-            inp = x_data[CONDITION:CONDITION+1, 0:1, :]
-        else:
-            inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
+        for t in range(len_seq_act):
 
-        with torch.no_grad():        
+            if t < ITI_steps:
+                inp = x_data[CONDITION:CONDITION+1, 0:1, :]
+            else:
+                inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
 
-            if PERTURBED_REGION == "alm" and t > start_silence and t < end_silence:
+            with torch.no_grad():        
+
+                if PERTURBED_REGION == "alm" and t > start_silence and t < end_silence:
                     inhib_stim = (-10 * alm_mask).unsqueeze(0).unsqueeze(0)
                     inp = 0*x_data[CONDITION:CONDITION+1, 0:1, :]
-            elif PERTURBED_REGION == "str" and t > start_silence and t < end_silence:
-                inhib_stim = (-0.25 * str_mask).unsqueeze(0).unsqueeze(0)
-                #inhib_stim = 1 * str_mask
-            else:
-                inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
-                    
-            _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
-            perturbed_acts.append(hn)
+                elif PERTURBED_REGION == "str" and t > start_silence and t < end_silence:
+                    inhib_stim = (-1 * str_mask).unsqueeze(0).unsqueeze(0)
+                    #inhib_stim = 1 * str_mask
+                else:
+                    inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
+                        
+                _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
+                perturbed_acts.append(hn)
 
 
     # initialize activity dict
@@ -210,6 +213,8 @@ def main():
                     h_0 = torch.cat([h_0, hidden_input[0, t:t+1, alm_start:]], dim=1).unsqueeze(0)
                 elif REGION == "alm":
                     h_0 = torch.cat([hidden_input[0, t:t+1, :alm_start], h_0], dim=1).unsqueeze(0)
+                elif REGION == "snr":
+                    h_0 = torch.cat([hidden_input[0, t:t+1, :snr_start], h_0, hidden_input[0, t:t+1, snr_start+HID_DIM:]], dim=1).unsqueeze(0)
 
                 _, _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
 
@@ -219,6 +224,8 @@ def main():
                     next_acts[t].append(act[0, 0, :alm_start].detach().cpu().numpy())
                 elif REGION == "alm":
                     next_acts[t].append(act[0, 0, alm_start:].detach().cpu().numpy())
+                elif REGION == "snr":
+                    next_acts[t].append(act[0, 0, snr_start:snr_start+HID_DIM].detach().cpu().numpy())
 
     # Reshape data back to grid
     data_coords = data_coords.numpy()
@@ -233,6 +240,8 @@ def main():
         sampled_acts_region = flow_field.transform_pca(sampled_acts[:, :str_start+HID_DIM])
     elif REGION == "alm":
         sampled_acts_region = flow_field.transform_pca(sampled_acts[:, alm_start:])
+    elif REGION == "snr":
+        sampled_acts_region = flow_field.transform_pca(sampled_acts[:, snr_start:snr_start+HID_DIM])
     elif REGION == "str2thal":
         sampled_acts_region = flow_field.transform_pca(sampled_acts[:, :alm_start])
     
