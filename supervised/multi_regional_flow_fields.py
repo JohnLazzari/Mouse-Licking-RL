@@ -5,7 +5,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegion
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 import scipy.io as sio
-from utils import gather_delay_data
+from utils import gather_inp_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
@@ -17,14 +17,14 @@ LR = 1e-4
 DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
-MODEL_TYPE = "d1d2" # constraint, no_constraint, no_constraint_thal
-REGION = "snr" # str, alm, or str2thal
-TIME_SKIPS = 100
-PERTURBATION = True
+MODEL_TYPE = "stralm" # constraint, no_constraint, no_constraint_thal
+REGION = "alm" # str, alm, str2thal, or snr
+TIME_SKIPS = 500
+PERTURBATION = False
 PERTURBED_REGION = "str" # str or alm
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
-SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow_d2silencing"
-SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow_d2silencing"
+SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow"
+SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow"
 
 class FlowFields():
     def __init__(self, dimensions=2):
@@ -32,7 +32,7 @@ class FlowFields():
         self.dimensions = dimensions
         self.x_pca = PCA(n_components=dimensions)
     
-    def generate_grid(self, num_points, lower_bound=-10, upper_bound=15):
+    def generate_grid(self, num_points, lower_bound=-10, upper_bound=20):
 
         # Num points is along each axis, not in total
         x = np.linspace(lower_bound, upper_bound, num_points)
@@ -81,7 +81,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     alm_mask = rnn.alm_mask
-    str_mask = rnn.str_d2_mask
+    str_mask = rnn.str_mask
 
     if MODEL_TYPE == "d1d2":
 
@@ -108,9 +108,8 @@ def main():
     flow_field = FlowFields()
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
-    y_data = y_data.cuda()
 
     x, y, data_coords = flow_field.generate_grid(num_points=NUM_POINTS)
 

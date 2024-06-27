@@ -8,7 +8,7 @@ import math
 import matplotlib.pyplot as plt
 
 class RNN_MultiRegional_D1D2(nn.Module):
-    def __init__(self, inp_dim, hid_dim, action_dim):
+    def __init__(self, inp_dim, hid_dim, action_dim, noise_level=0.01):
         super(RNN_MultiRegional_D1D2, self).__init__()
         
         '''
@@ -139,8 +139,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.001
-        self.sigma_input = 0.001
+        self.sigma_recur = noise_level
+        self.sigma_input = noise_level
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -210,14 +210,14 @@ class RNN_MultiRegional_D1D2(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = F.relu(rnn_out[:, :, self.hid_dim*5:] @ self.fc1)
+        out = rnn_out[:, :, self.hid_dim*5:] @ self.fc1
         out = F.hardtanh(out @ self.fc2, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
 
 
 class RNN_MultiRegional_STRALM(nn.Module):
-    def __init__(self, inp_dim, hid_dim, action_dim):
+    def __init__(self, inp_dim, hid_dim, action_dim, noise_level=0.01):
         super(RNN_MultiRegional_STRALM, self).__init__()
         
         '''
@@ -235,7 +235,7 @@ class RNN_MultiRegional_STRALM(nn.Module):
 
         self.alm_mask = torch.cat([torch.zeros(size=(hid_dim,)), 
                                     torch.ones(size=(hid_dim,))]).cuda()
-        self.str_mask = torch.cat([torch.ones(size=(hid_dim,)), 
+        self.str_d1_mask = torch.cat([torch.ones(size=(hid_dim,)), 
                                    torch.zeros(size=(hid_dim,))]).cuda()
         
         self.str2str_weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
@@ -279,12 +279,15 @@ class RNN_MultiRegional_STRALM(nn.Module):
         nn.init.uniform_(self.fc1_bias, 0, 0.001)
         nn.init.uniform_(self.fc2_bias, 0, 0.001)
 
+        # Zeros for no weights
+        self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
+
         # Time constants for networks (not sure what would be biologically plausible?)
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.01
-        self.sigma_input = 0.01
+        self.sigma_recur = noise_level
+        self.sigma_input = noise_level
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -325,7 +328,7 @@ class RNN_MultiRegional_STRALM(nn.Module):
                 perturb_inp = 0
 
             hn_next = F.relu(hn_next + 
-                      self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_mask) + inhib_stim[:, t, :]) 
+                      self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_d1_mask) + inhib_stim[:, t, :]) 
                       + perturb_hid)
 
             new_hs.append(hn_next)
@@ -339,14 +342,14 @@ class RNN_MultiRegional_STRALM(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = F.relu(rnn_out[:, :, self.hid_dim:] @ self.fc1 + self.fc1_bias)
-        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
+        out = rnn_out[:, :, self.hid_dim:] @ self.fc1
+        out = F.hardtanh(out @ self.fc2, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out
 
 
 class RNN_MultiRegional_D1(nn.Module):
-    def __init__(self, inp_dim, hid_dim, action_dim):
+    def __init__(self, inp_dim, hid_dim, action_dim, noise_level=0.01):
         super(RNN_MultiRegional_D1, self).__init__()
         
         '''
@@ -364,7 +367,7 @@ class RNN_MultiRegional_D1(nn.Module):
 
         self.alm_mask = torch.cat([torch.zeros(size=(hid_dim * 2,)), 
                                     torch.ones(size=(hid_dim,))]).cuda()
-        self.str_mask = torch.cat([torch.ones(size=(hid_dim,)), 
+        self.str_d1_mask = torch.cat([torch.ones(size=(hid_dim,)), 
                                    torch.zeros(size=(hid_dim * 2,))]).cuda()
         self.strthal_mask = torch.cat([torch.zeros(size=(int(hid_dim/2),)),
                                     torch.ones(size=(int(hid_dim/2),)), 
@@ -434,8 +437,8 @@ class RNN_MultiRegional_D1(nn.Module):
         self.t_const = 0.01
 
         # Noise level
-        self.sigma_recur = 0.01
-        self.sigma_input = 0.01
+        self.sigma_recur = noise_level
+        self.sigma_input = noise_level
 
     def forward(self, inp, hn, x, inhib_stim, noise=True):
 
@@ -493,7 +496,7 @@ class RNN_MultiRegional_D1(nn.Module):
         x_last = x_out[:, -1, :].unsqueeze(0)
 
         # Behavioral output layer
-        out = F.relu(rnn_out[:, :, self.hid_dim*2:] @ self.fc1 + self.fc1_bias)
-        out = F.hardtanh(out @ self.fc2 + self.fc2_bias, 0, 1)
+        out = rnn_out[:, :, self.hid_dim*2:] @ self.fc1
+        out = F.hardtanh(out @ self.fc2, 0, 1)
         
         return out, hn_last, rnn_out, x_last, x_out

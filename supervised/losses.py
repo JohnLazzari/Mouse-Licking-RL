@@ -7,44 +7,42 @@ from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_delay_data, get_ramp
 
 def loss_d1d2(criterion, 
-                    constraint_criterion, 
-                    act, 
-                    out, 
-                    neural_act, 
-                    y_data, 
-                    hid_dim, 
-                    alm_start, 
-                    str_start, 
-                    thal_start):
+                constraint_criterion, 
+                act, 
+                out, 
+                neural_act, 
+                y_data, 
+                hid_dim, 
+                alm_start, 
+                str_start, 
+                thal_start):
 
-    loss_stabilize = 1e-3 * torch.mean(torch.pow(act[:, :500, :], 2), dim=(1, 2, 0))
-
-    loss_delay = (criterion(out[:, 500:, :], y_data[:, 500:, :]) 
+    loss = (constraint_criterion(out[:, 500:, :], y_data[:, 500:, :]) 
             + constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
             + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
             + constraint_criterion(torch.mean(act[:, 500:, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
             + constraint_criterion(torch.mean(act[:, 500:, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
             )
     
-    loss = loss_stabilize + loss_delay
-
     return loss
 
-def loss_stralm(criterion, constraint_criterion, act, out, neural_act, y_data, alm_start, str_start):
+def loss_stralm(criterion, 
+                constraint_criterion, 
+                act, 
+                out, 
+                neural_act, 
+                y_data, 
+                alm_start, 
+                str_start):
 
-    loss_stabilize = 1e-3 * torch.mean(torch.pow(act[:, :500, :], 2), dim=(1, 2, 0))
+    loss = (constraint_criterion(out[:, 500:, :], y_data[:, 500:, :]) 
+            + constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
+            + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+            + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act[:, 500:, :])
+            )
     
-    loss_delay = (criterion(out[:, 500:, :], y_data[:, 500:, :]) 
-                    + constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                    + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                    + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                    )
-    
-    loss = loss_stabilize + loss_delay
-
     return loss
 
 def simple_dynamics_d1d2(act, rnn, hid_dim):
@@ -76,7 +74,7 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
     # Penalize complex trajectories
     d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-    update = 1e-3 * W_rec.T * d_act
+    update = 1e-3 * W_rec * d_act
 
     rnn.thal2str_weight_l0_hh.grad += update[:hid_dim, hid_dim*4:hid_dim*5]
     rnn.alm2str_weight_l0_hh.grad += update[:hid_dim, hid_dim*5:hid_dim*6]
@@ -99,7 +97,7 @@ def simple_dynamics_d1(act, rnn, hid_dim):
 
     # Concatenate into single weight matrix
 
-                        # STR        SNR       Thal      ALM
+                        # STR        Thal      ALM
     W_str = torch.cat([rnn.zeros, thal2str, alm2str], dim=1)          # STR
     W_thal = torch.cat([str2thal, rnn.zeros, rnn.zeros], dim=1)   # Thal
     W_alm = torch.cat([rnn.zeros, thal2alm, alm2alm], dim=1)       # ALM
@@ -110,7 +108,7 @@ def simple_dynamics_d1(act, rnn, hid_dim):
     # Penalize complex trajectories
     d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-    update = 1e-3 * W_rec.T * d_act
+    update = 1e-3 * W_rec * d_act
 
     rnn.thal2str_weight_l0_hh.grad += update[:hid_dim, hid_dim:hid_dim*2]
     rnn.alm2str_weight_l0_hh.grad += update[:hid_dim, hid_dim*2:hid_dim*3]
@@ -119,10 +117,26 @@ def simple_dynamics_d1(act, rnn, hid_dim):
     rnn.alm2alm_weight_l0_hh.grad += update[hid_dim*2:hid_dim*3, hid_dim*2:hid_dim*3]
 
 def simple_dynamics_stralm(act, rnn, hid_dim):
+
+    # Get full weights for training
+    alm2alm = rnn.alm2alm_weight_l0_hh
+    alm2str = rnn.alm2str_weight_l0_hh
+    str2alm = rnn.str2str_weight_l0_hh
     
+    # Concatenate into single weight matrix
+
+                        # STR        ALM
+    W_str = torch.cat([rnn.zeros, alm2str], dim=1)          # STR
+    W_alm = torch.cat([str2alm, alm2alm], dim=1)       # ALM
+
+    # Putting all weights together
+    W_rec = torch.cat([W_str, W_alm], dim=0)
+
     # Penalize complex trajectories
     d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-    rnn.alm2alm_weight_l0_hh.grad += (1e-4 * rnn.alm2alm_weight_l0_hh.T * d_act[hid_dim:])
-    rnn.alm2str_weight_l0_hh.grad += (1e-4 * rnn.alm2str_weight_l0_hh.T * d_act[hid_dim:])
-    rnn.str2alm_weight_l0_hh.grad += (1e-4 * rnn.str2alm_weight_l0_hh.T * d_act[:hid_dim])
+    update = 1e-3 * W_rec * d_act
+
+    rnn.alm2alm_weight_l0_hh.grad += (update[hid_dim:, hid_dim:])
+    rnn.alm2str_weight_l0_hh.grad += (update[:hid_dim, hid_dim:])
+    rnn.str2alm_weight_l0_hh.grad += (update[hid_dim:, :hid_dim])

@@ -8,10 +8,10 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_delay_data, get_ramp, get_masks
+from utils import gather_inp_data, gather_lick_time_data, get_ramp, get_masks
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2, simple_dynamics_stralm, simple_dynamics_d1
 
-SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1.pth"
+SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_stralm.pth"
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
@@ -19,7 +19,7 @@ EPOCHS = 1000
 LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-3
-MODEL_TYPE = "d1" # d1d2, d1, stralm
+MODEL_TYPE = "stralm" # d1d2, d1, stralm
 
 def main():
 
@@ -39,11 +39,12 @@ def main():
     constraint_criterion = nn.MSELoss()
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
+
+    y_data = gather_lick_time_data(dt=DT)
     y_data = y_data.cuda()
 
-    
     # Get ramping activity
     neural_act = get_ramp(dt=DT)
     neural_act = neural_act.cuda()
@@ -89,8 +90,6 @@ def main():
 
         loss_mask, loss_mask_act, loss_mask_exp = get_masks(OUT_DIM, HID_DIM, neural_act, len_seq, regions=3)
         inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*3), device="cuda")
-
-    best_loss = np.inf
 
     for epoch in range(EPOCHS):
         

@@ -18,7 +18,7 @@ def NormalizeData(data, min, max):
     '''
     return (data - min) / (max - min)
 
-def gather_delay_data(dt, hid_dim):
+def gather_inp_data(dt, hid_dim):
 
     '''
         Gather the input data, output target, and length of sequence for the task
@@ -28,7 +28,6 @@ def gather_delay_data(dt, hid_dim):
     '''
     
     inp = {}
-    lick_target = {}
 
     # Condition 1: 0.3 for 1.1s
     inp[0] = torch.cat([
@@ -51,31 +50,40 @@ def gather_delay_data(dt, hid_dim):
     # Combine all inputs
     total_inp = pad_sequence([inp[0], inp[1], inp[2]], batch_first=True)
 
-    # Lick range is 0.1s
-    lick = torch.ones(size=(int(0.1 / dt), 1))
+    # Combine all sequence lengths
+    len_seq = [int(2.1 / dt), int(2.6 / dt), int(3.1 / dt)]
 
+    return total_inp, len_seq
+
+def gather_lick_time_data(dt):
+
+    lick_target = {}
+    
     # Condition 1: 1-1.1 lick
-    no_lick = torch.zeros(size=(int(2.0 / dt), 1))
-    total_lick = torch.cat([no_lick, lick], dim=0)
-    lick_target[0] = total_lick
+    pre_cue_1 = -6 * torch.ones(size=(int(1.0 / dt), 1))
+    post_cue_1 = torch.linspace(-6, 6, int(1.1 / dt)).unsqueeze(1)
+    full_targ_1 = torch.cat([pre_cue_1, post_cue_1], dim=0)
+    full_targ_1 = torch.sigmoid(full_targ_1)
+    lick_target[0] = full_targ_1
 
     # Condition 2: 1.5-1.6 lick
-    no_lick = torch.zeros(size=(int(2.5 / dt), 1))
-    total_lick = torch.cat([no_lick, lick], dim=0)
-    lick_target[1] = total_lick
+    pre_cue_2 = -6 * torch.ones(size=(int(1.0 / dt), 1))
+    post_cue_2 = torch.linspace(-6, 6, int(1.6 / dt)).unsqueeze(1)
+    full_targ_2 = torch.cat([pre_cue_2, post_cue_2], dim=0)
+    full_targ_2 = torch.sigmoid(full_targ_2)
+    lick_target[1] = full_targ_2
 
     # Condition 3: 2-2.1 lick
-    no_lick = torch.zeros(size=(int(3.0 / dt), 1))
-    total_lick = torch.cat([no_lick, lick], dim=0)
-    lick_target[2] = total_lick
+    pre_cue_3 = -6 * torch.ones(size=(int(1.0 / dt), 1))
+    post_cue_3 = torch.linspace(-6, 6, int(2.1 / dt)).unsqueeze(1)
+    full_targ_3 = torch.cat([pre_cue_3, post_cue_3], dim=0)
+    full_targ_3 = torch.sigmoid(full_targ_3)
+    lick_target[2] = full_targ_3
 
     # Combine all targets
     total_target = pad_sequence([lick_target[0], lick_target[1], lick_target[2]], batch_first=True)
 
-    # Combine all sequence lengths
-    len_seq = [int(2.1 / dt), int(2.6 / dt), int(3.1 / dt)]
-
-    return total_inp, total_target, len_seq
+    return total_target
 
 def get_ramp(dt):
 
@@ -95,7 +103,7 @@ def get_ramp(dt):
     total_ramp = pad_sequence([all_ramps[0], all_ramps[1], all_ramps[2]], batch_first=True)
     return total_ramp
 
-def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim_strength, region="None", precue=False):
+def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim_strength, extra_steps_control, extra_steps_silence, region="None"):
 
     '''
         If silencing multi-regional model, get the activations with and without silencing
@@ -111,8 +119,6 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim
         str_mask = rnn.str_mask
 
     ITI_steps = 1000
-    extra_steps_silence = 500
-    extra_steps_control = 700
     start_silence = 600 + ITI_steps
     end_silence = 1100 + ITI_steps
 
@@ -132,31 +138,23 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim
             
             inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
             inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
-            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
             inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
             inp_pre = x_data[cond:cond+1, :start_silence, :].detach().clone()
             inp_silence = torch.zeros(size=(1, end_silence - start_silence, x_data.shape[-1]), device="cuda")
-            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, 1).detach().clone()
+            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + extra_steps_silence, 1).detach().clone()
             inp = torch.cat([inp_pre, inp_silence, inp_post], dim=1)
         
         elif region == "str":
 
-            # Only precue for striatal silencing for now
-            if precue:
-                inhib_stim_stabilize = torch.zeros(size=(1, int(ITI_steps/2), hn.shape[-1]), device="cuda")
-                inhib_stim_precue = stim_strength * torch.ones(size=(1, int(ITI_steps/2), hn.shape[-1]), device="cuda") * str_mask
-                inhib_stim_pre = torch.zeros(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda")
-                inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
-                inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
-            else:
-                inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
-                inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
-                inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + (end_silence - start_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
-                inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
+            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
+            inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
+            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
+            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
 
             inp_pre = x_data[cond:cond+1, :len_seq, :].detach().clone()
-            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, end_silence - start_silence + extra_steps_silence, 1).detach().clone()
+            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps_silence, 1).detach().clone()
             inp = torch.cat([inp_pre, inp_post], dim=1)
         
     else:
@@ -164,7 +162,6 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim
         inhib_stim = torch.zeros(size=(1, len_seq + extra_steps_control, hn.shape[-1]), device="cuda")
         inp_task = x_data[cond:cond+1, :len_seq, :].detach().clone()
         inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps_control, 1).detach().clone()
-        #inp_post = torch.zeros(size=(1, extra_steps_control, inp_task.shape[-1]), device="cuda")
         inp = torch.cat([inp_task, inp_post], dim=1)
 
     with torch.no_grad():        
@@ -200,3 +197,36 @@ def project_ramp_mode(samples, ramp_mode):
     # samples should be [time, neurons], ramp_mode should be [neurons]
     projected = samples @ ramp_mode
     return projected
+
+def get_inhib_stim_and_input_silence(rnn, region, x_data, start_silence, end_silence, len_seq, ITI_steps, extra_steps, stim_strength, total_num_units):
+
+    # Select mask based on region being silenced
+    if region == "alm":
+        mask = rnn.alm_mask
+    elif region == "str":
+        mask = rnn.str_d1_mask
+    elif region == "str_d2":
+        mask = rnn.str_d2_mask
+    
+    # Inhibitory/excitatory stimulus to network, designed as an input current
+    # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
+    inhib_stim_pre = torch.zeros(size=(1, start_silence, total_num_units), device="cuda")
+    inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, total_num_units), device="cuda") * mask
+    inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps, total_num_units), device="cuda")
+    inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
+
+    # Silencing of constant input, assuming that we are only silencing the input and never doing ALM excitation
+    if region == "alm":
+
+        inp_pre = x_data[:, :start_silence, :].detach().clone()
+        inp_silence = torch.zeros(size=(1, end_silence - start_silence, x_data.shape[-1]), device="cuda")
+        inp_post = x_data[:, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + extra_steps, 1).detach().clone()
+        inp = torch.cat([inp_pre, inp_silence, inp_post], dim=1)
+    
+    elif region == "str":
+
+        inp_pre = x_data[:, :len_seq, :].detach().clone()
+        inp_post = x_data[:, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps, 1).detach().clone()
+        inp = torch.cat([inp_pre, inp_post], dim=1)
+    
+    return inhib_stim, inp

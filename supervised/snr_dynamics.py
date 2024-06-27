@@ -6,7 +6,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegion
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 import scipy.io as sio
-from utils import gather_delay_data
+from utils import gather_inp_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
@@ -68,9 +68,8 @@ def main():
     snr_start = HID_DIM*3
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
-    y_data = y_data.cuda()
 
     # Sample many hidden states to get pcs for dimensionality reduction
     hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
