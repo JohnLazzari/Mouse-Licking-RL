@@ -9,7 +9,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRe
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_acts, get_ramp_mode, project_ramp_mode
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp_mode, project_ramp_mode
 import tqdm
 import time
 
@@ -24,10 +24,13 @@ OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
 DT = 1e-3
 CONDS = 3
-MODEL_TYPE = "stralm" # d1d2, d1, stralm
+MODEL_TYPE = "d1" # d1d2, d1, stralm
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
-PRECUE = False
+CONSTRAINED = True
+ITI_STEPS = 1000
+START_SILENCE = 1600 # timepoint from start of trial to silence at
+END_SILENCE = 2100 # timepoint from start of trial to end silencing
 
 def plot_silencing(len_seq, 
                    conds, 
@@ -45,7 +48,6 @@ def plot_silencing(len_seq,
                    use_label=False, 
                    ):
 
-    ITI_steps = 1000
 
     if MODEL_TYPE == "d1d2" and evaluated_region == "alm":
         start = hid_dim*5
@@ -60,8 +62,8 @@ def plot_silencing(len_seq,
         start = 0
         end = hid_dim
     elif MODEL_TYPE == "d1" and evaluated_region == "alm":
-        start = hid_dim*2
-        end = hid_dim*3
+        start = hid_dim*3
+        end = hid_dim*4
     elif MODEL_TYPE == "d1" and evaluated_region == "str":
         start = 0
         end = hid_dim
@@ -72,19 +74,17 @@ def plot_silencing(len_seq,
     for cond in range(conds):
 
         # activity without silencing
-        acts = get_acts(len_seq[cond], 
-                        rnn, 
-                        hid_dim, 
-                        x_data, 
-                        cond, 
-                        False, 
-                        MODEL_TYPE, 
-                        stim_strength, 
-                        extra_steps_control, 
-                        extra_steps_silence)
+        acts = get_acts_control(len_seq, 
+                                rnn, 
+                                hid_dim, 
+                                x_data, 
+                                cond, 
+                                MODEL_TYPE, 
+                                ITI_STEPS, 
+                                extra_steps_control)
 
         baseline_orig_control = np.mean(acts[500:1000, start:end], axis=0)
-        peak_orig_control = np.mean(acts[1100 + 500*cond - 400 + ITI_steps:1100 + 500*cond + ITI_steps, start:end], axis=0)
+        peak_orig_control = np.mean(acts[1100 + 500*cond - 400 + ITI_STEPS:1100 + 500*cond + ITI_STEPS, start:end], axis=0)
 
         ramp_mode = get_ramp_mode(baseline_orig_control, peak_orig_control)
         projected_orig = project_ramp_mode(acts[:, start:end], ramp_mode)
@@ -92,18 +92,19 @@ def plot_silencing(len_seq,
         ramp_orig[cond] = projected_orig
 
         # activity with silencing
-        acts = get_acts(len_seq[cond], 
-                        rnn, 
-                        hid_dim, 
-                        x_data, 
-                        cond, 
-                        True, 
-                        MODEL_TYPE, 
-                        stim_strength, 
-                        extra_steps_control, 
-                        extra_steps_silence, 
-                        region=silenced_region, 
-                        )
+        acts = get_acts_manipulation(len_seq, 
+                                    rnn, 
+                                    hid_dim, 
+                                    x_data, 
+                                    cond, 
+                                    MODEL_TYPE, 
+                                    ITI_STEPS,
+                                    START_SILENCE,
+                                    END_SILENCE,
+                                    stim_strength, 
+                                    extra_steps_silence, 
+                                    silenced_region, 
+                                    )
 
         projected_silenced = project_ramp_mode(acts[:, start:end], ramp_mode)
         ramp_silenced[cond] = projected_silenced
@@ -151,11 +152,11 @@ def main():
     
     # Create RNN
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
 
     rnn.load_state_dict(checkpoint)
 

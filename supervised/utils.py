@@ -55,72 +55,75 @@ def gather_inp_data(dt, hid_dim):
 
     return total_inp, len_seq
 
-def gather_lick_time_data(dt):
-
-    lick_target = {}
-    
-    # Condition 1: 1-1.1 lick
-    pre_cue_1 = -6 * torch.ones(size=(int(1.0 / dt), 1))
-    post_cue_1 = torch.linspace(-6, 6, int(1.1 / dt)).unsqueeze(1)
-    full_targ_1 = torch.cat([pre_cue_1, post_cue_1], dim=0)
-    full_targ_1 = torch.sigmoid(full_targ_1)
-    lick_target[0] = full_targ_1
-
-    # Condition 2: 1.5-1.6 lick
-    pre_cue_2 = -6 * torch.ones(size=(int(1.0 / dt), 1))
-    post_cue_2 = torch.linspace(-6, 6, int(1.6 / dt)).unsqueeze(1)
-    full_targ_2 = torch.cat([pre_cue_2, post_cue_2], dim=0)
-    full_targ_2 = torch.sigmoid(full_targ_2)
-    lick_target[1] = full_targ_2
-
-    # Condition 3: 2-2.1 lick
-    pre_cue_3 = -6 * torch.ones(size=(int(1.0 / dt), 1))
-    post_cue_3 = torch.linspace(-6, 6, int(2.1 / dt)).unsqueeze(1)
-    full_targ_3 = torch.cat([pre_cue_3, post_cue_3], dim=0)
-    full_targ_3 = torch.sigmoid(full_targ_3)
-    lick_target[2] = full_targ_3
-
-    # Combine all targets
-    total_target = pad_sequence([lick_target[0], lick_target[1], lick_target[2]], batch_first=True)
-
-    return total_target
-
-def get_ramp(dt):
+def get_ramp(dt, type="None"):
 
     '''
         If constraining any network to a specific solution, gather the neural data or create a ramp
 
         dt: timescale in seconds (0.001 is ms)
     '''
-    all_ramps = {}
+    
+    alm_ramps = {}
+    str_ramps = {}
+    thal_ramps = {}
+
     baseline = torch.zeros(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
+
+    if type == "None":
+        alm_mag = np.ones(shape=(3,))
+        str_mag = np.ones(shape=(3,))
+        thal_mag = np.ones(shape=(3,))
+    elif type == "randincond":
+        alm_mag = np.repeat(np.random.uniform(0.25, 1), 3)
+        str_mag = np.repeat(np.random.uniform(0.25, 1), 3)
+        thal_mag = np.repeat(np.random.uniform(0.25, 1), 3)
+    elif type == "randacrosscond":
+        thresh = np.array([0.1, 0.5, 1])
+        alm_mag = thresh
+        str_mag = thresh
+        thal_mag = thresh
+
     for cond in range(3):
-        all_ramps[cond] = torch.cat([
+
+        alm_ramps[cond] = torch.cat([
             baseline,
-            torch.linspace(0, 1, int((1.1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+            torch.linspace(0, alm_mag[cond], int((1.1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+        ])
+        str_ramps[cond] = torch.cat([
+            baseline,
+            torch.linspace(0, str_mag[cond], int((1.1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+        ])
+        thal_ramps[cond] = torch.cat([
+            baseline,
+            torch.linspace(0, thal_mag[cond], int((1.1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
         ])
 
-    total_ramp = pad_sequence([all_ramps[0], all_ramps[1], all_ramps[2]], batch_first=True)
-    return total_ramp
+    total_ramp_alm = pad_sequence([alm_ramps[0], alm_ramps[1], alm_ramps[2]], batch_first=True)
+    total_ramp_str = pad_sequence([str_ramps[0], str_ramps[1], str_ramps[2]], batch_first=True)
+    total_ramp_thal = pad_sequence([thal_ramps[0], thal_ramps[1], thal_ramps[2]], batch_first=True)
 
-def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim_strength, extra_steps_control, extra_steps_silence, region="None"):
+    return total_ramp_alm, total_ramp_str, total_ramp_thal
+
+def get_acts_control(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_steps, extra_steps):
 
     '''
-        If silencing multi-regional model, get the activations with and without silencing
+        Get the activities of the desired region for a single condition (silencing or activation)
+
+        Params:
+            len_seq: list of all sequence lengths for each condition
+            rnn: the RNN to get activities from
+            hid_dim: number of neurons in a single region
+            x_data: inp data
+            cond: condition to analyze (0, 1, 2)
+            model_type: which pathway model to study, chooses hidden state based on this
+            ITI_steps: number of ITI_steps
+            start_silence: number of steps (total, starting from beginning of trial) in which to start silencing
+            end_silence: number of steps in which to end silencing
+            stim_strength: scale of silencing or activation
+            extra_steps: number of extra steps after silencing to look at
+            region: region being silenced or activated
+            total_num_units: total number of units (hid_dim * num_regions)
     '''
-
-    acts = []
-
-    alm_mask = rnn.alm_mask
-
-    if model_type == "d1d2":
-        str_mask = rnn.str_d1_mask
-    else:
-        str_mask = rnn.str_mask
-
-    ITI_steps = 1000
-    start_silence = 600 + ITI_steps
-    end_silence = 1100 + ITI_steps
 
     if model_type == "d1d2":
         hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
@@ -129,61 +132,78 @@ def get_acts(len_seq, rnn, hid_dim, x_data, cond, perturbation, model_type, stim
         hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
         x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 3)).cuda()
+        hn = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
     
-    if perturbation == True:
+    inhib_stim = torch.zeros(size=(1, len_seq[cond] + extra_steps, hn.shape[-1]), device="cuda")
 
-        if region == "alm":
-            
-            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
-            inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * alm_mask
-            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
-            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
-
-            inp_pre = x_data[cond:cond+1, :start_silence, :].detach().clone()
-            inp_silence = torch.zeros(size=(1, end_silence - start_silence, x_data.shape[-1]), device="cuda")
-            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, (len_seq - end_silence) + extra_steps_silence, 1).detach().clone()
-            inp = torch.cat([inp_pre, inp_silence, inp_post], dim=1)
-        
-        elif region == "str":
-
-            inhib_stim_pre = torch.zeros(size=(1, start_silence, hn.shape[-1]), device="cuda")
-            inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, hn.shape[-1]), device="cuda") * str_mask
-            inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps_silence, hn.shape[-1]), device="cuda")
-            inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
-
-            inp_pre = x_data[cond:cond+1, :len_seq, :].detach().clone()
-            inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps_silence, 1).detach().clone()
-            inp = torch.cat([inp_pre, inp_post], dim=1)
-        
-    else:
-
-        inhib_stim = torch.zeros(size=(1, len_seq + extra_steps_control, hn.shape[-1]), device="cuda")
-        inp_task = x_data[cond:cond+1, :len_seq, :].detach().clone()
-        inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps_control, 1).detach().clone()
-        inp = torch.cat([inp_task, inp_post], dim=1)
+    inp_task = x_data[cond:cond+1, :len_seq[cond], :].detach().clone()
+    inp_post = x_data[cond:cond+1, ITI_steps+1:ITI_steps+2, :].repeat(1, extra_steps, 1).detach().clone()
+    inp = torch.cat([inp_task, inp_post], dim=1)
 
     with torch.no_grad():        
 
-        _, _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
+        _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_masks(out_dim, hid_dim, neural_act, len_seq, regions):
+def get_acts_manipulation(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_steps, start_silence, end_silence, stim_strength, extra_steps, region):
+
+    '''
+        Get the activities of the desired region during manipulation for a single condition (silencing or activation)
+
+        Params:
+            len_seq: list of all sequence lengths for each condition
+            rnn: the RNN to get activities from
+            hid_dim: number of neurons in a single region
+            x_data: inp data
+            cond: condition to analyze (0, 1, 2)
+            model_type: which pathway model to study, chooses hidden state based on this
+            ITI_steps: number of ITI_steps
+            start_silence: number of steps (total, starting from beginning of trial) in which to start silencing
+            end_silence: number of steps in which to end silencing
+            stim_strength: scale of silencing or activation
+            extra_steps: number of extra steps after silencing to look at
+            region: region being silenced or activated
+            total_num_units: total number of units (hid_dim * num_regions)
+    '''
+
+    if model_type == "d1d2":
+        hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
+    elif model_type == "stralm":
+        hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
+    elif model_type == "d1":
+        hn = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
+        x = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
+    
+    inhib_stim, inp = get_inhib_stim_and_input_silence(rnn, 
+                                                        region, 
+                                                        x_data[cond:cond+1, :, :], 
+                                                        start_silence, 
+                                                        end_silence, 
+                                                        len_seq[cond], 
+                                                        ITI_steps, 
+                                                        extra_steps, 
+                                                        stim_strength, 
+                                                        hn.shape[-1])
+        
+    with torch.no_grad():        
+
+        _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
+        acts = acts.squeeze().cpu().numpy()
+    
+    return acts
+
+def get_masks(hid_dim, len_seq, regions):
 
     # mask the losses which correspond to padded values (just in case)
-    loss_mask = [torch.ones(size=(length, out_dim), dtype=torch.int) for length in len_seq]
-    loss_mask = pad_sequence(loss_mask, batch_first=True).cuda()
-
     loss_mask_act = [torch.ones(size=(length, hid_dim * regions), dtype=torch.int) for length in len_seq]
     loss_mask_act = pad_sequence(loss_mask_act, batch_first=True).cuda()
 
-    loss_mask_exp = [torch.ones(size=(length, neural_act.shape[-1]), dtype=torch.int) for length in len_seq]
-    loss_mask_exp = pad_sequence(loss_mask_exp, batch_first=True).cuda()
-
-    return loss_mask, loss_mask_act, loss_mask_exp
+    return loss_mask_act
 
 def get_ramp_mode(baseline, peak):
     

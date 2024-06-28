@@ -17,8 +17,8 @@ LR = 1e-4
 DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
-MODEL_TYPE = "stralm" # constraint, no_constraint, no_constraint_thal
-REGION = "alm" # str, alm, str2thal, or snr
+MODEL_TYPE = "d1d2" # constraint, no_constraint, no_constraint_thal
+REGION = "str2thal" # str, alm, str2thal, or snr
 TIME_SKIPS = 500
 PERTURBATION = False
 PERTURBED_REGION = "str" # str or alm
@@ -32,7 +32,7 @@ class FlowFields():
         self.dimensions = dimensions
         self.x_pca = PCA(n_components=dimensions)
     
-    def generate_grid(self, num_points, lower_bound=-10, upper_bound=20):
+    def generate_grid(self, num_points, lower_bound=-12, upper_bound=18):
 
         # Num points is along each axis, not in total
         x = np.linspace(lower_bound, upper_bound, num_points)
@@ -120,7 +120,7 @@ def main():
 
     # Get original trajectory
     with torch.no_grad():
-        _, _, act, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
+        _, act, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
 
     sampled_acts = act[CONDITION:CONDITION+1, :len_seq[CONDITION], :]
     sampled_acts = torch.reshape(sampled_acts, shape=(sampled_acts.shape[0] * sampled_acts.shape[1], sampled_acts.shape[2])) 
@@ -168,13 +168,13 @@ def main():
                 else:
                     inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
                         
-                _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
+                hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
                 perturbed_acts.append(hn)
 
 
     # initialize activity dict
     next_acts = {}
-    for i in range(0, len_seq_act, TIME_SKIPS):
+    for i in range(500, len_seq_act, TIME_SKIPS):
         next_acts[i] = []
 
     hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
@@ -188,7 +188,7 @@ def main():
     inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
 
     # Go through activities and generate h_t+1
-    for t in range(0, len_seq_act, TIME_SKIPS):
+    for t in range(500, len_seq_act, TIME_SKIPS):
 
         print(f"input number: {t}")
 
@@ -215,7 +215,7 @@ def main():
                 elif REGION == "snr":
                     h_0 = torch.cat([hidden_input[0, t:t+1, :snr_start], h_0, hidden_input[0, t:t+1, snr_start+HID_DIM:]], dim=1).unsqueeze(0)
 
-                _, _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
+                _, act, _, _ = rnn(inp, h_0, xn, inhib_stim, noise=False)
 
                 if REGION == "str": 
                     next_acts[t].append(act[0, 0, :str_start+HID_DIM].detach().cpu().numpy())
@@ -230,7 +230,7 @@ def main():
     data_coords = data_coords.numpy()
     data_coords = np.reshape(data_coords, (NUM_POINTS, NUM_POINTS, data_coords.shape[-1]))
 
-    for i in range(0, len_seq_act, TIME_SKIPS):
+    for i in range(500, len_seq_act, TIME_SKIPS):
 
         next_acts[i] = flow_field.transform_pca(np.array(next_acts[i]))
         next_acts[i] = np.reshape(next_acts[i], (NUM_POINTS, NUM_POINTS, next_acts[i].shape[-1]))
@@ -247,19 +247,19 @@ def main():
     x_vels = {}
     y_vels = {}
 
-    for i in range(0, len_seq_act, TIME_SKIPS):
+    for i in range(500, len_seq_act, TIME_SKIPS):
 
         x_vels[i] = next_acts[i][:, :, 0] - data_coords[:, :, 0]
         y_vels[i] = next_acts[i][:, :, 1] - data_coords[:, :, 1]
     
     speeds = {}
     
-    for i in range(0, len_seq_act, TIME_SKIPS):
+    for i in range(500, len_seq_act, TIME_SKIPS):
         speed = np.sqrt(x_vels[i]**2 + y_vels[i]**2)
         c = speed / speed.max()
         speeds[i] = c
 
-    for i in range(0, len_seq_act, TIME_SKIPS):
+    for i in range(500, len_seq_act, TIME_SKIPS):
 
         plt.scatter(sampled_acts_region[i, 0], sampled_acts_region[i, 1], c="red", s=250)
         plt.streamplot(x, y, x_vels[i], y_vels[i], color=speeds[i], cmap="plasma", linewidth=3, arrowsize=2)

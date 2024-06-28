@@ -8,10 +8,9 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, gather_lick_time_data, get_ramp, get_masks
+from utils import gather_inp_data, get_ramp, get_masks
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2, simple_dynamics_stralm, simple_dynamics_d1
 
-SAVE_PATH = "checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_stralm.pth"
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
@@ -19,7 +18,10 @@ EPOCHS = 1000
 LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-3
-MODEL_TYPE = "stralm" # d1d2, d1, stralm
+MODEL_TYPE = "d1" # d1d2, d1, stralm
+CONSTRAINED = True
+TYPE = "None" # None, randincond, randacrosscond
+SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 
 def main():
 
@@ -29,32 +31,24 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
         
-    criterion = nn.BCELoss()
     constraint_criterion = nn.MSELoss()
 
     # Get input and output data
     x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
 
-    y_data = gather_lick_time_data(dt=DT)
-    y_data = y_data.cuda()
-
     # Get ramping activity
-    neural_act = get_ramp(dt=DT)
-    neural_act = neural_act.cuda()
+    neural_act_alm, neural_act_str, neural_act_thal = get_ramp(dt=DT, type=TYPE)
+    neural_act_alm, neural_act_str, neural_act_thal = neural_act_alm.cuda(), neural_act_str.cuda(), neural_act_thal.cuda()
 
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-
-    ####################################
-    #          Train RNN               #
-    ####################################
 
     if MODEL_TYPE == "d1d2":
 
@@ -65,7 +59,7 @@ def main():
         thal_units_start = HID_DIM * 4 
         alm_units_start = HID_DIM * 5
 
-        loss_mask, loss_mask_act, loss_mask_exp = get_masks(OUT_DIM, HID_DIM, neural_act, len_seq, regions=6)
+        loss_mask_act = get_masks(HID_DIM, len_seq, regions=6)
         inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*6), device="cuda")
 
     elif MODEL_TYPE == "stralm":
@@ -76,38 +70,40 @@ def main():
         str_units_start = 0
         alm_units_start = HID_DIM
 
-        loss_mask, loss_mask_act, loss_mask_exp = get_masks(OUT_DIM, HID_DIM, neural_act, len_seq, regions=2)
+        loss_mask_act = get_masks(HID_DIM, len_seq, regions=2)
         inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*2), device="cuda")
 
     elif MODEL_TYPE == "d1":
 
-        hn = torch.zeros(size=(1, 3, HID_DIM * 3)).cuda()
-        x = torch.zeros(size=(1, 3, HID_DIM * 3)).cuda()
+        hn = torch.zeros(size=(1, 3, HID_DIM * 4)).cuda()
+        x = torch.zeros(size=(1, 3, HID_DIM * 4)).cuda()
 
         str_units_start = 0
-        thal_units_start = HID_DIM
-        alm_units_start = HID_DIM * 2
+        thal_units_start = HID_DIM * 2
+        alm_units_start = HID_DIM * 3
 
-        loss_mask, loss_mask_act, loss_mask_exp = get_masks(OUT_DIM, HID_DIM, neural_act, len_seq, regions=3)
-        inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*3), device="cuda")
+        loss_mask_act = get_masks(HID_DIM, len_seq, regions=4)
+        inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*4), device="cuda")
 
+    ###########################
+    #    Begin Training       # 
+    ###########################
+    
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        out, _, act, _, _ = rnn(x_data, hn, x, inhib_stim, noise=True)
+        _, act, _, _ = rnn(x_data, hn, x, inhib_stim, noise=True)
 
         # Get masks
-        out = out * loss_mask
         act = act * loss_mask_act
-        neural_act = neural_act * loss_mask_exp
 
         # Get loss
         if MODEL_TYPE == "d1d2":
-            loss = loss_d1d2(criterion, constraint_criterion, act, out, neural_act, y_data, HID_DIM, alm_units_start, str_units_start, thal_units_start)
+            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start)
         elif MODEL_TYPE == "stralm":
-            loss = loss_stralm(criterion, constraint_criterion, act, out, neural_act, y_data, alm_units_start, str_units_start)
+            loss = loss_stralm(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, alm_units_start, str_units_start)
         elif MODEL_TYPE == "d1":
-            loss = loss_d1d2(criterion, constraint_criterion, act, out, neural_act, y_data, HID_DIM, alm_units_start, str_units_start, thal_units_start)
+            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start)
             
         # Save model
         if epoch > 100:

@@ -9,7 +9,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegion
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_inhib_stim_and_input_silence
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation
 import tqdm
 
 plt.rcParams['axes.spines.right'] = False
@@ -23,15 +23,18 @@ OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.04)
 DT = 1e-3
 CONDS = 3
-MODEL_TYPE = "stralm" # d1d2, d1, stralm
-REGION_PERTURB = "str" # alm, str, str_d2 (str will always be d1 for d1d2 model, specify d2 if necessary)
-STIM_STRENGTH = -0.35
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm
+REGION_PERTURB = "alm" # alm, str, str_d2 (str will always be d1 for d1d2 model, specify d2 if necessary)
+STIM_STRENGTH = -10
+ITI_STEPS = 1000
+EXTRA_STEPS_CONTROL = 0
+EXTRA_STEPS_SILENCING = 2000
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 
 # TODO, specify cut-off for no lick trials during control and silencing (like maybe 1s after target time so 1000 steps), make figures nicer
 # automatically save instead of manually saving
 
-def get_lick_samples(rnn, x_data, model_type, start_time, num_samples=100):
+def get_lick_samples(rnn, x_data, model_type, start_time, len_seq, num_samples=10):
 
     decision_times = {}
     # Initialize lists for conditions
@@ -39,41 +42,38 @@ def get_lick_samples(rnn, x_data, model_type, start_time, num_samples=100):
         decision_times[cond] = []
     num_trials = 0
 
+    if model_type == "d1d2":
+        alm_start = HID_DIM*5
+    elif model_type == "d1":
+        alm_start = HID_DIM*2
+    elif model_type == "stralm":
+        alm_start = HID_DIM
+
     for sample in tqdm.tqdm(range(num_samples)):
 
-        if model_type == "d1d2":
-            hn = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
-            x = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
-            inhib_stim = torch.zeros(size=(3, x_data.shape[1], HID_DIM * 6), device="cuda")
-            alm_start = HID_DIM*5
-        elif model_type == "stralm":
-            hn = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-            x = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-            inhib_stim = torch.zeros(size=(3, x_data.shape[1], HID_DIM * 2), device="cuda")
-            alm_start = HID_DIM
-        elif model_type == "d1":
-            hn = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
-            x = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
-            inhib_stim = torch.zeros(size=(3, x_data.shape[1], HID_DIM * 3), device="cuda")
-            alm_start = HID_DIM*2
+        for cond in range(len(len_seq)):
 
-        with torch.no_grad():
-            out, _, acts, _, _ = rnn(x_data, hn, x, inhib_stim, noise=True)
-            acts = acts.cpu().numpy()
-            out = out.cpu().numpy()
-            alm_acts = np.mean(acts[:, start_time:, alm_start:], axis=2)
+            acts = get_acts_control(len_seq,
+                                    rnn,
+                                    HID_DIM,
+                                    x_data,
+                                    cond,
+                                    model_type,
+                                    ITI_STEPS,
+                                    EXTRA_STEPS_CONTROL 
+                                    ) 
 
-        num_trials = num_trials + 1
-        
-        for cond in range(3):
-            for i, act in enumerate(alm_acts[cond]):
+            alm_acts = np.mean(acts[start_time:, alm_start:], axis=1)
+            num_trials = num_trials + 1
+            
+            for i, act in enumerate(alm_acts):
                 if act > 0.95:
                     decision_times[cond].append((i + start_time) * DT)
                     break
     
     return decision_times, num_trials
 
-def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, start_silence, end_silence, ITI_steps, start_time, num_samples=100):
+def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, start_silence, end_silence, start_time, num_samples=10):
     
     decision_times = {}
     for cond in range(3):
@@ -81,46 +81,32 @@ def get_lick_samples_perturbation(rnn, x_data, model_type, len_seq, region, star
     num_trials = 0
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
-        x = torch.zeros(size=(1, 1, HID_DIM * 6)).cuda()
         alm_start = HID_DIM*5
-    elif model_type == "stralm":
-        hn = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-        x = torch.zeros(size=(1, 1, HID_DIM * 2)).cuda()
-        alm_start = HID_DIM
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
-        x = torch.zeros(size=(1, 1, HID_DIM * 3)).cuda()
         alm_start = HID_DIM*2
-    
-    total_num_units = hn.shape[-1] 
-    extra_steps_silence = 2000
+    elif model_type == "stralm":
+        alm_start = HID_DIM
 
     for sample in tqdm.tqdm(range(num_samples)):
     
         for cond in range(len(len_seq)):
 
-            inhib_stim, inp = get_inhib_stim_and_input_silence(
-                rnn,
-                region,
-                x_data[cond:cond+1, :, :],
-                start_silence,
-                end_silence,
-                len_seq[cond],
-                ITI_steps,
-                extra_steps_silence,
-                STIM_STRENGTH,
-                total_num_units
-            )
+            acts = get_acts_manipulation(len_seq,
+                                        rnn,
+                                        HID_DIM,
+                                        x_data,
+                                        cond,
+                                        MODEL_TYPE,
+                                        ITI_STEPS,
+                                        start_silence,
+                                        end_silence,
+                                        STIM_STRENGTH,
+                                        EXTRA_STEPS_SILENCING,
+                                        region
+                                        )
             
-            extended_len_seq = inp.shape[1]
-
-            with torch.no_grad():        
-
-                logits, _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=True)
-                acts = acts.squeeze().cpu().numpy()
-                logits = logits.squeeze().cpu().numpy()
-                alm_acts = np.mean(acts[start_time:, alm_start:], axis=1)
+            extended_len_seq = len_seq[cond] + EXTRA_STEPS_SILENCING
+            alm_acts = np.mean(acts[start_time:, alm_start:], axis=1)
 
             num_trials = num_trials + 1
 
@@ -139,6 +125,7 @@ def calculate_ecdf(decision_times, len_seq, num_trials, start_time_s):
 
     bins = np.linspace(start_time_s, len_seq * DT, len_seq - int(start_time_s / DT))
     bin_probs = []
+
     for bin in bins:
         prob = 0
         for time in pooled_decision_times:
@@ -147,6 +134,7 @@ def calculate_ecdf(decision_times, len_seq, num_trials, start_time_s):
         # Not considering no lick trials for now, since it might not matter in this case
         prob = prob / pooled_decision_times.shape[0]
         bin_probs.append(prob)
+
     return bins, bin_probs
 
 def plot_ecdf(bins, bin_probs, bins_perturb, bin_probs_perturb, use_label=False):
@@ -201,28 +189,26 @@ def main():
     x_data = x_data.cuda()
 
     # Control
-    decision_times_control_late, num_trials_control_late = get_lick_samples(rnn, x_data, MODEL_TYPE, 1600)
-    decision_times_control_early, num_trials_control_early = get_lick_samples(rnn, x_data, MODEL_TYPE, 500)
+    decision_times_control_late, num_trials_control_late = get_lick_samples(rnn, x_data, MODEL_TYPE, 1600, len_seq)
+    decision_times_control_early, num_trials_control_early = get_lick_samples(rnn, x_data, MODEL_TYPE, 500, len_seq)
     # Delay Silencing
     decision_times_delay_silence, len_seq_delay_silence, num_trials_delay_silence = get_lick_samples_perturbation(rnn, 
-                                                                                                                  x_data, 
-                                                                                                                  MODEL_TYPE, 
-                                                                                                                  len_seq, 
-                                                                                                                  REGION_PERTURB, 
-                                                                                                                  start_silence=1600, 
-                                                                                                                  end_silence=2100, 
-                                                                                                                  ITI_steps=1000,
-                                                                                                                  start_time=1600)
+                                                                                                                x_data, 
+                                                                                                                MODEL_TYPE, 
+                                                                                                                len_seq, 
+                                                                                                                REGION_PERTURB, 
+                                                                                                                start_silence=1600, 
+                                                                                                                end_silence=2100, 
+                                                                                                                start_time=1600)
     # Precue Silencing
     decision_times_precue_silence, len_seq_precue_silence, num_trials_precue_silence = get_lick_samples_perturbation(rnn, 
-                                                                                                                     x_data, 
-                                                                                                                     MODEL_TYPE, 
-                                                                                                                     len_seq, 
-                                                                                                                     REGION_PERTURB, 
-                                                                                                                     start_silence=500, 
-                                                                                                                     end_silence=1000, 
-                                                                                                                     ITI_steps=1000,
-                                                                                                                     start_time=500)
+                                                                                                                    x_data, 
+                                                                                                                    MODEL_TYPE, 
+                                                                                                                    len_seq, 
+                                                                                                                    REGION_PERTURB, 
+                                                                                                                    start_silence=500, 
+                                                                                                                    end_silence=1000, 
+                                                                                                                    start_time=500)
 
     # Control CDF
     bins_control_late, bin_probs_control_late = calculate_ecdf(decision_times_control_late, len_seq_delay_silence, num_trials_control_late, 1.6)
