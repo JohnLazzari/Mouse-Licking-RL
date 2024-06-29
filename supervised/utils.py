@@ -31,20 +31,20 @@ def gather_inp_data(dt, hid_dim):
 
     # Condition 1: 0.3 for 1.1s
     inp[0] = torch.cat([
-        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
-        0.25*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.04)))
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 2: 0.6 for 1.6
     inp[1] = torch.cat([
-        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
-        0.2*torch.ones(size=(int(1.6 / dt), int(hid_dim*0.04)))
+        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(1.6 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 3: 0.9 for 2.1s
     inp[2] = torch.cat([
-        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.04))),
-        0.15*torch.ones(size=(int(2.1 / dt), int(hid_dim*0.04)))
+        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.1*torch.ones(size=(int(2.1 / dt), int(hid_dim*0.1)))
         ])
 
     # Combine all inputs
@@ -78,7 +78,7 @@ def get_ramp(dt, type="None"):
         str_mag = np.repeat(np.random.uniform(0.25, 1), 3)
         thal_mag = np.repeat(np.random.uniform(0.25, 1), 3)
     elif type == "randacrosscond":
-        thresh = np.array([0.1, 0.5, 1])
+        thresh = np.array([1.25, 0.75, 0.25])
         alm_mag = thresh
         str_mag = thresh
         thal_mag = thresh

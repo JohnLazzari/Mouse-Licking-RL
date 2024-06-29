@@ -137,7 +137,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         # Input weights
         self.inp_weight = nn.Parameter(torch.empty(size=(inp_dim, hid_dim * 6)))
-        nn.init.uniform_(self.inp_weight, 0, 0.1)
+        nn.init.uniform_(self.inp_weight, 0, 0.01)
 
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
@@ -226,7 +226,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             else:
             
                 hn_next = F.relu(hn_next 
-                        + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ inp_weight * self.strthal_mask) + inhib_stim[:, t, :]) 
+                        + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.strthal_mask) + inhib_stim[:, t, :]) 
                         + perturb_hid)
 
             new_hs.append(hn_next)
@@ -406,7 +406,7 @@ class RNN_MultiRegional_D1(nn.Module):
                                     torch.zeros(size=(hid_dim * 3,))]).cuda()
         self.tonic_inp = torch.cat([
             torch.zeros(size=(hid_dim,)),
-            0.45 * torch.ones(size=(hid_dim,)),
+            0.7 * torch.ones(size=(hid_dim,)),
             torch.ones(size=(hid_dim,)),
             torch.zeros(size=(hid_dim,))
         ]).cuda()
@@ -476,7 +476,7 @@ class RNN_MultiRegional_D1(nn.Module):
 
         # Input weights
         self.inp_weight = nn.Parameter(torch.empty(size=(inp_dim, hid_dim * 4)))
-        nn.init.uniform_(self.inp_weight, 0, 0.1)
+        nn.init.uniform_(self.inp_weight, 0, 0.01)
 
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
@@ -515,6 +515,7 @@ class RNN_MultiRegional_D1(nn.Module):
             alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-15, 1)
             thal2str = self.thal2str_mask * F.hardtanh(self.thal2str_weight_l0_hh, 1e-15, 1)
             thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-15, 1)
+            inp_weight = F.hardtanh(self.inp_weight, 1e-15, 1)
 
             # Concatenate into single weight matrix
             W_str = torch.cat([str2str, self.zeros, thal2str, alm2str], dim=1)
@@ -545,7 +546,7 @@ class RNN_MultiRegional_D1(nn.Module):
             if self.constrained:
 
                 hn_next = F.relu(hn_next + 
-                        self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.strthal_mask) + inhib_stim[:, t, :] + self.tonic_inp) 
+                        self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ inp_weight * self.strthal_mask) + inhib_stim[:, t, :] + self.tonic_inp) 
                         + perturb_hid)
             
             else:

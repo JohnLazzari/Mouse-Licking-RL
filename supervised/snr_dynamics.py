@@ -15,7 +15,7 @@ plt.rc('font', **font)
 
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDITION = 0
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
@@ -40,7 +40,7 @@ def get_perturbed_trajectories(rnn, len_seq, total_num_units, x_data, ITI_steps,
             else:
                 inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
                     
-            _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
+            hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
             
             perturbed_acts.append(hn)
     
@@ -79,7 +79,7 @@ def main():
 
     # Get original trajectory
     with torch.no_grad():
-        _, _, act, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
+        _, act, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
     
     sampled_acts = act[:, 500:, :]
     snr_act = sampled_acts[:, :, HID_DIM*2:HID_DIM*3]

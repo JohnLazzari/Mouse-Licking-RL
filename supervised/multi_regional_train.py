@@ -13,15 +13,31 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2, simple_dynamics
 
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 EPOCHS = 1000
 LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-3
-MODEL_TYPE = "d1" # d1d2, d1, stralm
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
+TYPE_LOSS = "alm" # alm or none (none trains all regions to ramp, alm is just alm. alm is currently base model)
 SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+
+'''
+Default Model(s):
+    HID_DIM = 256
+    OUT_DIM = 1
+    INP_DIM = int(HID_DIM*0.1)
+    EPOCHS = 1000
+    LR = 1E-4
+    DT = 1E-3
+    WEIGHT_DECAY = 1E-3
+    MODEL_TYPE = any (d1d2, stralm, d1)
+    CONSTRAINED = True
+    TYPE = None (ramping conditions, None means ramp to one across conditions)
+    TYPE_LOSS = alm (Only trained to ramp in alm)
+'''
 
 def main():
 
@@ -99,11 +115,11 @@ def main():
 
         # Get loss
         if MODEL_TYPE == "d1d2":
-            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start)
+            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start, type=TYPE_LOSS)
         elif MODEL_TYPE == "stralm":
-            loss = loss_stralm(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, alm_units_start, str_units_start)
+            loss = loss_stralm(constraint_criterion, act, neural_act_alm, neural_act_str, alm_units_start, str_units_start)
         elif MODEL_TYPE == "d1":
-            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start)
+            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start, type=TYPE_LOSS)
             
         # Save model
         if epoch > 100:

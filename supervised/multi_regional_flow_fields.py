@@ -12,8 +12,7 @@ plt.rcParams['axes.spines.top'] = False
 
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
-LR = 1e-4
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDITION = 0
 NUM_POINTS = 100
@@ -81,7 +80,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     alm_mask = rnn.alm_mask
-    str_mask = rnn.str_mask
+    str_mask = rnn.str_d1_mask
 
     if MODEL_TYPE == "d1d2":
 
@@ -93,10 +92,10 @@ def main():
 
     elif MODEL_TYPE == "d1":
 
-        total_num_units = HID_DIM * 3
+        total_num_units = HID_DIM * 4
         str_start = 0
-        thal_start = HID_DIM
-        alm_start = HID_DIM*2
+        thal_start = HID_DIM*2
+        alm_start = HID_DIM*3
 
     elif MODEL_TYPE == "stralm":
 

@@ -21,10 +21,10 @@ plt.rc('font', **font)
 
 HID_DIM = 256
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 3
-MODEL_TYPE = "d1" # d1d2, d1, stralm
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
@@ -47,7 +47,6 @@ def plot_silencing(len_seq,
                    extra_steps_silence,
                    use_label=False, 
                    ):
-
 
     if MODEL_TYPE == "d1d2" and evaluated_region == "alm":
         start = hid_dim*5
@@ -175,7 +174,7 @@ def main():
                    dt=DT, 
                    stim_strength=-10, 
                    extra_steps_control=0,
-                   extra_steps_silence=1000,
+                   extra_steps_silence=500,
                    use_label=True)
 
     plot_silencing(len_seq, 
@@ -188,9 +187,9 @@ def main():
                    silenced_region="str", 
                    evaluated_region="alm", 
                    dt=DT, 
-                   stim_strength=-0.35, 
+                   stim_strength=-0.5, 
                    extra_steps_control=0,
-                   extra_steps_silence=1000,
+                   extra_steps_silence=500,
                    )
 
     plot_silencing(len_seq, 
@@ -205,7 +204,7 @@ def main():
                    dt=DT, 
                    stim_strength=-10,
                    extra_steps_control=0,
-                   extra_steps_silence=1000,
+                   extra_steps_silence=500,
                    )
 
     plot_silencing(len_seq, 
@@ -218,9 +217,9 @@ def main():
                    silenced_region="str", 
                    evaluated_region="str", 
                    dt=DT, 
-                   stim_strength=-0.35, 
+                   stim_strength=-0.5, 
                    extra_steps_control=0,
-                   extra_steps_silence=1000,
+                   extra_steps_silence=500,
                    )
     
 if __name__ == "__main__":
