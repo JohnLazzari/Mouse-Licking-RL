@@ -142,7 +142,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim)).cuda()
 
-        # Time constants for networks (not sure what would be biologically plausible?)
+        # Time constants for networks
         self.t_const = 0.01
 
         # Noise level
