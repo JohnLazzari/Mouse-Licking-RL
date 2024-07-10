@@ -22,7 +22,7 @@ MODEL_TYPE = "d1d2" # d1d2, d1, stralm
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
 TYPE_LOSS = "alm" # alm or none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_largeinp.pth"
 
 '''
 Default Model(s):
@@ -100,7 +100,7 @@ def main():
 
         loss_mask_act = get_masks(HID_DIM, len_seq, regions=4)
         inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*4), device="cuda")
-
+    
     ###########################
     #    Begin Training       # 
     ###########################
@@ -108,7 +108,7 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        _, act, _, _ = rnn(x_data, hn, x, inhib_stim, noise=True)
+        _, act = rnn(x_data, hn, inhib_stim, noise=True)
 
         # Get masks
         act = act * loss_mask_act
@@ -132,11 +132,11 @@ def main():
         loss.backward()
 
         if MODEL_TYPE == "d1d2":
-            simple_dynamics_d1d2(act, rnn, HID_DIM)
+            simple_dynamics_d1d2(act, rnn, HID_DIM, constrained=CONSTRAINED)
         elif MODEL_TYPE == "stralm":
-            simple_dynamics_stralm(act, rnn, HID_DIM)
+            simple_dynamics_stralm(act, rnn, HID_DIM, constrained=CONSTRAINED)
         elif MODEL_TYPE == "d1":
-            simple_dynamics_d1(act, rnn, HID_DIM)
+            simple_dynamics_d1(act, rnn, HID_DIM, constrained=CONSTRAINED)
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)

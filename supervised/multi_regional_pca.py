@@ -5,18 +5,19 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegion
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 import scipy.io as sio
-from utils import gather_delay_data
+from utils import gather_inp_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
 
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
-MODEL_TYPE = "stralm" # constraint, no_constraint, no_constraint_thal
+MODEL_TYPE = "d1d2" # constraint, no_constraint, no_constraint_thal
 REGION = "alm" # str, alm, or str2thal
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+CONSTRAINED = False
+CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_unconstrained.pth"
 
 class FlowFields():
     def __init__(self, dimensions=2):
@@ -60,11 +61,11 @@ def main():
     
     # Create RNN
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     if MODEL_TYPE == "d1":
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
     if MODEL_TYPE == "stralm":
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM).cuda()
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
 
     rnn.load_state_dict(checkpoint)
 
@@ -93,9 +94,8 @@ def main():
     flow_field = FlowFields()
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
-    y_data = y_data.cuda()
 
     x_data[0, len_seq[0]:, :] = x_data[0, 1001:1002, :]
     x_data[1, len_seq[1]:, :] = x_data[1, 1001:1002, :]
@@ -108,7 +108,7 @@ def main():
 
     # Get original trajectory
     with torch.no_grad():
-        _, _, orig_acts, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
+        _, orig_acts, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
 
     orig_acts = orig_acts[:, 500:, :]
     acts = orig_acts

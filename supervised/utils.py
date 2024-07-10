@@ -127,13 +127,10 @@ def get_acts_control(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_steps,
 
     if model_type == "d1d2":
         hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
     elif model_type == "d1":
         hn = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
     
     inhib_stim = torch.zeros(size=(1, len_seq[cond] + extra_steps, hn.shape[-1]), device="cuda")
 
@@ -143,7 +140,7 @@ def get_acts_control(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_steps,
 
     with torch.no_grad():        
 
-        _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
+        _, acts = rnn(inp, hn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -171,13 +168,10 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_s
 
     if model_type == "d1d2":
         hn = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 6)).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 2)).cuda()
     elif model_type == "d1":
         hn = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
-        x = torch.zeros(size=(1, 1, hid_dim * 4)).cuda()
     
     inhib_stim, inp = get_inhib_stim_and_input_silence(rnn, 
                                                         region, 
@@ -192,7 +186,7 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, x_data, cond, model_type, ITI_s
         
     with torch.no_grad():        
 
-        _, acts, _, _ = rnn(inp, hn, x, inhib_stim, noise=False)
+        _, acts = rnn(inp, hn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts

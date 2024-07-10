@@ -149,7 +149,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.sigma_recur = noise_level
         self.sigma_input = noise_level
 
-    def forward(self, inp, hn, x, inhib_stim, noise=True):
+    def forward(self, inp, hn, inhib_stim, noise=True):
 
         '''
             Forward pass through the model
@@ -162,10 +162,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         # Saving hidden states
         hn_next = hn.squeeze(0)
-        x_next = x.squeeze(0)
         size = inp.shape[1]
         new_hs = []
-        new_xs = []
 
         if self.constrained:
 
@@ -230,16 +228,12 @@ class RNN_MultiRegional_D1D2(nn.Module):
                         + perturb_hid)
 
             new_hs.append(hn_next)
-            new_xs.append(x_next)
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
-        x_out = torch.stack(new_xs, dim=1)
-
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
-        x_last = x_out[:, -1, :].unsqueeze(0)
 
-        return hn_last, rnn_out, x_last, x_out
+        return hn_last, rnn_out
 
 
 class RNN_MultiRegional_STRALM(nn.Module):
@@ -315,7 +309,7 @@ class RNN_MultiRegional_STRALM(nn.Module):
         self.sigma_recur = noise_level
         self.sigma_input = noise_level
 
-    def forward(self, inp, hn, x, inhib_stim, noise=True):
+    def forward(self, inp, hn, inhib_stim, noise=True):
 
         '''
             Forward pass through the model
@@ -328,10 +322,8 @@ class RNN_MultiRegional_STRALM(nn.Module):
 
         # Saving hidden states
         hn_next = hn.squeeze(0)
-        x_next = x.squeeze(0)
         size = inp.shape[1]
         new_hs = []
-        new_xs = []
 
         if self.constrained:
 
@@ -339,6 +331,7 @@ class RNN_MultiRegional_STRALM(nn.Module):
             str2alm = F.hardtanh(self.str2alm_weight_l0_hh, 1e-15, 1)
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-15, 1) @ self.alm2alm_D
             alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-15, 1)
+            inp_weight = F.hardtanh(self.inp_weight, 1e-15, 1)
 
             # Concatenate into single weight matrix
             W_str = torch.cat([str2str, alm2str], dim=1)
@@ -362,21 +355,25 @@ class RNN_MultiRegional_STRALM(nn.Module):
                 perturb_hid = 0
                 perturb_inp = 0
 
-            hn_next = F.relu(hn_next + 
-                      self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_d1_mask) + inhib_stim[:, t, :]) 
-                      + perturb_hid)
+            if self.constrained:
+
+                hn_next = F.relu(hn_next + 
+                        self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ inp_weight * self.str_d1_mask) + inhib_stim[:, t, :]) 
+                        + perturb_hid)
+            
+            else:
+
+                hn_next = F.relu(hn_next + 
+                        self.t_const * (-hn_next + (W_rec @ hn_next.T).T + ((inp[:, t, :] + perturb_inp) @ self.inp_weight * self.str_d1_mask) + inhib_stim[:, t, :]) 
+                        + perturb_hid)
 
             new_hs.append(hn_next)
-            new_xs.append(x_next)
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
-        x_out = torch.stack(new_xs, dim=1)
-
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
-        x_last = x_out[:, -1, :].unsqueeze(0)
 
-        return hn_last, rnn_out, x_last, x_out
+        return hn_last, rnn_out
 
 
 class RNN_MultiRegional_D1(nn.Module):
@@ -488,7 +485,7 @@ class RNN_MultiRegional_D1(nn.Module):
         self.sigma_recur = noise_level
         self.sigma_input = noise_level
 
-    def forward(self, inp, hn, x, inhib_stim, noise=True):
+    def forward(self, inp, hn, inhib_stim, noise=True):
 
         '''
             Forward pass through the model
@@ -501,10 +498,8 @@ class RNN_MultiRegional_D1(nn.Module):
 
         # Saving hidden states
         hn_next = hn.squeeze(0)
-        x_next = x.squeeze(0)
         size = inp.shape[1]
         new_hs = []
-        new_xs = []
 
         if self.constrained:
 
@@ -556,13 +551,9 @@ class RNN_MultiRegional_D1(nn.Module):
                         + perturb_hid)
 
             new_hs.append(hn_next)
-            new_xs.append(x_next)
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
-        x_out = torch.stack(new_xs, dim=1)
-
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
-        x_last = x_out[:, -1, :].unsqueeze(0)
 
-        return hn_last, rnn_out, x_last, x_out
+        return hn_last, rnn_out

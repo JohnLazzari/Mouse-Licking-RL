@@ -17,6 +17,7 @@ plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
 font = {'size' : 26}
 plt.rcParams['figure.figsize'] = [10, 8]
+plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
@@ -25,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 3
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_largeinp.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000

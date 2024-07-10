@@ -20,11 +20,22 @@ def loss_d1d2(constraint_criterion,
                 type="alm"):
 
     if type == "alm":
+
         loss = (
                 constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
                 + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
                 )
+        '''
+        loss = (
+                constraint_criterion(torch.mean(act[0, 2100-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[0, 2100-1, :])
+                + constraint_criterion(torch.mean(act[1, 2600-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[1, 2600-1, :])
+                + constraint_criterion(torch.mean(act[2, 3100-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[2, 3100-1, :])
+                + 1e-1 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+                )
+        '''
+
     else:
+
         loss = (
                 constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
                 + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
@@ -39,28 +50,53 @@ def loss_stralm(constraint_criterion,
                 neural_act_alm, 
                 neural_act_str, 
                 alm_start, 
-                str_start):
+                str_start,
+                type="alm"):
 
-    loss = (
-            constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
-            + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-            + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act_str[:, 500:, :])
-            )
+    if type == "alm":
+
+        loss = (
+                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
+                + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+                )
+    
+    else:
+
+        loss = (
+                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
+                + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+                + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act_str[:, 500:, :])
+                )
     
     return loss
 
-def simple_dynamics_d1d2(act, rnn, hid_dim):
+def simple_dynamics_d1d2(act, rnn, hid_dim, constrained=True):
 
-    # Get full weights for training
-    alm2alm = rnn.alm2alm_weight_l0_hh
-    alm2str = rnn.alm2str_weight_l0_hh
-    thal2alm = rnn.thal2alm_weight_l0_hh
-    thal2str = rnn.thal2str_weight_l0_hh
-    str2snr = rnn.str2snr_weight_l0_hh
-    str2gpe = rnn.str2gpe_weight_l0_hh
-    gpe2stn = rnn.gpe2stn_weight_l0_hh
-    stn2snr = rnn.stn2snr_weight_l0_hh
-    snr2thal = rnn.snr2thal_weight_l0_hh
+    if constrained == True:
+
+        # Get full weights for training
+        alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-15, 1) @ rnn.alm2alm_D
+        alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-15, 1)
+        thal2alm = F.hardtanh(rnn.thal2alm_weight_l0_hh, 1e-15, 1)
+        thal2str = rnn.thal2str_mask * F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-15, 1)
+        str2snr = (rnn.str2snr_mask * F.hardtanh(rnn.str2snr_weight_l0_hh, 1e-15, 1)) @ rnn.str2snr_D
+        str2gpe = (rnn.str2gpe_mask * F.hardtanh(rnn.str2gpe_weight_l0_hh, 1e-15, 1)) @ rnn.str2gpe_D
+        gpe2stn = F.hardtanh(rnn.gpe2stn_weight_l0_hh, 1e-15, 1) @ rnn.gpe2stn_D
+        stn2snr = F.hardtanh(rnn.stn2snr_weight_l0_hh, 1e-15, 1)
+        snr2thal = F.hardtanh(rnn.snr2thal_weight_l0_hh, 1e-15, 1) @ rnn.snr2thal_D
+
+    else:
+
+        # Get full weights for training
+        alm2alm = rnn.alm2alm_weight_l0_hh
+        alm2str = rnn.alm2str_weight_l0_hh
+        thal2alm = rnn.thal2alm_weight_l0_hh
+        thal2str = rnn.thal2str_weight_l0_hh
+        str2snr = rnn.str2snr_weight_l0_hh
+        str2gpe = rnn.str2gpe_weight_l0_hh
+        gpe2stn = rnn.gpe2stn_weight_l0_hh
+        stn2snr = rnn.stn2snr_weight_l0_hh
+        snr2thal = rnn.snr2thal_weight_l0_hh
 
     # Concatenate into single weight matrix
 
@@ -90,15 +126,26 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
     rnn.thal2alm_weight_l0_hh.grad += update[hid_dim*5:hid_dim*6, hid_dim*4:hid_dim*5]
     rnn.alm2alm_weight_l0_hh.grad += update[hid_dim*5:hid_dim*6, hid_dim*5:hid_dim*6]
 
-def simple_dynamics_d1(act, rnn, hid_dim):
+def simple_dynamics_d1(act, rnn, hid_dim, constrained=True):
 
-    # Get full weights for training
-    alm2alm = rnn.alm2alm_weight_l0_hh
-    alm2str = rnn.alm2str_weight_l0_hh
-    thal2alm = rnn.thal2alm_weight_l0_hh
-    thal2str = rnn.thal2str_weight_l0_hh
-    str2snr = rnn.str2snr_weight_l0_hh
-    snr2thal = rnn.snr2thal_weight_l0_hh
+    if constrained == True:
+
+        str2snr = F.hardtanh(rnn.str2snr_weight_l0_hh, 1e-15, 1) @ rnn.str2snr_D
+        snr2thal = F.hardtanh(rnn.snr2thal_weight_l0_hh, 1e-15, 1) @ rnn.snr2thal_D
+        alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-15, 1) @ rnn.alm2alm_D
+        alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-15, 1)
+        thal2str = rnn.thal2str_mask * F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-15, 1)
+        thal2alm = F.hardtanh(rnn.thal2alm_weight_l0_hh, 1e-15, 1)
+    
+    else:
+
+        # Get full weights for training
+        alm2alm = rnn.alm2alm_weight_l0_hh
+        alm2str = rnn.alm2str_weight_l0_hh
+        thal2alm = rnn.thal2alm_weight_l0_hh
+        thal2str = rnn.thal2str_weight_l0_hh
+        str2snr = rnn.str2snr_weight_l0_hh
+        snr2thal = rnn.snr2thal_weight_l0_hh
 
     # Concatenate into single weight matrix
 
@@ -122,12 +169,20 @@ def simple_dynamics_d1(act, rnn, hid_dim):
     rnn.thal2alm_weight_l0_hh.grad += update[hid_dim*3:hid_dim*4, hid_dim*2:hid_dim*3]
     rnn.alm2alm_weight_l0_hh.grad += update[hid_dim*3:hid_dim*4, hid_dim*3:hid_dim*4]
 
-def simple_dynamics_stralm(act, rnn, hid_dim):
+def simple_dynamics_stralm(act, rnn, hid_dim, constrained=True):
 
-    # Get full weights for training
-    alm2alm = rnn.alm2alm_weight_l0_hh
-    alm2str = rnn.alm2str_weight_l0_hh
-    str2alm = rnn.str2str_weight_l0_hh
+    if constrained == True:
+
+        str2alm = F.hardtanh(rnn.str2alm_weight_l0_hh, 1e-15, 1)
+        alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-15, 1) @ rnn.alm2alm_D
+        alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-15, 1)
+    
+    else:
+
+        # Get full weights for training
+        alm2alm = rnn.alm2alm_weight_l0_hh
+        alm2str = rnn.alm2str_weight_l0_hh
+        str2alm = rnn.str2str_weight_l0_hh
     
     # Concatenate into single weight matrix
 

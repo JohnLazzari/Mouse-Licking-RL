@@ -8,7 +8,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegion
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 import scipy.io as sio
-from utils import gather_delay_data
+from utils import gather_inp_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
@@ -17,7 +17,7 @@ plt.rc('font', **font)
 
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 LR = 1e-3
 CONDITION = 0
@@ -28,7 +28,7 @@ class Vec(nn.Module):
         super(Vec, self).__init__()
 
         self.subspace = nn.Parameter(torch.empty(size=(HID_DIM,)))
-        nn.init.uniform_(self.subspace, -0.1, 0.1)
+        nn.init.uniform_(self.subspace, 0, 0.1)
     
     def forward(self, W_str, W_alm, thal_activity):
         
@@ -84,19 +84,17 @@ def main():
     snr_start = HID_DIM*3
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     x_data = x_data.cuda()
-    y_data = y_data.cuda()
 
     # Sample many hidden states to get pcs for dimensionality reduction
     hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-    xn = hn
 
     inhib_stim = torch.zeros(size=(1, x_data.shape[1], hn.shape[-1]), device="cuda")
 
     # Get original trajectory
     with torch.no_grad():
-        _, _, act, _, _ = rnn(x_data[CONDITION:CONDITION+1, :, :], hn, xn, inhib_stim, noise=False)
+        _, act = rnn(x_data[CONDITION:CONDITION+1, :, :], hn, inhib_stim, noise=False)
     
     thal2alm = F.relu(rnn.thal2alm_weight_l0_hh).detach()
     thal2str = rnn.thal2str_mask * F.relu(rnn.thal2str_weight_l0_hh).detach()
@@ -118,7 +116,7 @@ def main():
     for iter in range(100000):
         
         str_act, alm_act, thal_projection = thal2alm_vec(thal2str, thal2alm, thal_activity)
-        loss = (torch.sum(str_act)**2) + (torch.sum(alm_act) - 1)**2 + (torch.sum(torch.sum(thal_projection)) - 1)**2
+        loss = (torch.sum(str_act)**2) + (torch.mean(alm_act) - 1)**2 + (torch.mean(torch.mean(thal_projection)) - 1)**2
         losses_thal2alm.append(loss.item())
         print(f"Loss at iter {iter}: {loss}")
         thal2alm_optim.zero_grad()
@@ -128,7 +126,7 @@ def main():
     for iter in range(100000):
         
         str_act, alm_act, thal_projection = thal2str_vec(thal2str, thal2alm, thal_activity)
-        loss = (torch.sum(str_act) - 1)**2 + (torch.sum(alm_act)**2) + (torch.sum(torch.sum(thal_projection)) - 1)**2
+        loss = (torch.sum(str_act) - 10)**2 + (torch.sum(alm_act)**2) + (torch.sum(torch.sum(thal_projection)) - 10)**2
         losses_thal2str.append(loss.item())
         print(f"Loss at iter {iter}: {loss}")
         thal2str_optim.zero_grad()

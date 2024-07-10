@@ -10,6 +10,7 @@ from utils import gather_inp_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
+plt.rcParams['axes.linewidth'] = 4 # set the value globally
 font = {'size' : 20}
 plt.rc('font', **font)
 
@@ -73,16 +74,15 @@ def main():
 
     # Sample many hidden states to get pcs for dimensionality reduction
     hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-    xn = hn
 
     inhib_stim = torch.zeros(size=(1, x_data.shape[1], hn.shape[-1]), device="cuda")
 
     # Get original trajectory
     with torch.no_grad():
-        _, act, _, _ = rnn(x_data, hn, xn, inhib_stim, noise=False)
+        _, act, = rnn(x_data, hn, inhib_stim, noise=False)
     
     sampled_acts = act[:, 500:, :]
-    snr_act = sampled_acts[:, :, HID_DIM*2:HID_DIM*3]
+    snr_act = sampled_acts[:, :, HID_DIM*3:HID_DIM*4]
     snr_act = np.mean(snr_act.detach().cpu().numpy(), axis=2)
     print(snr_act.shape)
 
