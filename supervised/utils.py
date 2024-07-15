@@ -55,6 +55,25 @@ def gather_inp_data(dt, hid_dim):
 
     return total_inp, len_seq
 
+def get_event_target(dt):
+
+    '''
+        If constraining any network to a specific solution, gather the neural data or create a ramp
+
+        dt: timescale in seconds (0.001 is ms)
+    '''
+    
+    event_targets = {}
+
+    for cond in range(3):
+
+        event_targets[cond] = torch.zeros(size=(int((1.1 + 0.5 * cond) / dt), 1))
+        event_targets[cond][-1] = 1
+
+    event_targets = pad_sequence([event_targets[0], event_targets[1], event_targets[2]], batch_first=True)
+
+    return event_targets
+
 def get_ramp(dt, type="None"):
 
     '''

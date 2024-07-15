@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 3
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_largeinp.pth"
+CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
@@ -84,7 +84,7 @@ def plot_silencing(len_seq,
                                 extra_steps_control)
 
         baseline_orig_control = np.mean(acts[500:1000, start:end], axis=0)
-        peak_orig_control = np.mean(acts[1100 + 500*cond - 400 + ITI_STEPS:1100 + 500*cond + ITI_STEPS, start:end], axis=0)
+        peak_orig_control = np.mean(acts[1100 + 500*cond - 200 + ITI_STEPS:1100 + 500*cond + ITI_STEPS, start:end], axis=0)
 
         ramp_mode = get_ramp_mode(baseline_orig_control, peak_orig_control)
         projected_orig = project_ramp_mode(acts[:, start:end], ramp_mode)

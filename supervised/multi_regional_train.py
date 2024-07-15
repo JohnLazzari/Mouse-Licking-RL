@@ -8,7 +8,7 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_ramp, get_masks
+from utils import gather_inp_data, get_ramp, get_masks, get_event_target
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2, simple_dynamics_stralm, simple_dynamics_d1
 
 HID_DIM = 256 # Hid dim of each region
@@ -21,8 +21,8 @@ WEIGHT_DECAY = 1e-3
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
-TYPE_LOSS = "alm" # alm or none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_largeinp.pth"
+TYPE_LOSS = "alm" # alm, threshold none (none trains all regions to ramp, alm is just alm. alm is currently base model)
+SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 
 '''
 Default Model(s):
@@ -63,13 +63,15 @@ def main():
     neural_act_alm, neural_act_str, neural_act_thal = get_ramp(dt=DT, type=TYPE)
     neural_act_alm, neural_act_str, neural_act_thal = neural_act_alm.cuda(), neural_act_str.cuda(), neural_act_thal.cuda()
 
+    event_targets = get_event_target(DT)
+    event_targets = event_targets.cuda()
+
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
     if MODEL_TYPE == "d1d2":
 
         hn = torch.zeros(size=(1, 3, HID_DIM * 6)).cuda()
-        x = torch.zeros(size=(1, 3, HID_DIM * 6)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 4 
@@ -81,7 +83,6 @@ def main():
     elif MODEL_TYPE == "stralm":
 
         hn = torch.zeros(size=(1, 3, HID_DIM * 2)).cuda()
-        x = torch.zeros(size=(1, 3, HID_DIM * 2)).cuda()
 
         str_units_start = 0
         alm_units_start = HID_DIM
@@ -92,7 +93,6 @@ def main():
     elif MODEL_TYPE == "d1":
 
         hn = torch.zeros(size=(1, 3, HID_DIM * 4)).cuda()
-        x = torch.zeros(size=(1, 3, HID_DIM * 4)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 2
@@ -115,11 +115,37 @@ def main():
 
         # Get loss
         if MODEL_TYPE == "d1d2":
-            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start, type=TYPE_LOSS)
+            loss = loss_d1d2(constraint_criterion, 
+                             act, 
+                             neural_act_alm, 
+                             neural_act_str, 
+                             neural_act_thal, 
+                             event_targets, 
+                             HID_DIM, 
+                             alm_units_start, 
+                             str_units_start, 
+                             thal_units_start, 
+                             type=TYPE_LOSS)
         elif MODEL_TYPE == "stralm":
-            loss = loss_stralm(constraint_criterion, act, neural_act_alm, neural_act_str, alm_units_start, str_units_start)
+            loss = loss_stralm(constraint_criterion, 
+                               act, 
+                               neural_act_alm, 
+                               neural_act_str, 
+                               alm_units_start, 
+                               str_units_start, 
+                               type=TYPE_LOSS)
         elif MODEL_TYPE == "d1":
-            loss = loss_d1d2(constraint_criterion, act, neural_act_alm, neural_act_str, neural_act_thal, HID_DIM, alm_units_start, str_units_start, thal_units_start, type=TYPE_LOSS)
+            loss = loss_d1d2(constraint_criterion, 
+                             act, 
+                             neural_act_alm, 
+                             neural_act_str, 
+                             neural_act_thal, 
+                             event_targets, 
+                             HID_DIM, 
+                             alm_units_start, 
+                             str_units_start, 
+                             thal_units_start, 
+                             type=TYPE_LOSS)
             
         # Save model
         if epoch > 100:

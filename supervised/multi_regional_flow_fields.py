@@ -17,17 +17,17 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDITION = 1
 NUM_POINTS = 100
-MODEL_TYPE = "stralm" # d1d2, d2, stralm
-REGION = "alm" # str, alm, str2thal, or snr
+MODEL_TYPE = "d1d2" # d1d2, d2, stralm
+REGION = "str2thal" # str, alm, str2thal, or snr
 TIME_SKIPS = 100
 PERTURBATION = False
 PERTURBED_REGION = "alm" # str or alm
 ALM_PERTURBATION_TYPE = "none" # onlyramp, onlyITI, or none (none is both ITI and ramp are silenced)
-CONSTRAINED = False
+CONSTRAINED = True
 NUM_POINTS_OPTIMIZATION = 250
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}_unconstrained.pth"
-SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow_unconstrained"
-SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow_unconstrained"
+CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow"
+SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow"
 
 class FlowFields():
     def __init__(self, dimensions=2):
@@ -35,7 +35,7 @@ class FlowFields():
         self.dimensions = dimensions
         self.x_pca = PCA(n_components=dimensions)
     
-    def generate_grid(self, num_points, lower_bound=-1, upper_bound=1):
+    def generate_grid(self, num_points, lower_bound=-12, upper_bound=18):
 
         # Num points is along each axis, not in total
         x = np.linspace(lower_bound, upper_bound, num_points)
@@ -224,7 +224,7 @@ def main():
 
         print(f"input number: {t}")
         # Initialize Fixed Point Finder
-        # fpf = FixedPointFinderTorch(rnn)
+        fpf = FixedPointFinderTorch(rnn)
 
         if t < ITI_steps:
             inp = x_data[CONDITION:CONDITION+1, 0:1, :]
@@ -274,7 +274,6 @@ def main():
                 elif REGION == "snr":
                     next_acts[t].append(act[0, 0, snr_start:snr_start+HID_DIM].detach().cpu().numpy())
         
-        '''
         act_max, act_min = torch.max(h_0), torch.min(h_0)
         print("Max: ", act_max)
         print("Min: ", act_min)
@@ -295,7 +294,6 @@ def main():
         fps, _ = fpf.find_fixed_points(h_init.detach().cpu().numpy(), inp.squeeze(1).detach().cpu().numpy(), region_start, region_end)
         fps_difft[t] = fps
         print(fps_difft[t].xstar.shape)
-        '''
 
     # Reshape data back to grid
     data_coords = data_coords.numpy()
@@ -307,8 +305,6 @@ def main():
         next_acts[i] = flow_field.transform_pca(np.array(next_acts[i]))
         next_acts[i] = np.reshape(next_acts[i], (NUM_POINTS, NUM_POINTS, next_acts[i].shape[-1]))
 
-    
-        '''
         fp_list = fps_difft[i].xstar
         reduced_fps[i] = []
 
@@ -328,7 +324,6 @@ def main():
             for fp in fp_list:
                 fp = np.reshape(fp, (1, -1))
                 reduced_fps[i].append(flow_field.transform_pca(fp[:, :alm_start]).squeeze())
-        '''
         
     if REGION == "str":
         sampled_acts_region = flow_field.transform_pca(hidden_input[0, :, :str_start+HID_DIM].detach().cpu().numpy())
@@ -356,6 +351,7 @@ def main():
 
     for i in range(500, len_seq_act, TIME_SKIPS):
         
+        '''
         print("timestep: ", i)
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
         surf = ax.plot_surface(data_coords[:, :, 0], data_coords[:, :, 1], speeds[i][:, :], cmap=plt.cm.coolwarm,
@@ -363,14 +359,13 @@ def main():
         plt.tight_layout()
         plt.show()
         plt.close()
-
+        '''
+        
         plt.scatter(sampled_acts_region[i, 0], sampled_acts_region[i, 1], c="red", s=250, zorder=10)
         plt.plot(sampled_acts_region[:i, 0], sampled_acts_region[:i, 1], c="black", linewidth=4, zorder=5)
         plt.streamplot(x, y, x_vels[i], y_vels[i], color=speeds[i], cmap="plasma", linewidth=3, arrowsize=2, zorder=0)
-        '''
         for fp in reduced_fps[i]:
             plt.scatter(fp[0], fp[1], color="k", s=250)
-        '''
         plt.yticks([])
         plt.xticks([])
         if PERTURBATION == False:

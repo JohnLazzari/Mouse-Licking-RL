@@ -127,7 +127,8 @@ class FixedPointFinderTorch(FixedPointFinderBase):
             mode='min',
             factor=.25,
             patience=10,
-            cooldown=0)
+            cooldown=0,
+            threshold=1e-10)
 
         iter_count = 1
         iter_learning_rate = init_lr

@@ -13,6 +13,7 @@ def loss_d1d2(constraint_criterion,
                 neural_act_alm, 
                 neural_act_str, 
                 neural_act_thal, 
+                event_target,
                 hid_dim, 
                 alm_start, 
                 str_start, 
@@ -25,14 +26,23 @@ def loss_d1d2(constraint_criterion,
                 constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
                 + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
                 )
-        '''
+    
+    elif type == "threshold":
+
+        mean_act = torch.mean(act[:, 1000:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True)
+        thresh = 1 / (1 + torch.exp(-25 * (mean_act - 1)))
+
         loss = (
-                constraint_criterion(torch.mean(act[0, 2100-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[0, 2100-1, :])
-                + constraint_criterion(torch.mean(act[1, 2600-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[1, 2600-1, :])
-                + constraint_criterion(torch.mean(act[2, 3100-1, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[2, 3100-1, :])
-                + 1e-1 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
+                # event target should be only for delay (in terms of number of timesteps it has)
+                constraint_criterion(thresh[0, :1100-1, :], event_target[0, :1100-1, :])
+                + constraint_criterion(thresh[1, :1600-1, :], event_target[1, :1600-1, :])
+                + constraint_criterion(thresh[2, :2100-1, :], event_target[2, :2100-1, :])
+                + 5 * constraint_criterion(thresh[0, 1100-1, :], event_target[0, 1100-1, :])
+                + 5 * constraint_criterion(thresh[1, 1600-1, :], event_target[1, 1600-1, :])
+                + 5 * constraint_criterion(thresh[2, 2100-1, :], event_target[2, 2100-1, :])
+                + constraint_criterion(torch.mean(act[:, 500:1000, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:1000, :])
+                + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
                 )
-        '''
 
     else:
 

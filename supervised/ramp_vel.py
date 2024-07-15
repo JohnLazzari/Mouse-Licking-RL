@@ -20,7 +20,7 @@ OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDITION = 0
-MODEL_TYPE = "d1d2"
+MODEL_TYPE = "d1"
 CONSTRAINED = True
 CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
 
@@ -33,7 +33,7 @@ def main():
         rnn.load_state_dict(checkpoint)
         total_num_units = HID_DIM * 6
         str_start = int(HID_DIM/4)
-        str_end = int(HID_DIM/2)
+        str_end = int(HID_DIM * (3/4))
         inp_mask = rnn.strthal_mask
     elif MODEL_TYPE == "d1":
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
@@ -74,6 +74,16 @@ def main():
     int_activity_d = np.mean(int_activity_d.detach().cpu().numpy(), axis=-1)
 
     abs_error = np.abs(int_activity_d - vel_const) 
+
+    plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
+    plt.plot(vel_const[0, :len_seq[0] - 1000], '--', linewidth=10, color=(1-0*0.25, 0.1, 0.1)) 
+    plt.plot(vel_const[1, :len_seq[1] - 1000], '--', linewidth=10, color=(1-1*0.25, 0.1, 0.1)) 
+    plt.plot(vel_const[2, :len_seq[2] - 1000], '--', linewidth=10, color=(1-2*0.25, 0.1, 0.1)) 
+    plt.plot(int_activity_d[0, :len_seq[0] - 1000], linewidth=10, color=(1-0*0.25, 0.1, 0.1)) 
+    plt.plot(int_activity_d[1, :len_seq[1] - 1000], linewidth=10, color=(1-1*0.25, 0.1, 0.1)) 
+    plt.plot(int_activity_d[2, :len_seq[2] - 1000], linewidth=10, color=(1-2*0.25, 0.1, 0.1)) 
+    plt.xticks([])
+    plt.show()
 
     plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
     plt.plot(abs_error[0, :len_seq[0] - 1000], linewidth=10, color=(1-0*0.25, 0.1, 0.1)) 
