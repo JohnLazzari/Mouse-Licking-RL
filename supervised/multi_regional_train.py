@@ -5,24 +5,24 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1D2_Simple, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_ramp, get_masks, get_event_target
-from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2, simple_dynamics_stralm, simple_dynamics_d1
+from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 
-HID_DIM = 256 # Hid dim of each region
+HID_DIM = 128 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 EPOCHS = 1000
 LR = 1e-4
 DT = 1e-3
-WEIGHT_DECAY = 1e-3
-MODEL_TYPE = "d1d2" # d1d2, d1, stralm
+WEIGHT_DECAY = 1e-4
+MODEL_TYPE = "d1d2" # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
 TYPE_LOSS = "alm" # alm, threshold none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_128n_nonoise.pth"
 
 '''
 Default Model(s):
@@ -47,17 +47,21 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+    elif MODEL_TYPE == "d1d2_simple":
+        rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
         
     constraint_criterion = nn.MSELoss()
+    thresh_criterion = nn.BCELoss()
 
     # Get input and output data
     x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
-    x_data = x_data.cuda()
+    iti_inp, cue_inp = x_data
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Get ramping activity
     neural_act_alm, neural_act_str, neural_act_thal = get_ramp(dt=DT, type=TYPE)
@@ -71,35 +75,46 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 3, HID_DIM * 6)).cuda()
+        hn = torch.zeros(size=(1, 5, HID_DIM * 6 + INP_DIM)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 4 
         alm_units_start = HID_DIM * 5
 
-        loss_mask_act = get_masks(HID_DIM, len_seq, regions=6)
-        inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*6), device="cuda")
+        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM), device="cuda")
+
+    if MODEL_TYPE == "d1d2_simple":
+
+        hn = torch.zeros(size=(1, 5, HID_DIM * 4 + INP_DIM)).cuda()
+
+        str_units_start = 0
+        thal_units_start = HID_DIM * 2 
+        alm_units_start = HID_DIM * 3
+
+        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=4)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 4 + INP_DIM), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 
-        hn = torch.zeros(size=(1, 3, HID_DIM * 2)).cuda()
+        hn = torch.zeros(size=(1, 5, HID_DIM * 2 + INP_DIM)).cuda()
 
         str_units_start = 0
         alm_units_start = HID_DIM
 
-        loss_mask_act = get_masks(HID_DIM, len_seq, regions=2)
-        inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*2), device="cuda")
+        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=2)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 2 + INP_DIM), device="cuda")
 
     elif MODEL_TYPE == "d1":
 
-        hn = torch.zeros(size=(1, 3, HID_DIM * 4)).cuda()
+        hn = torch.zeros(size=(1, 5, HID_DIM * 4 + INP_DIM)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 2
         alm_units_start = HID_DIM * 3
 
-        loss_mask_act = get_masks(HID_DIM, len_seq, regions=4)
-        inhib_stim = torch.zeros(size=(1, x_data.shape[1], HID_DIM*4), device="cuda")
+        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=4)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 4 + INP_DIM), device="cuda")
     
     ###########################
     #    Begin Training       # 
@@ -108,44 +123,58 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        _, act = rnn(x_data, hn, inhib_stim, noise=True)
+        _, act = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=True)
 
         # Get masks
         act = act * loss_mask_act
 
         # Get loss
-        if MODEL_TYPE == "d1d2":
-            loss = loss_d1d2(constraint_criterion, 
-                             act, 
-                             neural_act_alm, 
-                             neural_act_str, 
-                             neural_act_thal, 
-                             event_targets, 
-                             HID_DIM, 
-                             alm_units_start, 
-                             str_units_start, 
-                             thal_units_start, 
-                             type=TYPE_LOSS)
+        if MODEL_TYPE == "d1d2" or MODEL_TYPE == "d1d2_simple":
+
+            loss = loss_d1d2(
+                constraint_criterion, 
+                thresh_criterion,
+                act, 
+                neural_act_alm, 
+                neural_act_str, 
+                neural_act_thal, 
+                event_targets, 
+                HID_DIM, 
+                alm_units_start, 
+                str_units_start, 
+                thal_units_start, 
+                type=TYPE_LOSS
+            )
+
         elif MODEL_TYPE == "stralm":
-            loss = loss_stralm(constraint_criterion, 
-                               act, 
-                               neural_act_alm, 
-                               neural_act_str, 
-                               alm_units_start, 
-                               str_units_start, 
-                               type=TYPE_LOSS)
+
+            loss = loss_stralm(
+                constraint_criterion, 
+                thresh_criterion,
+                act, 
+                neural_act_alm, 
+                neural_act_str, 
+                alm_units_start, 
+                str_units_start, 
+                type=TYPE_LOSS
+            )
+
         elif MODEL_TYPE == "d1":
-            loss = loss_d1d2(constraint_criterion, 
-                             act, 
-                             neural_act_alm, 
-                             neural_act_str, 
-                             neural_act_thal, 
-                             event_targets, 
-                             HID_DIM, 
-                             alm_units_start, 
-                             str_units_start, 
-                             thal_units_start, 
-                             type=TYPE_LOSS)
+
+            loss = loss_d1d2(
+                constraint_criterion, 
+                thresh_criterion,
+                act, 
+                neural_act_alm, 
+                neural_act_str, 
+                neural_act_thal, 
+                event_targets, 
+                HID_DIM, 
+                alm_units_start, 
+                str_units_start, 
+                thal_units_start, 
+                type=TYPE_LOSS
+            )
             
         # Save model
         if epoch > 100:
@@ -157,12 +186,8 @@ def main():
         rnn_optim.zero_grad()
         loss.backward()
 
-        if MODEL_TYPE == "d1d2":
-            simple_dynamics_d1d2(act, rnn, HID_DIM, constrained=CONSTRAINED)
-        elif MODEL_TYPE == "stralm":
-            simple_dynamics_stralm(act, rnn, HID_DIM, constrained=CONSTRAINED)
-        elif MODEL_TYPE == "d1":
-            simple_dynamics_d1(act, rnn, HID_DIM, constrained=CONSTRAINED)
+        #if MODEL_TYPE == "d1d2":
+        #    simple_dynamics_d1d2(act, rnn, HID_DIM) 
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)

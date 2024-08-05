@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRegional_D1
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1D2_Simple, RNN_MultiRegional_STRALM, RNN_MultiRegional_D1
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -20,23 +20,24 @@ plt.rcParams['figure.figsize'] = [10, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-HID_DIM = 256
+HID_DIM = 128
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
-CONDS = 3
+CONDS = 5
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_{MODEL_TYPE}.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_128n_nonoise.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
 START_SILENCE = 1600 # timepoint from start of trial to silence at
-END_SILENCE = 2100 # timepoint from start of trial to end silencing
+END_SILENCE = 2200 # timepoint from start of trial to end silencing
+EXTRA_STEPS_SILENCE = 1000
+EXTRA_STEPS_CONTROL = 0
 
 def plot_silencing(len_seq, 
                    conds, 
                    rnn, 
-                   hid_dim, 
                    x_data, 
                    save_name_control, 
                    save_name_silencing, 
@@ -50,63 +51,92 @@ def plot_silencing(len_seq,
                    ):
 
     if MODEL_TYPE == "d1d2" and evaluated_region == "alm":
-        start = hid_dim*5
-        end = hid_dim*6
+        start = HID_DIM*5
+        end = HID_DIM*6
     elif MODEL_TYPE == "d1d2" and evaluated_region == "str":
         start = 0
-        end = int(hid_dim/2)
+        end = int(HID_DIM/2)
+    elif MODEL_TYPE == "d1d2_simple" and evaluated_region == "alm":
+        start = HID_DIM*3
+        end = HID_DIM*4
+    elif MODEL_TYPE == "d1d2_simple" and evaluated_region == "str":
+        start = 0
+        end = int(HID_DIM/2)
     elif MODEL_TYPE == "stralm" and evaluated_region == "alm":
-        start = hid_dim
-        end = hid_dim*2
+        start = HID_DIM
+        end = HID_DIM*2
     elif MODEL_TYPE == "stralm" and evaluated_region == "str":
         start = 0
-        end = hid_dim
+        end = HID_DIM
     elif MODEL_TYPE == "d1" and evaluated_region == "alm":
-        start = hid_dim*3
-        end = hid_dim*4
+        start = HID_DIM*3
+        end = HID_DIM*4
     elif MODEL_TYPE == "d1" and evaluated_region == "str":
         start = 0
-        end = hid_dim
+        end = HID_DIM
     
     ramp_orig = {}
     ramp_silenced = {}
+    act_conds_orig = []
+    act_conds_silenced = []
 
     for cond in range(conds):
 
         # activity without silencing
-        acts = get_acts_control(len_seq, 
-                                rnn, 
-                                hid_dim, 
-                                x_data, 
-                                cond, 
-                                MODEL_TYPE, 
-                                ITI_STEPS, 
-                                extra_steps_control)
+        acts = get_acts_control(
+            len_seq, 
+            rnn, 
+            HID_DIM, 
+            INP_DIM,
+            x_data, 
+            cond, 
+            MODEL_TYPE, 
+            ITI_STEPS, 
+            extra_steps_control
+        )
+        
+        act_conds_orig.append(acts)
+        
+        # activity with silencing
+        acts_silenced = get_acts_manipulation(
+            len_seq, 
+            rnn, 
+            HID_DIM, 
+            INP_DIM,
+            x_data, 
+            cond, 
+            MODEL_TYPE, 
+            ITI_STEPS,
+            START_SILENCE,
+            END_SILENCE,
+            stim_strength, 
+            extra_steps_silence, 
+            silenced_region, 
+        )
+                                    
+        act_conds_silenced.append(acts_silenced)
+    
+    orig_baselines = []
+    orig_peaks = []
+    
+    for cond in range(conds):
 
-        baseline_orig_control = np.mean(acts[500:1000, start:end], axis=0)
-        peak_orig_control = np.mean(acts[1100 + 500*cond - 200 + ITI_STEPS:1100 + 500*cond + ITI_STEPS, start:end], axis=0)
+        baseline_orig_control = np.mean(act_conds_orig[cond][500:1000, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond][1000 + 500*cond - 200 + ITI_STEPS:1000 + 500*cond + ITI_STEPS, start:end], axis=0)
+        orig_baselines.append(baseline_orig_control)
+        orig_peaks.append(peak_orig_control)
+    
+    orig_baselines = np.array(orig_baselines)
+    orig_peaks = np.array(orig_peaks)
 
-        ramp_mode = get_ramp_mode(baseline_orig_control, peak_orig_control)
-        projected_orig = project_ramp_mode(acts[:, start:end], ramp_mode)
+    ramp_mode = get_ramp_mode(orig_baselines, orig_peaks)
 
+    for cond in range(conds):
+
+        projected_orig = project_ramp_mode(act_conds_orig[cond][:, start:end], ramp_mode)
         ramp_orig[cond] = projected_orig
 
-        # activity with silencing
-        acts = get_acts_manipulation(len_seq, 
-                                    rnn, 
-                                    hid_dim, 
-                                    x_data, 
-                                    cond, 
-                                    MODEL_TYPE, 
-                                    ITI_STEPS,
-                                    START_SILENCE,
-                                    END_SILENCE,
-                                    stim_strength, 
-                                    extra_steps_silence, 
-                                    silenced_region, 
-                                    )
-
-        projected_silenced = project_ramp_mode(acts[:, start:end], ramp_mode)
+        projected_silenced = project_ramp_mode(act_conds_silenced[cond][:, start:end], ramp_mode)
         ramp_silenced[cond] = projected_silenced
 
     plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
@@ -115,15 +145,15 @@ def plot_silencing(len_seq,
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.5 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 500)
-        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.5 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 500)
+        xs_p[cond] = np.linspace(-0.5, 1 + 0.5 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 500)
+        xs_u[cond] = np.linspace(-0.5, 1 + 0.5 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 500)
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1.1 + 0.5 * cond}s", linewidth=8, color=(1-cond*0.25, 0.1, 0.1))
-            plt.axvline(x=1.1 + 0.5 * cond, linestyle='--', color=(1-cond*0.25, 0.1, 0.1))
+            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1 + 0.5 * cond}s", linewidth=10)
+            plt.axvline(x=1 + 0.5 * cond, linestyle='--')
         else:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], linewidth=8, color=(1-cond*0.25, 0.1, 0.1))
+            plt.plot(xs_u[cond], ramp_orig[cond][500:], linewidth=10)
 
     if use_label:
         plt.xlabel("Time (s)")
@@ -139,7 +169,7 @@ def plot_silencing(len_seq,
     plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
 
     for cond in range(conds):
-        plt.plot(xs_p[cond], ramp_silenced[cond][500:], linewidth=8, color=(1-cond*0.25, 0.1, 0.1))
+        plt.plot(xs_p[cond], ramp_silenced[cond][500:], linewidth=10)
 
     plt.xticks([])
     plt.tick_params(left=False, bottom=False) 
@@ -152,76 +182,81 @@ def main():
     
     # Create RNN
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
+    elif MODEL_TYPE == "d1d2_simple":
+        rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
 
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(dt=0.001, hid_dim=HID_DIM)
-    x_data = x_data.cuda()
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     
-    plot_silencing(len_seq, 
-                   CONDS, 
-                   rnn, 
-                   HID_DIM, 
-                   x_data, 
-                   SAVE_NAME_PATH + "alm_activity_control", 
-                   SAVE_NAME_PATH + "alm_activity_alm_silencing",
-                   silenced_region="alm", 
-                   evaluated_region="alm", 
-                   dt=DT, 
-                   stim_strength=-10, 
-                   extra_steps_control=0,
-                   extra_steps_silence=500,
-                   use_label=True)
+    plot_silencing(
+        len_seq, 
+        CONDS, 
+        rnn, 
+        x_data, 
+        SAVE_NAME_PATH + "alm_activity_control", 
+        SAVE_NAME_PATH + "alm_activity_alm_silencing",
+        silenced_region="alm", 
+        evaluated_region="alm", 
+        dt=DT, 
+        stim_strength=-10, 
+        extra_steps_control=EXTRA_STEPS_CONTROL,
+        extra_steps_silence=EXTRA_STEPS_SILENCE,
+        use_label=True
+    )
 
-    plot_silencing(len_seq, 
-                   CONDS, 
-                   rnn, 
-                   HID_DIM, 
-                   x_data, 
-                   SAVE_NAME_PATH + "alm_activity_control", 
-                   SAVE_NAME_PATH + "alm_activity_str_silencing",
-                   silenced_region="str", 
-                   evaluated_region="alm", 
-                   dt=DT, 
-                   stim_strength=-0.5, 
-                   extra_steps_control=0,
-                   extra_steps_silence=500,
-                   )
+    plot_silencing(
+        len_seq, 
+        CONDS, 
+        rnn, 
+        x_data, 
+        SAVE_NAME_PATH + "alm_activity_control", 
+        SAVE_NAME_PATH + "alm_activity_str_silencing",
+        silenced_region="str", 
+        evaluated_region="alm", 
+        dt=DT, 
+        stim_strength=-0.5, 
+        extra_steps_control=EXTRA_STEPS_CONTROL,
+        extra_steps_silence=EXTRA_STEPS_SILENCE,
+        use_label=True
+    )
 
-    plot_silencing(len_seq, 
-                   CONDS, 
-                   rnn, 
-                   HID_DIM, 
-                   x_data, 
-                   SAVE_NAME_PATH + "str_activity_control", 
-                   SAVE_NAME_PATH + "str_activity_alm_silencing",
-                   silenced_region="alm", 
-                   evaluated_region="str", 
-                   dt=DT, 
-                   stim_strength=-10,
-                   extra_steps_control=0,
-                   extra_steps_silence=500,
-                   )
+    plot_silencing(
+        len_seq, 
+        CONDS, 
+        rnn, 
+        x_data, 
+        SAVE_NAME_PATH + "str_activity_control", 
+        SAVE_NAME_PATH + "str_activity_alm_silencing",
+        silenced_region="alm", 
+        evaluated_region="str", 
+        dt=DT, 
+        stim_strength=-10,
+        extra_steps_control=EXTRA_STEPS_CONTROL,
+        extra_steps_silence=EXTRA_STEPS_SILENCE,
+        use_label=True
+    )
 
-    plot_silencing(len_seq, 
-                   CONDS, 
-                   rnn, 
-                   HID_DIM, 
-                   x_data, 
-                   SAVE_NAME_PATH + "str_activity_control", 
-                   SAVE_NAME_PATH + "str_activity_str_silencing",
-                   silenced_region="str", 
-                   evaluated_region="str", 
-                   dt=DT, 
-                   stim_strength=-0.5, 
-                   extra_steps_control=0,
-                   extra_steps_silence=500,
-                   )
+    plot_silencing(
+        len_seq, 
+        CONDS, 
+        rnn,
+        x_data, 
+        SAVE_NAME_PATH + "str_activity_control", 
+        SAVE_NAME_PATH + "str_activity_str_silencing",
+        silenced_region="str", 
+        evaluated_region="str", 
+        dt=DT, 
+        stim_strength=-0.5, 
+        extra_steps_control=EXTRA_STEPS_CONTROL,
+        extra_steps_silence=EXTRA_STEPS_SILENCE,
+        use_label=True
+    )
     
 if __name__ == "__main__":
     main()

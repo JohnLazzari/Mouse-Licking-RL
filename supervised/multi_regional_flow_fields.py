@@ -175,7 +175,6 @@ def main():
 
         perturbed_acts = []
         hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-        xn = hn
 
         for t in range(len_seq_act):
 
