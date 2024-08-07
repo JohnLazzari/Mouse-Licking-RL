@@ -14,7 +14,7 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 HID_DIM = 128 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
-EPOCHS = 1500
+EPOCHS = 2000
 LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-4
@@ -22,7 +22,7 @@ MODEL_TYPE = "d1d2" # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
 TYPE_LOSS = "alm" # alm, threshold none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_stn2gpe_gpe2str_128n_allnoise.pth"
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_128n_almnoise.pth"
 
 '''
 Default Model(s):

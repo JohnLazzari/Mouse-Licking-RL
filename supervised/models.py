@@ -56,8 +56,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_thal_int = 0.25 * torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_thal_alm = 0.25 * torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_iti = torch.zeros(size=(inp_dim,), device="cuda")
 
@@ -259,8 +259,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Concatenate into single weight matrix
 
                                 # STR       GPE         STN         SNR       Thal      ALM         ALM ITI
-            W_str = torch.cat([str2str, gpe2str, self.zeros, self.zeros, thal2str, alm2str, inp_weight_str], dim=1)          # STR
-            W_gpe = torch.cat([str2gpe, self.zeros, stn2gpe, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # GPE
+            W_str = torch.cat([str2str, self.zeros, self.zeros, self.zeros, thal2str, alm2str, inp_weight_str], dim=1)          # STR
+            W_gpe = torch.cat([str2gpe, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # GPE
             W_stn = torch.cat([self.zeros, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # STN
             W_snr = torch.cat([str2snr, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)        # SNR
             W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, alm2thal, self.zeros_inp_from], dim=1)   # Thal
@@ -304,7 +304,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
                 hn_next = F.relu(hn_next 
                         + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + iti_input + inhib_stim[:, t, :] + self.tonic_inp + cue_inp[:, t, :] * self.str_mask) 
-                        + perturb_hid)
+                        + (perturb_hid * self.alm_ramp_mask))
             
             else:
             

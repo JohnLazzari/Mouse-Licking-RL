@@ -27,7 +27,7 @@ STIM_STRENGTH = -10
 REGION_TO_SILENCE = "alm"
 EXTRA_STEPS = 1000
 ITI_STEPS = 1000
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_stn2gpe_gpe2str_128n_allnoise.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_128n_almnoise.pth"
 
 def main():
     
