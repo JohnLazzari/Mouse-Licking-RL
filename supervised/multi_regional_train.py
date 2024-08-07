@@ -14,7 +14,7 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 HID_DIM = 128 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
-EPOCHS = 1000
+EPOCHS = 1500
 LR = 1e-4
 DT = 1e-3
 WEIGHT_DECAY = 1e-4
@@ -22,7 +22,7 @@ MODEL_TYPE = "d1d2" # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True
 TYPE = "None" # None, randincond, randacrosscond
 TYPE_LOSS = "alm" # alm, threshold none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_128n_nonoise.pth"
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_stn2gpe_gpe2str_128n_allnoise.pth"
 
 '''
 Default Model(s):
@@ -47,7 +47,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.015, noise_level_inp=0.5, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1d2_simple":
         rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":

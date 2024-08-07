@@ -2,129 +2,161 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
+import torch.optim as optim
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 from sklearn.decomposition import PCA
 import scipy.io as sio
-from utils import gather_delay_data
+from utils import gather_inp_data, get_acts_manipulation
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
+font = {'size' : 20}
+plt.rc('font', **font)
 
-HID_DIM = 256 # Hid dim of each region
+HID_DIM = 128 # Hid dim of each region
 OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.04)
+INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDITION = 0
-CHECK_PATH = f"checkpoints/rnn_goal_data_multiregional_bigger_long_conds_localcircuit_ramping_d1d2.pth"
-
-def get_perturbed_trajectories(rnn, len_seq, total_num_units, x_data, ITI_steps, start_silence, end_silence, str_mask, stim_strength):
-
-    perturbed_acts = []
-    hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-    xn = hn
-
-    for t in range(len_seq[CONDITION] + 1000):
-
-        if t < ITI_steps:
-            inp = x_data[CONDITION:CONDITION+1, 0:1, :]
-        else:
-            inp = x_data[CONDITION:CONDITION+1, ITI_steps+1:ITI_steps+2, :]
-
-        with torch.no_grad():        
-
-            if t > start_silence and t < end_silence:
-                inhib_stim = (stim_strength * str_mask).unsqueeze(0).unsqueeze(0)
-            else:
-                inhib_stim = torch.zeros(size=(1, 1, hn.shape[-1]), device="cuda")
-                    
-            _, hn, _, xn, _ = rnn(inp, hn, xn, inhib_stim, noise=False)
-            
-            perturbed_acts.append(hn)
-    
-    perturbed_acts = torch.concatenate(perturbed_acts, dim=1).clone().detach().cuda()
-
-    return perturbed_acts
+START_SILENCE = 1600
+END_SILENCE = 2200
+MODEL_TYPE = "d1d2"
+STIM_STRENGTH = -10
+REGION_TO_SILENCE = "alm"
+EXTRA_STEPS = 1000
+ITI_STEPS = 1000
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_stn2gpe_gpe2str_128n_allnoise.pth"
 
 def main():
     
-    ITI_steps = 1000
-    extra_steps = 0
-    start_silence = 600 + ITI_steps
-    end_silence = 1100 + ITI_steps
     checkpoint = torch.load(CHECK_PATH)
     
     # Create RNN
     rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
     rnn.load_state_dict(checkpoint)
 
-    str_mask = rnn.str_d1_mask
-
-    total_num_units = HID_DIM * 6
+    total_num_units = HID_DIM * 6 + INP_DIM
     str_start = 0
     stn_start = HID_DIM*2
     snr_start = HID_DIM*3
 
     # Get input and output data
-    x_data, y_data, len_seq = gather_delay_data(dt=DT, hid_dim=HID_DIM)
-    x_data = x_data.cuda()
-    y_data = y_data.cuda()
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    iti_inp, cue_inp = x_data
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Sample many hidden states to get pcs for dimensionality reduction
-    hn = torch.zeros(size=(1, 1, total_num_units)).cuda()
-    xn = hn
+    hn = torch.zeros(size=(1, 5, total_num_units)).cuda()
 
-    inhib_stim = torch.zeros(size=(1, x_data.shape[1], hn.shape[-1]), device="cuda")
+    inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], hn.shape[-1]), device="cuda")
 
     # Get original trajectory
     with torch.no_grad():
-        _, _, act, _, _ = rnn(x_data[CONDITION:CONDITION+1, :, :], hn, xn, inhib_stim, noise=False)
+        _, act = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=False)
     
-    sampled_acts = act[0, 500:len_seq[CONDITION], :]
+    thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-10, 1).detach().cpu().numpy()
+    alm2str = (rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)).detach().cpu().numpy()
+    inp_weight_str = F.hardtanh(rnn.inp_weight_str, 1e-10, 1).detach().cpu().numpy()
+    str2str = ((rnn.str2str_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D).detach().cpu().numpy()
 
-    d1_activity = sampled_acts[:, :int(HID_DIM/2)]
-    d2_activity = sampled_acts[:, int(HID_DIM/2):HID_DIM]
+    thal_activity = act[:, :, HID_DIM*4:HID_DIM*5].detach().clone().cpu().numpy()
+    alm_activity = act[:, :, HID_DIM*5:HID_DIM*6].detach().clone().cpu().numpy()
+    iti_activity = act[:, :, HID_DIM*6:].detach().clone().cpu().numpy()
+    str_activity = act[:, :, :HID_DIM].detach().clone().cpu().numpy()
+
+    thal2str_acts = []
+    alm2str_acts = []
+    iti2str_acts = []
+    str_decay = []
+
+    for cond in range(iti_inp.shape[0]):
+
+        thal2str_act_cur = np.mean((thal2str @ thal_activity[cond].T).T, axis=-1)
+        alm2str_act_cur = np.mean((alm2str @ alm_activity[cond].T).T, axis=-1)
+        iti2str_act_cur = np.mean((inp_weight_str @ iti_activity[cond].T).T, axis=-1)
+        str_decay_cur = np.mean((str2str @ str_activity[cond].T).T, axis=-1) - np.mean(str_activity[cond], axis=-1)
+
+        thal2str_acts.append(thal2str_act_cur)
+        alm2str_acts.append(alm2str_act_cur)
+        iti2str_acts.append(iti2str_act_cur)
+        str_decay.append(str_decay_cur)
     
-    sampled_acts = sampled_acts.detach().cpu().numpy()
-    d1_activity = d1_activity.detach().cpu().numpy()
-    d2_activity = d2_activity.detach().cpu().numpy()
-
-    d1_activity_peak = np.mean(d1_activity[-400:, :], axis=0)
-    d2_activity_peak = np.mean(d2_activity[-400:, :], axis=0)
-
-    disc = d1_activity_peak - d2_activity_peak
-    disc = disc / np.linalg.norm(disc)
-
-    # reduce d1 and d2 snr activity using PCA
-    d2_snr_activity_reduced = d2_activity @ disc
-    d1_snr_activity_reduced = d1_activity @ disc
-
-    # Get perturbed trajectories
-    d1_perturbed_trajectories = []
-    d2_perturbed_trajectories = []
-    stim_strengths = [0.25, 0.75, 1.25]
-
-    for stim in stim_strengths:
-        perturbed_act = get_perturbed_trajectories(rnn, len_seq, total_num_units, x_data, ITI_steps, start_silence, end_silence, str_mask, stim)
-        d1_perturbed_trajectories.append(perturbed_act[0, 500:, :int(HID_DIM/2)])
-        d2_perturbed_trajectories.append(perturbed_act[0, 500:, int(HID_DIM/2):HID_DIM])
-
-    projected_perturbed_d1 = []
-    projected_perturbed_d2 = []
-
-    for d1, d2 in zip(d1_perturbed_trajectories, d2_perturbed_trajectories):
-
-        projected_perturbed_d1.append(d1.detach().cpu().numpy() @ disc)
-        projected_perturbed_d2.append(d2.detach().cpu().numpy() @ disc)
-    
-    plt.plot(d1_snr_activity_reduced, linewidth=4, color="red") 
-    plt.plot(d2_snr_activity_reduced, linewidth=4, color="blue") 
+    plt.plot(np.array(thal2str_acts).T, linewidth=6)
     plt.show()
+
+    plt.plot(np.array(alm2str_acts).T, linewidth=6)
+    plt.show()
+
+    plt.plot(np.array(iti2str_acts).T, linewidth=6)
+    plt.show()
+
+    plt.plot(np.array(str_decay).T, linewidth=6)
+    plt.show()
+
+    thal2str_acts_manipulation = []
+    alm2str_acts_manipulation = []
+    iti2str_acts_manipulation = []
+    str_decay_manipulation = []
+    for cond in range(iti_inp.shape[0]):
+        act_manipulation = get_acts_manipulation(
+            len_seq, 
+            rnn, 
+            HID_DIM,
+            INP_DIM,
+            x_data,
+            cond,
+            MODEL_TYPE,
+            ITI_STEPS,
+            START_SILENCE,
+            END_SILENCE,
+            STIM_STRENGTH,
+            EXTRA_STEPS,
+            REGION_TO_SILENCE
+            )
+
+        thal_act_manipulation_cur = act_manipulation[:, HID_DIM*4:HID_DIM*5]
+        alm_act_manipulation_cur = act_manipulation[:, HID_DIM*5:HID_DIM*6]
+        iti_act_manipulation_cur = act_manipulation[:, HID_DIM*6:]
+        str_act_manipulation_cur = act_manipulation[:, :HID_DIM]
+
+        thal2str_act_manipulation_cur = np.mean((thal2str @ thal_act_manipulation_cur.T).T, axis=-1)
+        alm2str_act_manipulation_cur = np.mean((alm2str @ alm_act_manipulation_cur.T).T, axis=-1)
+        iti2str_act_manipulation_cur = np.mean((inp_weight_str @ iti_act_manipulation_cur.T).T, axis=-1)
+        str_decay_manipulation_cur = np.mean((str2str @ thal_act_manipulation_cur.T).T, axis=-1) - np.mean(str_act_manipulation_cur, axis=-1)
+
+        thal2str_acts_manipulation.append(thal2str_act_manipulation_cur)
+        alm2str_acts_manipulation.append(alm2str_act_manipulation_cur)
+        iti2str_acts_manipulation.append(iti2str_act_manipulation_cur)
+        str_decay_manipulation.append(str_decay_manipulation_cur)
     
-    for i in range(3):
-        plt.plot(projected_perturbed_d1[i], linewidth=4, color=(1-i*0.25, 0.1, 0.1)) 
-        plt.plot(projected_perturbed_d2[i], linewidth=4, color=(0.1, 0.1, 1-i*0.25)) 
-    
+    plt.plot(thal2str_acts_manipulation[0], linewidth=6)
+    plt.plot(thal2str_acts_manipulation[1], linewidth=6)
+    plt.plot(thal2str_acts_manipulation[2], linewidth=6)
+    plt.plot(thal2str_acts_manipulation[3], linewidth=6)
+    plt.plot(thal2str_acts_manipulation[4], linewidth=6)
+    plt.show()
+
+    plt.plot(alm2str_acts_manipulation[0], linewidth=6)
+    plt.plot(alm2str_acts_manipulation[1], linewidth=6)
+    plt.plot(alm2str_acts_manipulation[2], linewidth=6)
+    plt.plot(alm2str_acts_manipulation[3], linewidth=6)
+    plt.plot(alm2str_acts_manipulation[4], linewidth=6)
+    plt.show()
+
+    plt.plot(iti2str_acts_manipulation[0], linewidth=6)
+    plt.plot(iti2str_acts_manipulation[1], linewidth=6)
+    plt.plot(iti2str_acts_manipulation[2], linewidth=6)
+    plt.plot(iti2str_acts_manipulation[3], linewidth=6)
+    plt.plot(iti2str_acts_manipulation[4], linewidth=6)
+    plt.show()
+
+    plt.plot(str_decay_manipulation[0], linewidth=6)
+    plt.plot(str_decay_manipulation[1], linewidth=6)
+    plt.plot(str_decay_manipulation[2], linewidth=6)
+    plt.plot(str_decay_manipulation[3], linewidth=6)
+    plt.plot(str_decay_manipulation[4], linewidth=6)
     plt.show()
 
 if __name__ == "__main__":

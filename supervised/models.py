@@ -183,7 +183,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
             # thal to STR mask
             sparse_matrix = torch.empty_like(self.thal2str_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.4)
+            nn.init.sparse_(sparse_matrix, 0.5)
             self.thal2str_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             
         else:
@@ -259,11 +259,11 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Concatenate into single weight matrix
 
                                 # STR       GPE         STN         SNR       Thal      ALM         ALM ITI
-            W_str = torch.cat([str2str, self.zeros, self.zeros, self.zeros, thal2str, alm2str, inp_weight_str], dim=1)          # STR
-            W_gpe = torch.cat([str2gpe, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # GPE
+            W_str = torch.cat([str2str, gpe2str, self.zeros, self.zeros, thal2str, alm2str, inp_weight_str], dim=1)          # STR
+            W_gpe = torch.cat([str2gpe, self.zeros, stn2gpe, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # GPE
             W_stn = torch.cat([self.zeros, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # STN
             W_snr = torch.cat([str2snr, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)        # SNR
-            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_inp_from], dim=1)   # Thal
+            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, alm2thal, self.zeros_inp_from], dim=1)   # Thal
             W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_inp_from], dim=1)       # ALM
             W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_rec], dim=1)       # ALM ITI
 
@@ -304,7 +304,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
                 hn_next = F.relu(hn_next 
                         + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + iti_input + inhib_stim[:, t, :] + self.tonic_inp + cue_inp[:, t, :] * self.str_mask) 
-                        + (perturb_hid * self.alm_ramp_mask))
+                        + perturb_hid)
             
             else:
             

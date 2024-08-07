@@ -284,7 +284,7 @@ def project_ramp_mode(samples, ramp_mode):
 
 def get_iti_mode(activity, lick_times):
     
-    # Activity should be of shape [samples, num_neurons], lick_times [samples]
+    # Activity should be of shape [num_neurons, samples], lick_times [samples]
     iti_mode = []
     for neuron in activity:
         correlation = spearmanr(neuron, lick_times, axis=0)
@@ -328,3 +328,47 @@ def get_input_silence(iti_inp, cue_inp, len_seq, extra_steps):
     inp_cue = torch.cat([inp_cue_pre, inp_cue_post], dim=1)
     
     return inp_iti, inp_cue
+
+def get_region_borders(model_type, region, hid_dim, inp_dim):
+    
+    if model_type == "d1d2" and region == "alm":
+
+        start = hid_dim*5
+        end = hid_dim*6 + inp_dim
+
+    elif model_type == "d1d2" and region == "str":
+
+        start = 0
+        end = int(hid_dim/2)
+
+    elif model_type == "d1d2_simple" and region == "alm":
+
+        start = hid_dim*3
+        end = hid_dim*4 + inp_dim
+
+    elif model_type == "d1d2_simple" and region == "str":
+
+        start = 0
+        end = int(hid_dim/2)
+
+    elif model_type == "stralm" and region == "alm":
+
+        start = hid_dim
+        end = hid_dim*2 + inp_dim
+
+    elif model_type == "stralm" and region == "str":
+
+        start = 0
+        end = hid_dim
+
+    elif model_type == "d1" and region == "alm":
+
+        start = hid_dim*3
+        end = hid_dim*4 + inp_dim
+
+    elif model_type == "d1" and region == "str":
+
+        start = 0
+        end = hid_dim
+    
+    return start, end
