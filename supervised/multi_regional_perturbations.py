@@ -20,13 +20,13 @@ plt.rcParams['figure.figsize'] = [10, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-HID_DIM = 128
+HID_DIM = 256
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 5
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_128n_almnoise.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_allnoise.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
@@ -94,6 +94,8 @@ def plot_silencing(len_seq,
             ITI_STEPS, 
             extra_steps_control
         )
+
+        
         
         act_conds_orig.append(acts)
         
@@ -115,7 +117,7 @@ def plot_silencing(len_seq,
         )
                                     
         act_conds_silenced.append(acts_silenced)
-    
+
     orig_baselines = []
     orig_peaks = []
     

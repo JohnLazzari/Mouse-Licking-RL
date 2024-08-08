@@ -26,7 +26,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.constrained = constrained
 
         self.alm_ramp_mask = torch.cat([torch.zeros(size=(hid_dim * 5,)), 
-                                    torch.ones(size=(hid_dim,)),
+                                    torch.ones(size=(hid_dim - int(hid_dim * 0.3),)),
+                                    torch.zeros(size=(int(hid_dim * 0.3),)),
                                     torch.zeros(size=(inp_dim,))]).cuda()
 
         self.full_alm_mask = torch.cat([torch.zeros(size=(hid_dim * 5,)), 
@@ -56,8 +57,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal_int = 0.25 * torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_thal_alm = 0.25 * torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_iti = torch.zeros(size=(inp_dim,), device="cuda")
 
@@ -110,7 +111,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         if constrained:
 
             # Initialize weights to be all positive for Dale's Law
-            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 1e-3)
+            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 1e-2)
             nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 1e-2)
             nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 1e-2)
             nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 1e-2)
@@ -131,7 +132,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Implement Necessary Masks
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.9)
+            nn.init.sparse_(sparse_matrix, 0.85)
             self.str2str_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             self.str2str_D = -1*torch.eye(hid_dim).cuda()
 
@@ -237,7 +238,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         if self.constrained:
 
             # Get full weights for training
-            str2str = (self.str2str_mask * F.hardtanh(self.str2str_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
+            str2str = F.hardtanh(self.str2str_weight_l0_hh, 1e-10, 1) @ self.str2str_D
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
             alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-10, 1)
             alm2thal = self.alm2thal_mask * F.hardtanh(self.alm2thal_weight_l0_hh, 1e-10, 1)
@@ -263,7 +264,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             W_gpe = torch.cat([str2gpe, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # GPE
             W_stn = torch.cat([self.zeros, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)     # STN
             W_snr = torch.cat([str2snr, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)        # SNR
-            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, alm2thal, self.zeros_inp_from], dim=1)   # Thal
+            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_inp_from], dim=1)   # Thal
             W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_inp_from], dim=1)       # ALM
             W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_rec], dim=1)       # ALM ITI
 
@@ -304,7 +305,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
                 hn_next = F.relu(hn_next 
                         + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + iti_input + inhib_stim[:, t, :] + self.tonic_inp + cue_inp[:, t, :] * self.str_mask) 
-                        + (perturb_hid * self.alm_ramp_mask))
+                        + perturb_hid)
             
             else:
             

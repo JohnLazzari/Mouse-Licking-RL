@@ -15,7 +15,7 @@ plt.rcParams['axes.spines.top'] = False
 font = {'size' : 20}
 plt.rc('font', **font)
 
-HID_DIM = 128 # Hid dim of each region
+HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
@@ -27,7 +27,7 @@ STIM_STRENGTH = -10
 REGION_TO_SILENCE = "alm"
 EXTRA_STEPS = 1000
 ITI_STEPS = 1000
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_alm2thal_128n_almnoise.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_allnoise.pth"
 
 def main():
     
@@ -59,7 +59,7 @@ def main():
     thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-10, 1).detach().cpu().numpy()
     alm2str = (rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)).detach().cpu().numpy()
     inp_weight_str = F.hardtanh(rnn.inp_weight_str, 1e-10, 1).detach().cpu().numpy()
-    str2str = ((rnn.str2str_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D).detach().cpu().numpy()
+    str2str = (F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1) @ rnn.str2str_D).detach().cpu().numpy()
 
     thal_activity = act[:, :, HID_DIM*4:HID_DIM*5].detach().clone().cpu().numpy()
     alm_activity = act[:, :, HID_DIM*5:HID_DIM*6].detach().clone().cpu().numpy()

@@ -25,7 +25,7 @@ def loss_d1d2(constraint_criterion,
 
         loss = (
                 constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
-                + 1e-4 * torch.mean(torch.pow(act[:, 1000:, :], 2), dim=(1, 2, 0))  
+                + 1e-3 * torch.mean(torch.pow(act[:, 1000:, :], 2), dim=(1, 2, 0))  
                 )
     
     elif type == "threshold":
