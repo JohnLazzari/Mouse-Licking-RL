@@ -11,18 +11,18 @@ import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_ramp, get_masks, get_event_target
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 
-HID_DIM = 256                       # Hid dim of each region
-OUT_DIM = 1
-INP_DIM = int(HID_DIM*0.1)
-EPOCHS = 2000
-LR = 1e-4
-DT = 1e-3
-WEIGHT_DECAY = 1e-3
-MODEL_TYPE = "d1d2"                 # d1d2, d1, stralm, d1d2_simple
-CONSTRAINED = True
-TYPE = "None"                       # None, randincond, randacrosscond
-TYPE_LOSS = "alm"                   # alm, threshold none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_allnoise.pth"
+HID_DIM = 256                                                                       # Hid dim of each region
+OUT_DIM = 1                                                                         # Output dim (not used)
+INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
+EPOCHS = 3000                                                                       # Training iterations
+LR = 1e-4                                                                           # Learning rate
+DT = 1e-3                                                                           # DT to control number of timesteps
+WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
+MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
+CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
+TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
+TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -47,7 +47,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=2.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1d2_simple":
         rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":

@@ -26,12 +26,12 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 5
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_allnoise.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
-START_SILENCE = 1600 # timepoint from start of trial to silence at
-END_SILENCE = 2200 # timepoint from start of trial to end silencing
+START_SILENCE = 1600                    # timepoint from start of trial to silence at
+END_SILENCE = 2200                      # timepoint from start of trial to end silencing
 EXTRA_STEPS_SILENCE = 1000
 EXTRA_STEPS_CONTROL = 0
 
@@ -95,8 +95,6 @@ def plot_silencing(len_seq,
             extra_steps_control
         )
 
-        
-        
         act_conds_orig.append(acts)
         
         # activity with silencing
@@ -125,6 +123,7 @@ def plot_silencing(len_seq,
 
         baseline_orig_control = np.mean(act_conds_orig[cond][500:1000, start:end], axis=0)
         peak_orig_control = np.mean(act_conds_orig[cond][1000 + 500*cond - 200 + ITI_STEPS:1000 + 500*cond + ITI_STEPS, start:end], axis=0)
+
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
     

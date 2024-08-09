@@ -27,7 +27,7 @@ STIM_STRENGTH = -10
 REGION_TO_SILENCE = "alm"
 EXTRA_STEPS = 1000
 ITI_STEPS = 1000
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_allnoise.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"
 
 def main():
     

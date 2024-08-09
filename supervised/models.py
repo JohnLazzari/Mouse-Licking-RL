@@ -288,7 +288,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         for t in range(size):
 
             # Add noise to the system if specified
-            if noise:
+            if noise and t > 1000:
                 perturb_hid = np.sqrt(2*self.sigma_recur**2) * np.random.normal(0, 1)
                 perturb_inp = np.sqrt(2*self.sigma_input**2) * np.random.normal(0, 1)
             else:
@@ -305,7 +305,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
                 hn_next = F.relu(hn_next 
                         + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + iti_input + inhib_stim[:, t, :] + self.tonic_inp + cue_inp[:, t, :] * self.str_mask) 
-                        + perturb_hid)
+                        + (perturb_hid * self.alm_ramp_mask))
             
             else:
             
