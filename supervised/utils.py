@@ -30,74 +30,49 @@ def gather_inp_data(dt, hid_dim):
     
     inp = {}
 
-    # Condition 1: 0.3 for 1.1s
+    # Condition 1: 1.1s
     inp[0] = torch.cat([
         0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
         0.3*torch.ones(size=(int(1 / dt), int(hid_dim*0.1)))
         ])
 
-    # Condition 2: 0.6 for 1.6
+    # Condition 2: 1.4s
     inp[1] = torch.cat([
         0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
         0.25*torch.ones(size=(int(1.5 / dt), int(hid_dim*0.1)))
         ])
 
-    # Condition 3: 0.9 for 2.1s
+    # Condition 3: 1.7s
     inp[2] = torch.cat([
         0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
         0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
         ])
 
-    # Condition 3: 0.9 for 2.1s
+    # Condition 4: 2s
     inp[3] = torch.cat([
         0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
         0.15*torch.ones(size=(int(2.5 / dt), int(hid_dim*0.1)))
         ])
 
-    # Condition 3: 0.9 for 2.1s
-    inp[4] = torch.cat([
-        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.1*torch.ones(size=(int(3 / dt), int(hid_dim*0.1)))
-        ])
-
     # Combine all inputs
-    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3], inp[4]], batch_first=True)
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
 
     # Cue Input
     cue_inp_dict = {}
 
-    for cond in range(5):
+    for cond in range(4):
 
-        cue_inp_dict[cond] = torch.zeros(size=(int((2 + 0.5 * cond) / dt), 1))
+        cue_inp_dict[cond] = torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1))
         #cue_inp_dict[cond][999:999+100] = 0.01
 
-    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3], cue_inp_dict[4]], batch_first=True)
+    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [int(2 / dt), int(2.5 / dt), int(3 / dt), int(3.5 / dt), int(4 / dt)]
+    len_seq = [int(2.1 / dt), int(2.4 / dt), int(2.7 / dt), int(3 / dt)]
 
     total_inp = [total_iti_inp, total_cue_inp]
 
     return total_inp, len_seq
-
-def get_event_target(dt):
-
-    '''
-        If constraining any network to a specific solution, gather the neural data or create a ramp
-
-        dt: timescale in seconds (0.001 is ms)
-    '''
-    
-    event_targets = {}
-
-    for cond in range(3):
-
-        event_targets[cond] = (-np.pi / 6) * torch.ones(size=(int((1.1 + 0.5 * cond) / dt), 1))
-        event_targets[cond][-1] = np.pi / 6
-
-    event_targets = pad_sequence([event_targets[0], event_targets[1], event_targets[2]], batch_first=True)
-
-    return event_targets
 
 def get_ramp(dt, type="None"):
 
@@ -116,7 +91,6 @@ def get_ramp(dt, type="None"):
     baselines[1] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
     baselines[2] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
     baselines[3] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
-    baselines[4] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
 
     if type == "None":
         alm_mag = np.ones(shape=(5,))
@@ -132,24 +106,24 @@ def get_ramp(dt, type="None"):
         str_mag = thresh
         thal_mag = thresh
 
-    for cond in range(5):
+    for cond in range(4):
 
         alm_ramps[cond] = torch.cat([
             baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], alm_mag[cond], int((1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+            torch.linspace(baselines[cond][-1, 0], alm_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
         ])
         str_ramps[cond] = torch.cat([
             baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], str_mag[cond], int((1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+            torch.linspace(baselines[cond][-1, 0], str_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
         ])
         thal_ramps[cond] = torch.cat([
             baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], thal_mag[cond], int((1 + 0.5 * cond) / dt), dtype=torch.float32).unsqueeze(1)
+            torch.linspace(baselines[cond][-1, 0], thal_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
         ])
 
-    total_ramp_alm = pad_sequence([alm_ramps[0], alm_ramps[1], alm_ramps[2], alm_ramps[3], alm_ramps[4]], batch_first=True)
-    total_ramp_str = pad_sequence([str_ramps[0], str_ramps[1], str_ramps[2], alm_ramps[3], alm_ramps[4]], batch_first=True)
-    total_ramp_thal = pad_sequence([thal_ramps[0], thal_ramps[1], thal_ramps[2], alm_ramps[3], alm_ramps[4]], batch_first=True)
+    total_ramp_alm = pad_sequence([alm_ramps[0], alm_ramps[1], alm_ramps[2], alm_ramps[3]], batch_first=True)
+    total_ramp_str = pad_sequence([str_ramps[0], str_ramps[1], str_ramps[2], alm_ramps[3]], batch_first=True)
+    total_ramp_thal = pad_sequence([thal_ramps[0], thal_ramps[1], thal_ramps[2], alm_ramps[3]], batch_first=True)
 
     return total_ramp_alm, total_ramp_str, total_ramp_thal
 

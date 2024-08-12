@@ -27,7 +27,7 @@ STIM_STRENGTH = -10
 REGION_TO_SILENCE = "alm"
 EXTRA_STEPS = 1000
 ITI_STEPS = 1000
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise.005_itinoise1_newloss.pth"
 
 def main():
     
@@ -99,7 +99,9 @@ def main():
     alm2str_acts_manipulation = []
     iti2str_acts_manipulation = []
     str_decay_manipulation = []
+
     for cond in range(iti_inp.shape[0]):
+
         act_manipulation = get_acts_manipulation(
             len_seq, 
             rnn, 

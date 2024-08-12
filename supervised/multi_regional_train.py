@@ -22,7 +22,7 @@ MODEL_TYPE = "d1d2"                                                             
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise1_3000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -47,7 +47,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=2.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=1.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1d2_simple":
         rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
@@ -75,7 +75,7 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 5, HID_DIM * 6 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 4 
@@ -86,7 +86,7 @@ def main():
 
     if MODEL_TYPE == "d1d2_simple":
 
-        hn = torch.zeros(size=(1, 5, HID_DIM * 4 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 2 
@@ -97,7 +97,7 @@ def main():
 
     elif MODEL_TYPE == "stralm":
 
-        hn = torch.zeros(size=(1, 5, HID_DIM * 2 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 2 + INP_DIM)).cuda()
 
         str_units_start = 0
         alm_units_start = HID_DIM
@@ -107,7 +107,7 @@ def main():
 
     elif MODEL_TYPE == "d1":
 
-        hn = torch.zeros(size=(1, 5, HID_DIM * 4 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 2
@@ -177,10 +177,11 @@ def main():
             )
             
         # Save model
-        if epoch > 100:
+        if epoch > 2000 and epoch % 10 == 0:
             torch.save(rnn.state_dict(), SAVE_PATH)
 
-        print("Training loss at epoch {}:{}".format(epoch, loss.item()))
+        if epoch % 10 == 0:
+            print("Training loss at epoch {}:{}".format(epoch, loss.item()))
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()

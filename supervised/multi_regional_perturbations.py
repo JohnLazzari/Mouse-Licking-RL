@@ -24,9 +24,9 @@ HID_DIM = 256
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
-CONDS = 5
+CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise1_4000iters_weightedloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
@@ -118,7 +118,7 @@ def plot_silencing(len_seq,
 
     orig_baselines = []
     orig_peaks = []
-    
+
     for cond in range(conds):
 
         baseline_orig_control = np.mean(act_conds_orig[cond][500:1000, start:end], axis=0)
@@ -146,13 +146,13 @@ def plot_silencing(len_seq,
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(-0.5, 1 + 0.5 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 500)
-        xs_u[cond] = np.linspace(-0.5, 1 + 0.5 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 500)
+        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 500)
+        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 500)
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1 + 0.5 * cond}s", linewidth=10)
-            plt.axvline(x=1 + 0.5 * cond, linestyle='--')
+            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1.1 + 0.3 * cond}s", linewidth=10)
+            plt.axvline(x=1.1 + 0.3 * cond, linestyle='--')
         else:
             plt.plot(xs_u[cond], ramp_orig[cond][500:], linewidth=10)
 
