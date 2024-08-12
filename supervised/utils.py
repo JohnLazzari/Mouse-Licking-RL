@@ -32,26 +32,26 @@ def gather_inp_data(dt, hid_dim):
 
     # Condition 1: 1.1s
     inp[0] = torch.cat([
-        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1 / dt), int(hid_dim*0.1)))
+        0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
-        0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.25*torch.ones(size=(int(1.5 / dt), int(hid_dim*0.1)))
+        0.035*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.35*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
-        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
-        0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.15*torch.ones(size=(int(2.5 / dt), int(hid_dim*0.1)))
+        0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
         ])
 
     # Combine all inputs
@@ -93,15 +93,15 @@ def get_ramp(dt, type="None"):
     baselines[3] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
 
     if type == "None":
-        alm_mag = np.ones(shape=(5,))
-        str_mag = np.ones(shape=(5,))
-        thal_mag = np.ones(shape=(5,))
+        alm_mag = np.ones(shape=(4,))
+        str_mag = np.ones(shape=(4,))
+        thal_mag = np.ones(shape=(4,))
     elif type == "randincond":
-        alm_mag = np.repeat(np.random.uniform(0.25, 1), 5)
-        str_mag = np.repeat(np.random.uniform(0.25, 1), 5)
-        thal_mag = np.repeat(np.random.uniform(0.25, 1), 5)
+        alm_mag = np.repeat(np.random.uniform(0.25, 1), 4)
+        str_mag = np.repeat(np.random.uniform(0.25, 1), 4)
+        thal_mag = np.repeat(np.random.uniform(0.25, 1), 4)
     elif type == "randacrosscond":
-        thresh = np.array([1.25, 0.75, 0.25, 0.25, 0.25])
+        thresh = np.array([1.25, 0.75, 0.25, 0.25])
         alm_mag = thresh
         str_mag = thresh
         thal_mag = thresh
@@ -163,11 +163,11 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_type, I
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     inp_iti_task = iti_inp[cond:cond+1, :len_seq[cond], :].detach().clone()
-    inp_iti_post = iti_inp[cond:cond+1, len_seq[cond]-1:len_seq[cond], :].repeat(1, extra_steps, 1).detach().clone()
+    inp_iti_post = iti_inp[cond:cond+1, len_seq[cond]-2:len_seq[cond]-1, :].repeat(1, extra_steps, 1).detach().clone()
     inp_iti = torch.cat([inp_iti_task, inp_iti_post], dim=1)
 
     inp_cue_task = cue_inp[cond:cond+1, :len_seq[cond], :].detach().clone()
-    inp_cue_post = cue_inp[cond:cond+1, len_seq[cond]-1:len_seq[cond], :].repeat(1, extra_steps, 1).detach().clone()
+    inp_cue_post = cue_inp[cond:cond+1, len_seq[cond]-2:len_seq[cond]-1, :].repeat(1, extra_steps, 1).detach().clone()
     inp_cue = torch.cat([inp_cue_task, inp_cue_post], dim=1)
 
     with torch.no_grad():        
@@ -294,11 +294,11 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 def get_input_silence(iti_inp, cue_inp, len_seq, extra_steps):
 
     inp_iti_pre = iti_inp[:, :len_seq, :].detach().clone()
-    inp_iti_post = iti_inp[:, len_seq-1:len_seq, :].repeat(1, extra_steps, 1).detach().clone()
+    inp_iti_post = iti_inp[:, len_seq-2:len_seq-1, :].repeat(1, extra_steps, 1).detach().clone()
     inp_iti = torch.cat([inp_iti_pre, inp_iti_post], dim=1)
 
     inp_cue_pre = cue_inp[:, :len_seq, :].detach().clone()
-    inp_cue_post = cue_inp[:, len_seq-1:len_seq, :].repeat(1, extra_steps, 1).detach().clone()
+    inp_cue_post = cue_inp[:, len_seq-2:len_seq-1, :].repeat(1, extra_steps, 1).detach().clone()
     inp_cue = torch.cat([inp_cue_pre, inp_cue_post], dim=1)
     
     return inp_iti, inp_cue

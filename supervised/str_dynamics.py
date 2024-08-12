@@ -48,7 +48,7 @@ def main():
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Sample many hidden states to get pcs for dimensionality reduction
-    hn = torch.zeros(size=(1, 5, total_num_units)).cuda()
+    hn = torch.zeros(size=(1, 4, total_num_units)).cuda()
 
     inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], hn.shape[-1]), device="cuda")
 

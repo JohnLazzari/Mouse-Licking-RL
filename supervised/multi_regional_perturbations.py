@@ -26,12 +26,12 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise1_4000iters_weightedloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise.01_itinoise1_3000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
 START_SILENCE = 1600                    # timepoint from start of trial to silence at
-END_SILENCE = 2200                      # timepoint from start of trial to end silencing
+END_SILENCE = 2100                      # timepoint from start of trial to end silencing
 EXTRA_STEPS_SILENCE = 1000
 EXTRA_STEPS_CONTROL = 0
 
@@ -92,11 +92,12 @@ def plot_silencing(len_seq,
             cond, 
             MODEL_TYPE, 
             ITI_STEPS, 
-            extra_steps_control
+            extra_steps_control,
+            noise=False
         )
 
         act_conds_orig.append(acts)
-        
+
         # activity with silencing
         acts_silenced = get_acts_manipulation(
             len_seq, 
@@ -113,7 +114,7 @@ def plot_silencing(len_seq,
             extra_steps_silence, 
             silenced_region, 
         )
-                                    
+
         act_conds_silenced.append(acts_silenced)
 
     orig_baselines = []
@@ -122,7 +123,7 @@ def plot_silencing(len_seq,
     for cond in range(conds):
 
         baseline_orig_control = np.mean(act_conds_orig[cond][500:1000, start:end], axis=0)
-        peak_orig_control = np.mean(act_conds_orig[cond][1000 + 500*cond - 200 + ITI_STEPS:1000 + 500*cond + ITI_STEPS, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond][1100 + 300*cond - 200 + ITI_STEPS:1100 + 300*cond + ITI_STEPS, start:end], axis=0)
 
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
@@ -151,7 +152,7 @@ def plot_silencing(len_seq,
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1.1 + 0.3 * cond}s", linewidth=10)
+            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1.1 + 0.3 * cond:.1f}s", linewidth=10)
             plt.axvline(x=1.1 + 0.3 * cond, linestyle='--')
         else:
             plt.plot(xs_u[cond], ramp_orig[cond][500:], linewidth=10)
@@ -221,7 +222,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-0.5, 
+        stim_strength=-0.35, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -253,7 +254,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-0.5, 
+        stim_strength=-0.35, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True

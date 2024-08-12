@@ -303,6 +303,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Get the activity of the next hidden state
             if self.constrained:
 
+                # Change noise to obey time constant
+
                 hn_next = F.relu(hn_next 
                         + self.t_const * (-hn_next + (W_rec @ hn_next.T).T + iti_input + inhib_stim[:, t, :] + self.tonic_inp + cue_inp[:, t, :] * self.str_mask) 
                         + (perturb_hid * self.alm_ramp_mask))

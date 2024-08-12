@@ -8,8 +8,9 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1D2_Simple, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_ramp, get_masks, get_event_target
+from utils import gather_inp_data, get_ramp, get_masks
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
+from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
@@ -22,7 +23,7 @@ MODEL_TYPE = "d1d2"                                                             
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise1_3000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise.01_itinoise1_3000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -47,7 +48,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=1.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=1.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1d2_simple":
         rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
@@ -66,9 +67,6 @@ def main():
     # Get ramping activity
     neural_act_alm, neural_act_str, neural_act_thal = get_ramp(dt=DT, type=TYPE)
     neural_act_alm, neural_act_str, neural_act_thal = neural_act_alm.cuda(), neural_act_str.cuda(), neural_act_thal.cuda()
-
-    event_targets = get_event_target(DT)
-    event_targets = event_targets.cuda()
 
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -120,7 +118,7 @@ def main():
     #    Begin Training       # 
     ###########################
     
-    for epoch in range(EPOCHS):
+    for epoch in tqdm(range(EPOCHS)):
         
         # Pass through RNN
         _, act = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=True)
@@ -138,7 +136,6 @@ def main():
                 neural_act_alm, 
                 neural_act_str, 
                 neural_act_thal, 
-                event_targets, 
                 HID_DIM, 
                 alm_units_start, 
                 str_units_start, 
@@ -168,7 +165,6 @@ def main():
                 neural_act_alm, 
                 neural_act_str, 
                 neural_act_thal, 
-                event_targets, 
                 HID_DIM, 
                 alm_units_start, 
                 str_units_start, 
