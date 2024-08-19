@@ -23,7 +23,7 @@ MODEL_TYPE = "d1d2"                                                             
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_nonoise_3000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_itinoise10_3000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -48,7 +48,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0, noise_level_inp=10.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1d2_simple":
         rnn = RNN_MultiRegional_D1D2_Simple(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":

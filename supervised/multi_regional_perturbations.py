@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-3
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_nonoise_3000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise10_3000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
@@ -52,7 +52,8 @@ def plot_silencing(len_seq,
 
     if MODEL_TYPE == "d1d2" and evaluated_region == "alm":
         start = HID_DIM*5
-        end = HID_DIM*6
+        # get only excitatory neurons
+        end = HID_DIM*6 - int(HID_DIM * 0.3)
     elif MODEL_TYPE == "d1d2" and evaluated_region == "str":
         start = 0
         end = int(HID_DIM/2)
@@ -77,26 +78,20 @@ def plot_silencing(len_seq,
     
     ramp_orig = {}
     ramp_silenced = {}
-    act_conds_orig = []
     act_conds_silenced = []
 
+    # activity without silencing
+    act_conds_orig = get_acts_control(
+        len_seq, 
+        rnn, 
+        HID_DIM, 
+        INP_DIM,
+        x_data, 
+        MODEL_TYPE, 
+        extra_steps_control
+    )
+
     for cond in range(conds):
-
-        # activity without silencing
-        acts = get_acts_control(
-            len_seq, 
-            rnn, 
-            HID_DIM, 
-            INP_DIM,
-            x_data, 
-            cond, 
-            MODEL_TYPE, 
-            ITI_STEPS, 
-            extra_steps_control,
-            noise=False
-        )
-
-        act_conds_orig.append(acts)
 
         # activity with silencing
         acts_silenced = get_acts_manipulation(
@@ -206,7 +201,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-10, 
+        stim_strength=10, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -238,7 +233,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-10,
+        stim_strength=10,
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True

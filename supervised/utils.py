@@ -127,7 +127,7 @@ def get_ramp(dt, type="None"):
 
     return total_ramp_alm, total_ramp_str, total_ramp_thal
 
-def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_type, ITI_steps, extra_steps, noise=False):
+def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
 
     '''
         Get the activities of the desired region for a single condition (silencing or activation)
@@ -149,35 +149,27 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_type, I
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 1, hid_dim * 6 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
     elif model_type == "d1d2_simple":
-        hn = torch.zeros(size=(1, 1, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     elif model_type == "stralm":
-        hn = torch.zeros(size=(1, 1, hid_dim * 2 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 1, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     
-    inhib_stim = torch.zeros(size=(1, len_seq[cond] + extra_steps, hn.shape[-1]), device="cuda")
+    inhib_stim = torch.zeros(size=(4, max(len_seq), hn.shape[-1]), device="cuda")
 
     iti_inp, cue_inp = x_data 
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
-    inp_iti_task = iti_inp[cond:cond+1, :len_seq[cond], :].detach().clone()
-    inp_iti_post = iti_inp[cond:cond+1, len_seq[cond]-2:len_seq[cond]-1, :].repeat(1, extra_steps, 1).detach().clone()
-    inp_iti = torch.cat([inp_iti_task, inp_iti_post], dim=1)
-
-    inp_cue_task = cue_inp[cond:cond+1, :len_seq[cond], :].detach().clone()
-    inp_cue_post = cue_inp[cond:cond+1, len_seq[cond]-2:len_seq[cond]-1, :].repeat(1, extra_steps, 1).detach().clone()
-    inp_cue = torch.cat([inp_cue_task, inp_cue_post], dim=1)
-
     with torch.no_grad():        
 
-        _, acts = rnn(inp_iti, inp_cue, hn, inhib_stim, noise=noise)
+        _, acts = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_type, ITI_steps, start_silence, end_silence, stim_strength, extra_steps, region):
+def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, model_type, start_silence, end_silence, stim_strength, extra_steps, region):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -199,13 +191,13 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_ty
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 1, hid_dim * 6 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
     elif model_type == "d1d2_simple":
-        hn = torch.zeros(size=(1, 1, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     elif model_type == "stralm":
-        hn = torch.zeros(size=(1, 1, hid_dim * 2 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 1, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
 
     iti_inp, cue_inp = x_data
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
@@ -215,16 +207,16 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, cond, model_ty
         region, 
         start_silence, 
         end_silence, 
-        len_seq[cond], 
+        len_seq, 
         extra_steps, 
         stim_strength, 
         hn.shape[-1]
     )
 
     iti_inp_silence, cue_inp_silence = get_input_silence(
-        iti_inp[cond:cond+1], 
-        cue_inp[cond:cond+1], 
-        len_seq[cond], 
+        iti_inp, 
+        cue_inp, 
+        len_seq, 
         extra_steps
     )
         
@@ -276,7 +268,7 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask = rnn.full_alm_mask
+        mask = rnn.alm_inhib_mask
     elif region == "str":
         mask = rnn.str_d1_mask
     elif region == "str_d2":
@@ -284,9 +276,9 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
     # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
-    inhib_stim_pre = torch.zeros(size=(1, start_silence, total_num_units), device="cuda")
-    inhib_stim_silence = stim_strength * torch.ones(size=(1, end_silence - start_silence, total_num_units), device="cuda") * mask
-    inhib_stim_post = torch.zeros(size=(1, (len_seq - end_silence) + extra_steps, total_num_units), device="cuda")
+    inhib_stim_pre = torch.zeros(size=(4, start_silence, total_num_units), device="cuda")
+    inhib_stim_silence = stim_strength * torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
+    inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim

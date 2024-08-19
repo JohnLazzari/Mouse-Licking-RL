@@ -30,6 +30,11 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(int(hid_dim * 0.3),)),
                                     torch.zeros(size=(inp_dim,))]).cuda()
 
+        self.alm_inhib_mask = torch.cat([torch.zeros(size=(hid_dim * 5,)), 
+                                    torch.zeros(size=(hid_dim - int(hid_dim * 0.3),)),
+                                    torch.ones(size=(int(hid_dim * 0.3),)),
+                                    torch.zeros(size=(inp_dim,))]).cuda()
+
         self.full_alm_mask = torch.cat([torch.zeros(size=(hid_dim * 5,)), 
                                     torch.ones(size=(hid_dim,)),
                                     torch.ones(size=(inp_dim,))]).cuda()
@@ -181,11 +186,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.gpe2str_D = -1 * torch.eye(hid_dim).cuda()
             self.gpe2str_mask = torch.cat([torch.zeros(size=(int(hid_dim/2), hid_dim)),
                                            torch.ones(size=(int(hid_dim/2), hid_dim))], dim=0).cuda()
-
-            # thal to STR mask
-            sparse_matrix = torch.empty_like(self.thal2str_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.5)
-            self.thal2str_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             
         else:
 
@@ -205,6 +205,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
         # Input weights STR
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim, inp_dim)))
         nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
+        
+        self.alm2iti_weight = nn.Parameter(torch.empty(size=(inp_dim, hid_dim)))
+        nn.init.uniform_(self.alm2iti_weight, 0, 1e-2)
+
+        # ALM to iti masks
+        self.alm2iti_D = -1 * torch.eye(hid_dim).cuda()
+        self.alm2iti_mask_excitatory = torch.zeros(size=(inp_dim, hid_dim - int(0.3*hid_dim)))
+        self.alm2iti_mask_inhibitory = torch.ones(size=(inp_dim, int(0.3*hid_dim)))
+        self.alm2iti_mask = torch.cat([self.alm2iti_mask_excitatory, self.alm2iti_mask_inhibitory], dim=1).cuda()
 
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
@@ -256,6 +265,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             gpe2snr = F.hardtanh(self.gpe2snr_weight_l0_hh, 1e-10, 1) @ self.gpe2snr_D
             gpe2str = (self.gpe2str_mask * F.hardtanh(self.gpe2str_weight_l0_hh, 1e-10, 1)) @ self.gpe2str_D
             inp_weight_str = F.hardtanh(self.inp_weight_str, 1e-10, 1)
+            alm2iti = (self.alm2iti_mask * F.hardtanh(self.alm2iti_weight, 1e-10, 1)) @ self.alm2iti_D
 
             # Concatenate into single weight matrix
 
@@ -266,7 +276,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             W_snr = torch.cat([str2snr, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)        # SNR
             W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_inp_from], dim=1)   # Thal
             W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_inp_from], dim=1)       # ALM
-            W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_rec], dim=1)       # ALM ITI
+            W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, alm2iti, self.zeros_inp_rec], dim=1)       # ALM
 
         else:
 
