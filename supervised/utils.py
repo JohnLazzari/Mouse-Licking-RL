@@ -51,7 +51,7 @@ def gather_inp_data(dt, hid_dim):
     # Condition 4: 2s
     inp[3] = torch.cat([
         0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
+        0.25*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
         ])
 
     # Combine all inputs
@@ -150,12 +150,16 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
 
     if model_type == "d1d2":
         hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
     elif model_type == "d1d2_simple":
         hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
         hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     
     inhib_stim = torch.zeros(size=(4, max(len_seq), hn.shape[-1]), device="cuda")
 
@@ -164,12 +168,12 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
 
     with torch.no_grad():        
 
-        _, acts = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=False)
+        _, _, acts = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, model_type, start_silence, end_silence, stim_strength, extra_steps, region):
+def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -192,15 +196,16 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, model_type, st
 
     if model_type == "d1d2":
         hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
     elif model_type == "d1d2_simple":
         hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
         hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
-
-    iti_inp, cue_inp = x_data
-    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
 
     inhib_stim = get_inhib_stim_silence(
         rnn, 
@@ -214,15 +219,16 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, x_data, model_type, st
     )
 
     iti_inp_silence, cue_inp_silence = get_input_silence(
-        iti_inp, 
-        cue_inp, 
-        len_seq, 
+        dt, 
+        hid_dim,
         extra_steps
     )
+
+    iti_inp_silence, cue_inp_silence = iti_inp_silence.cuda(), cue_inp_silence.cuda()
         
     with torch.no_grad():        
 
-        _, acts = rnn(iti_inp_silence, cue_inp_silence, hn, inhib_stim, noise=False)
+        _, _, acts = rnn(iti_inp_silence, cue_inp_silence, hn, xn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -248,71 +254,85 @@ def project_ramp_mode(samples, ramp_mode):
     projected = samples @ ramp_mode
     return projected
 
-def get_iti_mode(activity, lick_times):
-    
-    # Activity should be of shape [num_neurons, samples], lick_times [samples]
-    iti_mode = []
-    for neuron in activity:
-        correlation = spearmanr(neuron, lick_times, axis=0)
-        iti_mode.append(correlation)
-    iti_mode = np.array(iti_mode)
-    return iti_mode
-
-def project_iti_mode(samples, iti_mode):
-    
-    # samples should be [time, neurons], iti_mode should be [neurons]
-    projected = samples @ iti_mode
-    return projected
-
 def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, extra_steps, stim_strength, total_num_units):
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask = rnn.alm_inhib_mask
+        mask_inhib_units = stim_strength * rnn.alm_inhib_mask
+        mask_iti_units = -10 * rnn.iti_mask
+        mask = mask_inhib_units + mask_iti_units
     elif region == "str":
-        mask = rnn.str_d1_mask
+        mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":
-        mask = rnn.str_d2_mask
+        mask = stim_strength * rnn.str_d2_mask
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
     # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
     inhib_stim_pre = torch.zeros(size=(4, start_silence, total_num_units), device="cuda")
-    inhib_stim_silence = stim_strength * torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
+    inhib_stim_silence = torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
     inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
 
-def get_input_silence(iti_inp, cue_inp, len_seq, extra_steps):
+def get_input_silence(dt, hid_dim, extra_steps):
 
-    inp_iti_pre = iti_inp[:, :len_seq, :].detach().clone()
-    inp_iti_post = iti_inp[:, len_seq-2:len_seq-1, :].repeat(1, extra_steps, 1).detach().clone()
-    inp_iti = torch.cat([inp_iti_pre, inp_iti_post], dim=1)
+    inp = {}
 
-    inp_cue_pre = cue_inp[:, :len_seq, :].detach().clone()
-    inp_cue_post = cue_inp[:, len_seq-2:len_seq-1, :].repeat(1, extra_steps, 1).detach().clone()
-    inp_cue = torch.cat([inp_cue_pre, inp_cue_post], dim=1)
+    # Condition 1: 1.1s
+    inp[0] = torch.cat([
+        0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1))),
+        0.4*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        ])
+
+    # Condition 2: 1.4s
+    inp[1] = torch.cat([
+        0.035*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.35*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
+        0.35*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        ])
+
+    # Condition 3: 1.7s
+    inp[2] = torch.cat([
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        ])
+
+    # Condition 4: 2s
+    inp[3] = torch.cat([
+        0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.25*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
+        0.25*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        ])
+
+    # Combine all inputs
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+
+    # Cue Input
+    cue_inp_dict = {}
+
+    for cond in range(4):
+
+        cue_inp_dict[cond] = torch.cat([
+            torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1)),
+            torch.zeros(size=(extra_steps, 1)),
+        ])
+        #cue_inp_dict[cond][999:999+100] = 0.01
+
+    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
     
-    return inp_iti, inp_cue
+    return total_iti_inp, total_cue_inp
 
 def get_region_borders(model_type, region, hid_dim, inp_dim):
     
     if model_type == "d1d2" and region == "alm":
 
         start = hid_dim*5
-        end = hid_dim*6 + inp_dim
+        end = hid_dim*6 - int(hid_dim * 0.3)
 
     elif model_type == "d1d2" and region == "str":
-
-        start = 0
-        end = int(hid_dim/2)
-
-    elif model_type == "d1d2_simple" and region == "alm":
-
-        start = hid_dim*3
-        end = hid_dim*4 + inp_dim
-
-    elif model_type == "d1d2_simple" and region == "str":
 
         start = 0
         end = int(hid_dim/2)
