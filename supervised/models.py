@@ -381,6 +381,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
+        pre_out = torch.stack(new_xs, dim=1)
         hn_last = rnn_out[:, -1, :].unsqueeze(0)
         xn_last = new_xs[-1].unsqueeze(0)
 

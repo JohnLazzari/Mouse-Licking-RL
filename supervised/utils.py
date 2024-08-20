@@ -38,20 +38,20 @@ def gather_inp_data(dt, hid_dim):
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
-        0.035*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.35*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1)))
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
-        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1)))
+        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1)))
         ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
-        0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.25*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
+        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
         ])
 
     # Combine all inputs
@@ -258,8 +258,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask_inhib_units = -stim_strength * rnn.full_alm_mask
-        mask_iti_units = -.5 * rnn.iti_mask
+        mask_inhib_units = stim_strength * rnn.alm_inhib_mask
+        mask_iti_units = -1 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
@@ -288,23 +288,23 @@ def get_input_silence(dt, hid_dim, extra_steps):
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
-        0.035*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.35*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
-        0.35*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
-        0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
-        0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.25*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
-        0.25*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
+        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
+        0.1*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
     # Combine all inputs

@@ -32,7 +32,7 @@ CONSTRAINED = True
 ITI_STEPS = 1000
 START_SILENCE = 1600                    # timepoint from start of trial to silence at
 END_SILENCE = 2200                      # timepoint from start of trial to end silencing
-EXTRA_STEPS_SILENCE = 500
+EXTRA_STEPS_SILENCE = 1000
 EXTRA_STEPS_CONTROL = 0
 
 def plot_silencing(len_seq, 
@@ -167,7 +167,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=10, 
+        stim_strength=7, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -183,7 +183,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-.4, 
+        stim_strength=-.5, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -199,7 +199,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=10,
+        stim_strength=7,
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -215,7 +215,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.4, 
+        stim_strength=-.5, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
