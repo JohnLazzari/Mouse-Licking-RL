@@ -31,7 +31,7 @@ SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 1000
 START_SILENCE = 1600                    # timepoint from start of trial to silence at
-END_SILENCE = 2100                      # timepoint from start of trial to end silencing
+END_SILENCE = 2200                      # timepoint from start of trial to end silencing
 EXTRA_STEPS_SILENCE = 500
 EXTRA_STEPS_CONTROL = 0
 
@@ -183,7 +183,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-.1, 
+        stim_strength=-.4, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -215,7 +215,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.2, 
+        stim_strength=-.4, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True

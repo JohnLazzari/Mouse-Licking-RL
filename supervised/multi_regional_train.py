@@ -24,7 +24,7 @@ CONSTRAINED = True                                                              
 TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
 START_SILENCE = 1600
-END_SILENCE = 2100
+END_SILENCE = 2200
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 1000
 SILENCED_REGION = "alm"
@@ -61,14 +61,14 @@ def test(rnn, len_seq, str_start, str_end, best_steady_state):
         DT 
     )
 
-    vels = acts_manipulation[:, START_SILENCE+1:END_SILENCE, str_start:str_end] - acts_manipulation[:, START_SILENCE:END_SILENCE-1, str_start:str_end]
+    vels = acts_manipulation[:, START_SILENCE+100:END_SILENCE, str_start:str_end] - acts_manipulation[:, START_SILENCE+99:END_SILENCE-1, str_start:str_end]
     mean_vels = np.abs(np.mean(vels, axis=(1, 0, 2)))
 
     if mean_vels < best_steady_state:
         torch.save(rnn.state_dict(), SAVE_PATH)
         best_steady_state = mean_vels
     
-    return best_steady_state
+    return best_steady_state, mean_vels
 
 def main():
 
@@ -138,6 +138,7 @@ def main():
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 4 + INP_DIM), device="cuda")
     
     best_steady_state = np.inf
+    prev_steady_state = np.inf
     
     ###########################
     #    Begin Training       # 
@@ -198,12 +199,13 @@ def main():
             )
             
         # Save model
-        if epoch > 2000:
-            best_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
+        if epoch > 3000:
+            best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 
         if epoch % 10 == 0:
             print("Training loss at epoch {}:{}".format(epoch, loss.item()))
             print("Best steady state at epoch {}:{}".format(epoch, best_steady_state))
+            print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()

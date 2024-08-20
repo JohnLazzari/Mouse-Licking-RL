@@ -141,8 +141,23 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
             nn.init.sparse_(sparse_matrix, 0.85)
-            self.str2str_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
+            self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             self.str2str_D = -1*torch.eye(hid_dim).cuda()
+
+            d1_lateral_connections_mask = torch.cat([
+                torch.ones(size=(int(hid_dim/2), int(hid_dim/2))),
+                torch.zeros(size=(int(hid_dim/2), int(hid_dim/2))),
+            ], dim=1)
+
+            d2_lateral_connections_mask = torch.cat([
+                torch.zeros(size=(int(hid_dim/2), int(hid_dim/2))),
+                torch.ones(size=(int(hid_dim/2), int(hid_dim/2))),
+            ], dim=1)
+
+            self.str2str_split_mask = torch.cat([
+                d1_lateral_connections_mask,
+                d2_lateral_connections_mask
+            ], dim=0).cuda()
 
             self.alm2alm_D = torch.eye(hid_dim).cuda()
             self.alm2alm_D[hid_dim-int(0.3*hid_dim):, 
@@ -151,25 +166,46 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # ALM to striatum weights
             self.alm2str_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
             self.alm2str_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
-            self.alm2str_mask = torch.cat([self.alm2str_mask_excitatory, self.alm2str_mask_inhibitory], dim=1).cuda()
+            
+            self.alm2str_mask = torch.cat([
+                self.alm2str_mask_excitatory, 
+                self.alm2str_mask_inhibitory
+            ], dim=1).cuda()
 
             # ALM to Thal mask
             self.alm2thal_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
             self.alm2thal_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
-            self.alm2thal_mask = torch.cat([self.alm2thal_mask_excitatory, self.alm2thal_mask_inhibitory], dim=1).cuda()
+            
+            self.alm2thal_mask = torch.cat([
+                self.alm2thal_mask_excitatory, 
+                self.alm2thal_mask_inhibitory
+            ], dim=1).cuda()
             
             # STR to SNR D
             self.str2snr_D = -1 * torch.eye(hid_dim).cuda()
-            self.str2snr_mask = torch.cat([torch.ones(size=(hid_dim, int(hid_dim/2))), 
-                                        torch.zeros(size=(hid_dim, int(hid_dim/2)))], dim=1).cuda()
+            
+            self.str2snr_mask = torch.cat([
+                torch.ones(size=(hid_dim, int(hid_dim/2))), 
+                torch.zeros(size=(hid_dim, int(hid_dim/2)))
+            ], dim=1).cuda()
 
             # SNR to Thal D
             self.snr2thal_D = -1 * torch.eye(hid_dim).cuda()
-            self.snr2thal_mask_cm = torch.cat([torch.ones(int(hid_dim/2), int(hid_dim/2)),
-                                               torch.zeros(int(hid_dim/2), int(hid_dim/2))], dim=1)
-            self.snr2thal_mask_vm = torch.cat([torch.zeros(int(hid_dim/2), int(hid_dim/2)),
-                                               torch.ones(int(hid_dim/2), int(hid_dim/2))], dim=1)
-            self.snr2thal_mask = torch.cat([self.snr2thal_mask_cm, self.snr2thal_mask_vm], dim=0).cuda()
+            
+            self.snr2thal_mask_cm = torch.cat([
+                torch.ones(int(hid_dim/2), int(hid_dim/2)),
+                torch.zeros(int(hid_dim/2), int(hid_dim/2))
+            ], dim=1)
+            
+            self.snr2thal_mask_vm = torch.cat([
+                torch.zeros(int(hid_dim/2), int(hid_dim/2)),
+                torch.ones(int(hid_dim/2), int(hid_dim/2))
+            ], dim=1)
+            
+            self.snr2thal_mask = torch.cat([
+                self.snr2thal_mask_cm, 
+                self.snr2thal_mask_vm
+            ], dim=0).cuda()
 
             # STR to GPE D
             self.str2gpe_D = -1 * torch.eye(hid_dim).cuda()
@@ -252,7 +288,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
             alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-10, 1)
             alm2thal = self.alm2thal_mask * F.hardtanh(self.alm2thal_weight_l0_hh, 1e-10, 1)
-            thal2alm = self.thal2alm_mask * F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
+            thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
             thal2str = F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
             str2snr = (self.str2snr_mask * F.hardtanh(self.str2snr_weight_l0_hh, 1e-10, 1)) @ self.str2snr_D
             snr2snr = F.hardtanh(self.snr2snr_weight_l0_hh, 1e-10, 1) @ self.snr2snr_D
@@ -319,11 +355,12 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + (W_rec @ hn_next.T).T
                             + iti_input
                             + self.tonic_inp
-                            + cue_inp[:, t, :] * self.str_mask
+                            + inhib_stim[:, t, :]
+                            + (cue_inp[:, t, :] * self.str_mask)
                             + (perturb_hid * self.alm_ramp_mask)
                         ))
 
-                hn_next = F.relu(xn_next + inhib_stim[:, t, :])
+                hn_next = F.relu(xn_next)
             
             else:
 
@@ -336,7 +373,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + (perturb_hid * self.alm_ramp_mask)
                         ))
 
-                hn_next = F.relu(xn_next) + (self.t_const * inhib_stim[:, t, :])
+                hn_next = F.relu(xn_next + inhib_stim[:, t, :])
 
             # append activity to list
             new_xs.append(xn_next)

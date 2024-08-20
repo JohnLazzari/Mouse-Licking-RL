@@ -258,8 +258,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask_inhib_units = stim_strength * rnn.alm_inhib_mask
-        mask_iti_units = -10 * rnn.iti_mask
+        mask_inhib_units = -stim_strength * rnn.full_alm_mask
+        mask_iti_units = -.5 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
