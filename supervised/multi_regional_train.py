@@ -28,7 +28,7 @@ END_SILENCE = 2200
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 1000
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise5_itinoise5_4000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise6_itinoise6_4000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -61,8 +61,9 @@ def test(rnn, len_seq, str_start, str_end, best_steady_state):
         DT 
     )
 
-    vels = acts_manipulation[:, START_SILENCE+100:END_SILENCE, str_start:str_end] - acts_manipulation[:, START_SILENCE+99:END_SILENCE-1, str_start:str_end]
-    mean_vels = np.abs(np.mean(vels, axis=(1, 0, 2)))
+    acts_manipulation_mean = np.mean(acts_manipulation[:, :, str_start:str_end], axis=-1)
+    vels = np.abs(acts_manipulation_mean[:, START_SILENCE+100:END_SILENCE] - acts_manipulation_mean[:, START_SILENCE+99:END_SILENCE-1])
+    mean_vels = np.mean(vels, axis=(1, 0))
 
     if mean_vels < best_steady_state:
         torch.save(rnn.state_dict(), SAVE_PATH)
@@ -78,7 +79,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=5.0, noise_level_inp=5.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=6.0, noise_level_inp=6.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
@@ -210,9 +211,6 @@ def main():
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
         loss.backward()
-
-        #if MODEL_TYPE == "d1d2":
-        #    simple_dynamics_d1d2(act, rnn, HID_DIM) 
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
