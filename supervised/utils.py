@@ -149,11 +149,8 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
-    elif model_type == "d1d2_simple":
-        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
         xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
@@ -195,11 +192,8 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_sile
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim)).cuda()
-    elif model_type == "d1d2_simple":
-        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
     elif model_type == "stralm":
         hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
         xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
@@ -236,7 +230,7 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_sile
 def get_masks(hid_dim, inp_dim, len_seq, regions):
 
     # mask the losses which correspond to padded values (just in case)
-    loss_mask_act = [torch.ones(size=(length, hid_dim * regions + inp_dim), dtype=torch.int) for length in len_seq]
+    loss_mask_act = [torch.ones(size=(length, hid_dim * regions + inp_dim + int(hid_dim * 0.3)), dtype=torch.int) for length in len_seq]
     loss_mask_act = pad_sequence(loss_mask_act, batch_first=True).cuda()
 
     return loss_mask_act

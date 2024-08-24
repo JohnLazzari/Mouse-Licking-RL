@@ -15,7 +15,7 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 4000                                                                       # Training iterations
+EPOCHS = 5000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-3                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
@@ -28,7 +28,7 @@ END_SILENCE = 2200
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 1000
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise6_itinoise6_4000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise5_itinoise2_5000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -79,7 +79,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=6.0, noise_level_inp=6.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=5.0, noise_level_inp=2.0, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
@@ -102,8 +102,8 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
 
         str_units_start = 0
         str_units_end = int(HID_DIM/2)
@@ -111,7 +111,7 @@ def main():
         alm_units_start = HID_DIM * 5
 
         loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM), device="cuda")
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 
@@ -200,7 +200,7 @@ def main():
             )
             
         # Save model
-        if epoch > 3000:
+        if epoch > 4000:
             best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 
         if epoch % 10 == 0:
