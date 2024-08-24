@@ -130,6 +130,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.alm2fsi_weight = nn.Parameter(torch.empty(size=(self.fsi_size, hid_dim)))
         # Excitatory Connections
         self.iti2fsi_weight = nn.Parameter(torch.empty(size=(self.fsi_size, inp_dim)))
+        # Excitatory Connections
+        self.fsi2fsi_weight = nn.Parameter(torch.empty(size=(self.fsi_size, self.fsi_size)))
 
         if constrained:
 
@@ -149,6 +151,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             nn.init.uniform_(self.thal2fsi_weight, 0, 1e-2)
             nn.init.uniform_(self.alm2fsi_weight, 0, 1e-2)
             nn.init.uniform_(self.iti2fsi_weight, 0, 1e-2)
+            nn.init.uniform_(self.fsi2fsi_weight, 0, 1e-2)
 
             # Implement Necessary Masks
             # Striatum recurrent weights
@@ -215,6 +218,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
             # FSI to STR D
             self.fsi2str_D = -1 * torch.eye(self.fsi_size).cuda()
+
+            # FSI to FSI D
+            self.fsi2fsi_D = -1 * torch.eye(self.fsi_size).cuda()
             
         else:
 
@@ -244,7 +250,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.zeros_to_fsi = torch.zeros(size=(self.fsi_size, hid_dim), device="cuda")
         self.zeros_from_fsi = torch.zeros(size=(hid_dim, self.fsi_size), device="cuda")
         self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
-        self.zeros_rec_fsi = torch.zeros(size=(self.fsi_size, self.fsi_size), device="cuda")
 
         # Time constants for networks
         self.t_const = 0.01
@@ -289,6 +294,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             thal2fsi = F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
             alm2fsi = F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
             iti2fsi = F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
+            fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
             inp_weight_str = F.hardtanh(self.inp_weight_str, 1e-10, 1)
 
             # Concatenate into single weight matrix
@@ -301,7 +307,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             W_thal = torch.cat([self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_from_iti, self.zeros_from_fsi], dim=1)   # Thal
             W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_from_iti, self.zeros_from_fsi], dim=1)       # ALM
             W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_rec_iti, self.zeros_from_fsi2iti], dim=1)       # ALM
-            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi, iti2fsi, self.zeros_rec_fsi], dim=1)       # ALM
+            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi, iti2fsi, fsi2fsi], dim=1)       # ALM
 
         else:
 
