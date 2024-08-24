@@ -180,21 +180,26 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             hid_dim-int(0.3*hid_dim):] *= -1
             
             # ALM to striatum weights
-            self.alm2str_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
-            self.alm2str_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
+            self.alm_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
+            self.alm_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
             
             self.alm2str_mask = torch.cat([
-                self.alm2str_mask_excitatory, 
-                self.alm2str_mask_inhibitory
+                self.alm_mask_excitatory, 
+                self.alm_mask_inhibitory
             ], dim=1).cuda()
 
-            # ALM to Thal mask
-            self.alm2thal_mask_excitatory = torch.ones(size=(hid_dim, hid_dim - int(0.3*hid_dim)))
-            self.alm2thal_mask_inhibitory = torch.zeros(size=(hid_dim, int(0.3*hid_dim)))
-            
             self.alm2thal_mask = torch.cat([
-                self.alm2thal_mask_excitatory, 
-                self.alm2thal_mask_inhibitory
+                self.alm_mask_excitatory, 
+                self.alm_mask_inhibitory
+            ], dim=1).cuda()
+
+            # ALM to FSI
+            self.alm_mask_excitatory_fsi = torch.ones(size=(self.fsi_size, hid_dim - int(0.3*hid_dim)))
+            self.alm_mask_inhibitory_fsi = torch.zeros(size=(self.fsi_size, int(0.3*hid_dim)))
+
+            self.alm2fsi_mask = torch.cat([
+                self.alm_mask_excitatory_fsi, 
+                self.alm_mask_inhibitory_fsi
             ], dim=1).cuda()
             
             # STR to SNR D
@@ -292,7 +297,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
             fsi2str = F.hardtanh(self.fsi2str_weight, 1e-10, 1) @ self.fsi2str_D
             thal2fsi = F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
-            alm2fsi = F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
+            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
             iti2fsi = F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
             fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
             inp_weight_str = F.hardtanh(self.inp_weight_str, 1e-10, 1)
