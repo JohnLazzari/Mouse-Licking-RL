@@ -158,7 +158,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
             nn.init.sparse_(sparse_matrix, 0.9)
             self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
-            self.str2str_D = -1*torch.eye(hid_dim).cuda()
+            self.str2str_D = -1 * torch.eye(hid_dim).cuda()
 
             d1_lateral_connections_mask = torch.cat([
                 torch.ones(size=(int(hid_dim/2), int(hid_dim/2))),
@@ -227,6 +227,14 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # FSI to FSI D
             self.fsi2fsi_D = -1 * torch.eye(self.fsi_size).cuda()
             
+            # Thal 2 ALM mask
+            self.thal2alm_mask_excitatory = torch.ones(size=(hid_dim - int(0.3*hid_dim), hid_dim))
+            self.thal2alm_mask_inhibitory = torch.zeros(size=(int(0.3*hid_dim), hid_dim))
+            self.thal2alm_mask = torch.cat([
+                self.thal2alm_mask_excitatory,
+                self.thal2alm_mask_inhibitory
+            ]).cuda()
+
         else:
 
             # Initialize all weights randomly
@@ -257,7 +265,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
 
         # Time constants for networks
-        self.t_const = 0.01
+        self.t_const = 0.1
 
         # Noise level
         self.sigma_recur = noise_level_act
@@ -334,7 +342,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         for t in range(size):
 
             # Add noise to the system if specified
-            if noise and t > 1000:
+            if noise and t > 100:
                 perturb_hid = np.sqrt(2*self.t_const*self.sigma_recur**2) * np.random.normal(0, 1)
                 perturb_inp = np.sqrt(2*self.t_const*self.sigma_input**2) * np.random.normal(0, 1)
             else:

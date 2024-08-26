@@ -11,9 +11,7 @@ import matplotlib.pyplot as plt
 def loss_d1d2(constraint_criterion, 
                 thresh_criterion,
                 act, 
-                neural_act_alm, 
-                neural_act_str, 
-                neural_act_thal, 
+                neural_act, 
                 hid_dim, 
                 alm_start, 
                 str_start, 
@@ -23,16 +21,9 @@ def loss_d1d2(constraint_criterion,
     if type == "alm":
 
         loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
-                + 1e-3 * torch.mean(torch.pow(act[:, 1000:, :], 2), dim=(1, 2, 0))
+                constraint_criterion(torch.mean(act[:, 50:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act[:, 50:, :])
+                + 1e-3 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
                 )
-
-        '''
-        loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start + hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
-                + 1e-3 * torch.mean(torch.pow(act[:, 1000:, :], 2), dim=(1, 2, 0))  
-                )
-        '''
     
     elif type == "threshold":
 
@@ -40,11 +31,11 @@ def loss_d1d2(constraint_criterion,
 
         loss = (
                 # event target should be only for delay (in terms of number of timesteps it has)
-                constraint_criterion(mean_act[0, 2000-1, :], neural_act_alm[0, 2000-1, :])
-                + constraint_criterion(mean_act[1, 2500-1, :], neural_act_alm[1, 2500-1, :])
-                + constraint_criterion(mean_act[2, 3000-1, :], neural_act_alm[2, 3000-1, :])
-                + constraint_criterion(mean_act[3, 3500-1, :], neural_act_alm[3, 3500-1, :])
-                + constraint_criterion(mean_act[4, 4000-1, :], neural_act_alm[4, 4000-1, :])
+                constraint_criterion(mean_act[0, 2000-1, :], neural_act[0, 2000-1, :])
+                + constraint_criterion(mean_act[1, 2500-1, :], neural_act[1, 2500-1, :])
+                + constraint_criterion(mean_act[2, 3000-1, :], neural_act[2, 3000-1, :])
+                + constraint_criterion(mean_act[3, 3500-1, :], neural_act[3, 3500-1, :])
+                + constraint_criterion(mean_act[4, 4000-1, :], neural_act[4, 4000-1, :])
                 + constraint_criterion(mean_act[:, 500:1000, :], neural_act_alm[:, 500:1000, :])
                 + 1e-1 * torch.mean(torch.pow(act[:, 1001:, :], 2), dim=(1, 2, 0))  
                 )
@@ -52,18 +43,17 @@ def loss_d1d2(constraint_criterion,
     else:
 
         loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
+                constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
                 + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                + constraint_criterion(torch.mean(act[:, 500:, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act_str[:, 500:, :])
-                + constraint_criterion(torch.mean(act[:, 500:, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act_thal[:, 500:, :])
+                + constraint_criterion(torch.mean(act[:, 500:, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
+                + constraint_criterion(torch.mean(act[:, 500:, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
                 )
     
     return loss
 
 def loss_stralm(constraint_criterion, 
                 act, 
-                neural_act_alm, 
-                neural_act_str, 
+                neural_act, 
                 alm_start, 
                 str_start,
                 type="alm"):
@@ -71,16 +61,16 @@ def loss_stralm(constraint_criterion,
     if type == "alm":
 
         loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
+                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
                 + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
                 )
     
     else:
 
         loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act_alm[:, 500:, :])
+                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
                 + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act_str[:, 500:, :])
+                + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act[:, 500:, :])
                 )
     
     return loss

@@ -15,20 +15,19 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 5000                                                                       # Training iterations
-LR = 1e-4                                                                           # Learning rate
-DT = 1e-3                                                                           # DT to control number of timesteps
+EPOCHS = 10000                                                                       # Training iterations
+LR = 1e-5                                                                           # Learning rate
+DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
-TYPE = "None"                                                                       # None, randincond, randacrosscond (for thresholds)
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-START_SILENCE = 1600
-END_SILENCE = 2200
+START_SILENCE = 160
+END_SILENCE = 220
 STIM_STRENGTH = 10
-EXTRA_STEPS_SILENCE = 1000
+EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise5_itinoise2_5000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -62,7 +61,7 @@ def test(rnn, len_seq, str_start, str_end, best_steady_state):
     )
 
     acts_manipulation_mean = np.mean(acts_manipulation[:, :, str_start:str_end], axis=-1)
-    vels = np.abs(acts_manipulation_mean[:, START_SILENCE+100:END_SILENCE] - acts_manipulation_mean[:, START_SILENCE+99:END_SILENCE-1])
+    vels = np.abs(acts_manipulation_mean[:, START_SILENCE+10:END_SILENCE] - acts_manipulation_mean[:, START_SILENCE+9:END_SILENCE-1])
     mean_vels = np.mean(vels, axis=(1, 0))
 
     if mean_vels < best_steady_state:
@@ -79,7 +78,7 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=5.0, noise_level_inp=2.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "d1":
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
     elif MODEL_TYPE == "stralm":
@@ -94,8 +93,8 @@ def main():
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Get ramping activity
-    neural_act_alm, neural_act_str, neural_act_thal = get_ramp(dt=DT, type=TYPE)
-    neural_act_alm, neural_act_str, neural_act_thal = neural_act_alm.cuda(), neural_act_str.cuda(), neural_act_thal.cuda()
+    neural_act = get_ramp(dt=DT)
+    neural_act = neural_act.cuda()
 
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
@@ -145,7 +144,7 @@ def main():
     #    Begin Training       # 
     ###########################
     
-    for epoch in tqdm(range(EPOCHS)):
+    for epoch in range(EPOCHS):
         
         # Pass through RNN
         _, _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
@@ -160,9 +159,7 @@ def main():
                 constraint_criterion, 
                 thresh_criterion,
                 act, 
-                neural_act_alm, 
-                neural_act_str, 
-                neural_act_thal, 
+                neural_act, 
                 HID_DIM, 
                 alm_units_start, 
                 str_units_start, 
@@ -176,8 +173,7 @@ def main():
                 constraint_criterion, 
                 thresh_criterion,
                 act, 
-                neural_act_alm, 
-                neural_act_str, 
+                neural_act, 
                 alm_units_start, 
                 str_units_start, 
                 type=TYPE_LOSS
@@ -189,9 +185,7 @@ def main():
                 constraint_criterion, 
                 thresh_criterion,
                 act, 
-                neural_act_alm, 
-                neural_act_str, 
-                neural_act_thal, 
+                neural_act, 
                 HID_DIM, 
                 alm_units_start, 
                 str_units_start, 
@@ -207,6 +201,7 @@ def main():
             print("Training loss at epoch {}:{}".format(epoch, loss.item()))
             print("Best steady state at epoch {}:{}".format(epoch, best_steady_state))
             print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
+            print("")
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()

@@ -23,16 +23,16 @@ plt.rc('font', **font)
 HID_DIM = 256
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
-DT = 1e-3
+DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise5_itinoise5_4000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
-ITI_STEPS = 1000
-START_SILENCE = 1600                    # timepoint from start of trial to silence at
-END_SILENCE = 2200                      # timepoint from start of trial to end silencing
-EXTRA_STEPS_SILENCE = 1000
+ITI_STEPS = 100
+START_SILENCE = 160                    # timepoint from start of trial to silence at
+END_SILENCE = 220                      # timepoint from start of trial to end silencing
+EXTRA_STEPS_SILENCE = 100
 EXTRA_STEPS_CONTROL = 0
 
 def plot_silencing(len_seq, 
@@ -80,13 +80,35 @@ def plot_silencing(len_seq,
         DT 
     )
 
+    #plt.plot(np.mean(act_conds_silenced[:, :, 256*5:256*6 - int(256 * 0.3)], axis=-1).T)
+    #plt.plot(np.mean(act_conds_silenced[:, :, 256*6 - int(256 * 0.3):256*6], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_orig[:, :, 128:256], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_silenced[:, :, :128], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*4:HID_DIM*5], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6 + INP_DIM:], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6:HID_DIM*6 + INP_DIM], axis=-1).T)
+    #plt.show()
+
+    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6 + INP_DIM:], axis=-1).T)
+    #plt.show()
+
     orig_baselines = []
     orig_peaks = []
 
     for cond in range(conds):
 
-        baseline_orig_control = np.mean(act_conds_orig[cond, 500:1000, start:end], axis=0)
-        peak_orig_control = np.mean(act_conds_orig[cond, 1100 + 300*cond - 200 + ITI_STEPS:1100 + 300*cond + ITI_STEPS, start:end], axis=0)
+        baseline_orig_control = np.mean(act_conds_orig[cond, 50:100, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond, 110 + 30*cond - 20 + ITI_STEPS:110 + 30*cond + ITI_STEPS, start:end], axis=0)
 
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
@@ -101,24 +123,24 @@ def plot_silencing(len_seq,
         projected_orig = project_ramp_mode(act_conds_orig[cond, :len_seq[cond] + extra_steps_control, start:end], ramp_mode)
         ramp_orig[cond] = projected_orig
 
-        projected_silenced = project_ramp_mode(act_conds_silenced[cond, :len_seq[cond] + extra_steps_silence, start:end], ramp_mode)
+        projected_silenced = project_ramp_mode(act_conds_silenced[cond, :int((1.1 + 0.3 * cond) / dt) + extra_steps_silence + ITI_STEPS, start:end], ramp_mode)
         ramp_silenced[cond] = projected_silenced
 
-    plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
+    plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
 
     xs_p = {}
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_silence * dt), len_seq[cond] + extra_steps_silence - 500)
-        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_control * dt), len_seq[cond] + extra_steps_control - 500)
+        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 50)
+        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 50 + extra_steps_control)
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], label=f"Lick Time {1.1 + 0.3 * cond:.1f}s", linewidth=10)
+            plt.plot(xs_u[cond], ramp_orig[cond][50:], label=f"Lick Time {1.1 + 0.3 * cond:.1f}s", linewidth=10)
             plt.axvline(x=1.1 + 0.3 * cond, linestyle='--')
         else:
-            plt.plot(xs_u[cond], ramp_orig[cond][500:], linewidth=10)
+            plt.plot(xs_u[cond], ramp_orig[cond][50:], linewidth=10)
 
     if use_label:
         plt.xlabel("Time (s)")
@@ -131,10 +153,10 @@ def plot_silencing(len_seq,
     plt.savefig(f"{save_name_control}.png")
     plt.close()
 
-    plt.axvline(x=0.01, linestyle='--', color='black', label="Cue")
+    plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
 
     for cond in range(conds):
-        plt.plot(xs_p[cond], ramp_silenced[cond][500:], linewidth=10)
+        plt.plot(xs_p[cond], ramp_silenced[cond][50:], linewidth=10)
 
     plt.xticks([])
     plt.tick_params(left=False, bottom=False) 
@@ -167,7 +189,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=7, 
+        stim_strength=3, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -199,7 +221,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=7,
+        stim_strength=3,
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True

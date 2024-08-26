@@ -19,6 +19,9 @@ def NormalizeData(data, min, max):
     '''
     return (data - min) / (max - min)
 
+def gaussian_density(x, mean, std):
+    return torch.exp(-(x - mean)**2/(2*std**2))
+
 def gather_inp_data(dt, hid_dim):
 
     '''
@@ -33,25 +36,25 @@ def gather_inp_data(dt, hid_dim):
     # Condition 1: 1.1s
     inp[0] = torch.cat([
         0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1)))
+        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1))),
         ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
         0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1)))
+        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
         0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1)))
+        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
         ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
         0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1)))
+        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
         ])
 
     # Combine all inputs
@@ -74,7 +77,7 @@ def gather_inp_data(dt, hid_dim):
 
     return total_inp, len_seq
 
-def get_ramp(dt, type="None"):
+def get_ramp(dt):
 
     '''
         If constraining any network to a specific solution, gather the neural data or create a ramp
@@ -82,50 +85,19 @@ def get_ramp(dt, type="None"):
         dt: timescale in seconds (0.001 is ms)
     '''
     
-    alm_ramps = {}
-    str_ramps = {}
-    thal_ramps = {}
-    baselines = {}
+    ramps = {}
 
-    baselines[0] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
-    baselines[1] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
-    baselines[2] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
-    baselines[3] = 0.1 * torch.ones(size=(int(1.0 / dt),), dtype=torch.float32).unsqueeze(1)
-
-    if type == "None":
-        alm_mag = np.ones(shape=(4,))
-        str_mag = np.ones(shape=(4,))
-        thal_mag = np.ones(shape=(4,))
-    elif type == "randincond":
-        alm_mag = np.repeat(np.random.uniform(0.25, 1), 4)
-        str_mag = np.repeat(np.random.uniform(0.25, 1), 4)
-        thal_mag = np.repeat(np.random.uniform(0.25, 1), 4)
-    elif type == "randacrosscond":
-        thresh = np.array([1.25, 0.75, 0.25, 0.25])
-        alm_mag = thresh
-        str_mag = thresh
-        thal_mag = thresh
+    means = [1.1, 1.4, 1.7, 2.0]
+    std = [0.4, 0.5, 0.6, 0.7]
 
     for cond in range(4):
 
-        alm_ramps[cond] = torch.cat([
-            baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], alm_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
-        ])
-        str_ramps[cond] = torch.cat([
-            baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], str_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
-        ])
-        thal_ramps[cond] = torch.cat([
-            baselines[cond],
-            torch.linspace(baselines[cond][-1, 0], thal_mag[cond], int((1.1 + 0.3 * cond) / dt), dtype=torch.float32).unsqueeze(1)
-        ])
+        timepoints = torch.linspace(-1, means[cond], steps=100 + int((means[cond]) / dt)).unsqueeze(-1)
+        ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
 
-    total_ramp_alm = pad_sequence([alm_ramps[0], alm_ramps[1], alm_ramps[2], alm_ramps[3]], batch_first=True)
-    total_ramp_str = pad_sequence([str_ramps[0], str_ramps[1], str_ramps[2], alm_ramps[3]], batch_first=True)
-    total_ramp_thal = pad_sequence([thal_ramps[0], thal_ramps[1], thal_ramps[2], alm_ramps[3]], batch_first=True)
+    total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
 
-    return total_ramp_alm, total_ramp_str, total_ramp_thal
+    return total_ramp
 
 def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
 
@@ -252,8 +224,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask_inhib_units = stim_strength * rnn.alm_inhib_mask
-        mask_iti_units = -1 * rnn.iti_mask
+        mask_inhib_units = -stim_strength * rnn.full_alm_mask
+        mask_iti_units = 0 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
@@ -329,7 +301,7 @@ def get_region_borders(model_type, region, hid_dim, inp_dim):
     elif model_type == "d1d2" and region == "str":
 
         start = 0
-        end = int(hid_dim/2)
+        end = hid_dim
 
     elif model_type == "stralm" and region == "alm":
 

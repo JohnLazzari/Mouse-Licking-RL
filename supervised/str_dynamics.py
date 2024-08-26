@@ -18,16 +18,16 @@ plt.rc('font', **font)
 HID_DIM = 256 # Hid dim of each region
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
-DT = 1e-3
+DT = 1e-2
 CONDITION = 0
-START_SILENCE = 1600
-END_SILENCE = 2200
+START_SILENCE = 160
+END_SILENCE = 220
 MODEL_TYPE = "d1d2"
-STIM_STRENGTH = -10
+STIM_STRENGTH = 10
 REGION_TO_SILENCE = "alm"
-EXTRA_STEPS = 1000
-ITI_STEPS = 1000
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_256n_almnoise.005_itinoise1_newloss.pth"
+EXTRA_STEPS = 100
+ITI_STEPS = 100
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
 
 def main():
     
@@ -37,7 +37,7 @@ def main():
     rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM).cuda()
     rnn.load_state_dict(checkpoint)
 
-    total_num_units = HID_DIM * 6 + INP_DIM
+    total_num_units = HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)
     str_start = 0
     stn_start = HID_DIM*2
     snr_start = HID_DIM*3
@@ -49,21 +49,22 @@ def main():
 
     # Sample many hidden states to get pcs for dimensionality reduction
     hn = torch.zeros(size=(1, 4, total_num_units)).cuda()
+    xn = torch.zeros(size=(1, 4, total_num_units)).cuda()
 
     inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], hn.shape[-1]), device="cuda")
 
     # Get original trajectory
     with torch.no_grad():
-        _, act = rnn(iti_inp, cue_inp, hn, inhib_stim, noise=False)
+        _, _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
     
     thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-10, 1).detach().cpu().numpy()
     alm2str = (rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)).detach().cpu().numpy()
     inp_weight_str = F.hardtanh(rnn.inp_weight_str, 1e-10, 1).detach().cpu().numpy()
-    str2str = (F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1) @ rnn.str2str_D).detach().cpu().numpy()
+    str2str = ((rnn.str2str_sparse_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D).detach().cpu().numpy()
 
     thal_activity = act[:, :, HID_DIM*4:HID_DIM*5].detach().clone().cpu().numpy()
     alm_activity = act[:, :, HID_DIM*5:HID_DIM*6].detach().clone().cpu().numpy()
-    iti_activity = act[:, :, HID_DIM*6:].detach().clone().cpu().numpy()
+    iti_activity = act[:, :, HID_DIM*6:HID_DIM*6 + INP_DIM].detach().clone().cpu().numpy()
     str_activity = act[:, :, :HID_DIM].detach().clone().cpu().numpy()
 
     thal2str_acts = []
@@ -120,7 +121,7 @@ def main():
 
         thal_act_manipulation_cur = act_manipulation[:, HID_DIM*4:HID_DIM*5]
         alm_act_manipulation_cur = act_manipulation[:, HID_DIM*5:HID_DIM*6]
-        iti_act_manipulation_cur = act_manipulation[:, HID_DIM*6:]
+        iti_act_manipulation_cur = act_manipulation[:, HID_DIM*6:HID_DIM*6+INP_DIM]
         str_act_manipulation_cur = act_manipulation[:, :HID_DIM]
 
         thal2str_act_manipulation_cur = np.mean((thal2str @ thal_act_manipulation_cur.T).T, axis=-1)
