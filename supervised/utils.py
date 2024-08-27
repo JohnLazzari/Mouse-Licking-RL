@@ -295,13 +295,13 @@ def get_region_borders(model_type, region, hid_dim, inp_dim):
     
     if model_type == "d1d2" and region == "alm":
 
-        start = hid_dim*5
-        end = hid_dim*6 - int(hid_dim * 0.3)
+        start = hid_dim*5 + int(hid_dim * 0.3)
+        end = hid_dim*6
 
     elif model_type == "d1d2" and region == "str":
 
         start = 0
-        end = hid_dim
+        end = hid_dim + int(hid_dim * 0.3)
 
     elif model_type == "stralm" and region == "alm":
 

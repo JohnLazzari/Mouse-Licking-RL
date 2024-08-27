@@ -106,8 +106,8 @@ def main():
 
         str_units_start = 0
         str_units_end = int(HID_DIM/2)
-        thal_units_start = HID_DIM * 4 
-        alm_units_start = HID_DIM * 5
+        thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
+        alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
 
         loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
@@ -195,7 +195,8 @@ def main():
             
         # Save model
         if epoch > 4000:
-            best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
+            torch.save(rnn.state_dict(), SAVE_PATH)
+            #best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 
         if epoch % 10 == 0:
             print("Training loss at epoch {}:{}".format(epoch, loss.item()))

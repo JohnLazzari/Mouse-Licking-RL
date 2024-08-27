@@ -158,7 +158,7 @@ def plot_silencing(len_seq,
     for cond in range(conds):
         plt.plot(xs_p[cond], ramp_silenced[cond][50:], linewidth=10)
 
-    plt.xticks([])
+    #plt.xticks([])
     plt.tick_params(left=False, bottom=False) 
     plt.savefig(f"{save_name_silencing}.png")
     plt.close()
@@ -189,7 +189,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=3, 
+        stim_strength=1, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -205,7 +205,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-.5, 
+        stim_strength=-.45, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -221,7 +221,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=3,
+        stim_strength=1,
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -237,7 +237,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.5, 
+        stim_strength=-.45, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
