@@ -27,7 +27,7 @@ STIM_STRENGTH = 10
 REGION_TO_SILENCE = "alm"
 EXTRA_STEPS = 100
 ITI_STEPS = 100
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_almnoise.15_itinoise.1_5000iters_newloss.pth"
 
 def main():
     
@@ -38,6 +38,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     total_num_units = HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)
+    fsi_size = int(HID_DIM * 0.3)
     str_start = 0
     stn_start = HID_DIM*2
     snr_start = HID_DIM*3
@@ -62,9 +63,9 @@ def main():
     inp_weight_str = F.hardtanh(rnn.inp_weight_str, 1e-10, 1).detach().cpu().numpy()
     str2str = ((rnn.str2str_sparse_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D).detach().cpu().numpy()
 
-    thal_activity = act[:, :, HID_DIM*4:HID_DIM*5].detach().clone().cpu().numpy()
-    alm_activity = act[:, :, HID_DIM*5:HID_DIM*6].detach().clone().cpu().numpy()
-    iti_activity = act[:, :, HID_DIM*6:HID_DIM*6 + INP_DIM].detach().clone().cpu().numpy()
+    thal_activity = act[:, :, HID_DIM*4 + fsi_size:HID_DIM*5 + fsi_size].detach().clone().cpu().numpy()
+    alm_activity = act[:, :, HID_DIM*5 + fsi_size:HID_DIM*6 + fsi_size].detach().clone().cpu().numpy()
+    iti_activity = act[:, :, HID_DIM*6 + fsi_size:HID_DIM*6 + INP_DIM + fsi_size].detach().clone().cpu().numpy()
     str_activity = act[:, :, :HID_DIM].detach().clone().cpu().numpy()
 
     thal2str_acts = []

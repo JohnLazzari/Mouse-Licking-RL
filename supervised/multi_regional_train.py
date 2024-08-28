@@ -15,10 +15,10 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 10000                                                                       # Training iterations
+EPOCHS = 5000                                                                       # Training iterations
 LR = 1e-5                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
@@ -27,20 +27,19 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_almnoise.15_itinoise.1_5000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
     HID_DIM = 256
     OUT_DIM = 1
     INP_DIM = int(HID_DIM*0.1)
-    EPOCHS = 1000
-    LR = 1E-4
-    DT = 1E-3
+    EPOCHS = 5000
+    LR = 1E-5
+    DT = 1E-2
     WEIGHT_DECAY = 1E-3
     MODEL_TYPE = any (d1d2, stralm, d1)
     CONSTRAINED = True
-    TYPE = None (ramping conditions, None means ramp to one across conditions)
     TYPE_LOSS = alm (Only trained to ramp in alm)
 '''
 
@@ -78,10 +77,15 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.15, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
+
     elif MODEL_TYPE == "d1":
+
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
+
     elif MODEL_TYPE == "stralm":
+        
         rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
         
     constraint_criterion = nn.MSELoss()
@@ -194,7 +198,7 @@ def main():
             )
             
         # Save model
-        if epoch > 4000:
+        if epoch > 500:
             torch.save(rnn.state_dict(), SAVE_PATH)
             #best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 

@@ -86,7 +86,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = torch.zeros(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm = torch.zeros(size=(hid_dim,), device="cuda")

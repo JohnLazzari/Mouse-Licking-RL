@@ -26,13 +26,13 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_almnoise.15_itinoise.1_5000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
-EXTRA_STEPS_SILENCE = 100
+EXTRA_STEPS_SILENCE = 70
 EXTRA_STEPS_CONTROL = 0
 
 def plot_silencing(len_seq, 
@@ -205,7 +205,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-.45, 
+        stim_strength=-.5, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -237,7 +237,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.45, 
+        stim_strength=-.5, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
