@@ -20,13 +20,13 @@ plt.rcParams['figure.figsize'] = [10, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-HID_DIM = 256
+HID_DIM = 100
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_almnoise.15_itinoise.1_5000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100

@@ -12,11 +12,11 @@ from utils import gather_inp_data, get_ramp, get_masks, get_acts_manipulation
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
-HID_DIM = 256                                                                       # Hid dim of each region
+HID_DIM = 100                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 5000                                                                       # Training iterations
-LR = 1e-5                                                                           # Learning rate
+EPOCHS = 2000                                                                       # Training iterations
+LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
@@ -27,20 +27,21 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_almnoise.15_itinoise.1_5000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
-    HID_DIM = 256
+    HID_DIM = 100
     OUT_DIM = 1
     INP_DIM = int(HID_DIM*0.1)
-    EPOCHS = 5000
-    LR = 1E-5
+    EPOCHS = 2000
+    LR = 1E-4
     DT = 1E-2
-    WEIGHT_DECAY = 1E-3
+    WEIGHT_DECAY = 1E-4
     MODEL_TYPE = any (d1d2, stralm, d1)
     CONSTRAINED = True
     TYPE_LOSS = alm (Only trained to ramp in alm)
+    SAVE_PATH = checkpoints/d1d2_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth
 '''
 
 def test(rnn, len_seq, str_start, str_end, best_steady_state):
@@ -78,7 +79,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.15, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 

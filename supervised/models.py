@@ -141,22 +141,22 @@ class RNN_MultiRegional_D1D2(nn.Module):
         if constrained:
 
             # Initialize weights to be all positive for Dale's Law
-            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.str2gpe_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.gpe2stn_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.stn2snr_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 1e-2)
-            nn.init.uniform_(self.fsi2str_weight, 0, 1e-2)
-            nn.init.uniform_(self.thal2fsi_weight, 0, 1e-2)
-            nn.init.uniform_(self.alm2fsi_weight, 0, 1e-2)
-            nn.init.uniform_(self.iti2fsi_weight, 0, 1e-2)
-            nn.init.uniform_(self.fsi2fsi_weight, 0, 1e-2)
+            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.str2gpe_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.gpe2stn_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.stn2snr_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 3e-2)
+            nn.init.uniform_(self.fsi2str_weight, 0, 3e-2)
+            nn.init.uniform_(self.thal2fsi_weight, 0, 3e-2)
+            nn.init.uniform_(self.alm2fsi_weight, 0, 3e-2)
+            nn.init.uniform_(self.iti2fsi_weight, 0, 3e-2)
+            nn.init.uniform_(self.fsi2fsi_weight, 0, 3e-2)
 
             # Implement Necessary Masks
             # Striatum recurrent weights
