@@ -8,11 +8,12 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_ramp, get_masks, get_acts_manipulation
+from utils import gather_inp_data, get_data, get_masks, get_acts_manipulation
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
+ALM_HID_DIM = 517
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
 EPOCHS = 10000                                                                       # Training iterations
@@ -21,9 +22,9 @@ DT = 1e-2                                                                       
 WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
-TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
 START_SILENCE = 160
 END_SILENCE = 220
+CONDS = 3
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
@@ -78,10 +79,15 @@ def main():
 
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, ALM_HID_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+
     elif MODEL_TYPE == "d1":
+
         rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
+
     elif MODEL_TYPE == "stralm":
+
         rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
         
     constraint_criterion = nn.MSELoss()
@@ -93,7 +99,7 @@ def main():
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Get ramping activity
-    neural_act = get_ramp(dt=DT)
+    neural_act = get_data(dt=DT)
     neural_act = neural_act.cuda()
 
     # Specify Optimizer
@@ -101,11 +107,10 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
+        hn = torch.zeros(size=(1, CONDS, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, CONDS, rnn.total_num_units)).cuda()
 
         str_units_start = 0
-        str_units_end = int(HID_DIM/2)
         thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
         alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
 
@@ -114,8 +119,8 @@ def main():
 
     elif MODEL_TYPE == "stralm":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 2 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 2 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, CONDS, HID_DIM * 2 + INP_DIM)).cuda()
+        xn = torch.zeros(size=(1, CONDS, HID_DIM * 2 + INP_DIM)).cuda()
 
         str_units_start = 0
         str_units_end = int(HID_DIM/2)
@@ -126,8 +131,8 @@ def main():
 
     elif MODEL_TYPE == "d1":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
+        hn = torch.zeros(size=(1, CONDS, HID_DIM * 4 + INP_DIM)).cuda()
+        xn = torch.zeros(size=(1, CONDS, HID_DIM * 4 + INP_DIM)).cuda()
 
         str_units_start = 0
         str_units_end = int(HID_DIM/2)
@@ -157,14 +162,10 @@ def main():
 
             loss = loss_d1d2(
                 constraint_criterion, 
-                thresh_criterion,
                 act, 
                 neural_act, 
-                HID_DIM, 
-                alm_units_start, 
-                str_units_start, 
-                thal_units_start, 
-                type=TYPE_LOSS
+                ALM_HID_DIM, 
+                alm_units_start
             )
 
         elif MODEL_TYPE == "stralm":

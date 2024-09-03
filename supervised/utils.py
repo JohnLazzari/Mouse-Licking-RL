@@ -35,49 +35,45 @@ def gather_inp_data(dt, hid_dim):
 
     # Condition 1: 1.1s
     inp[0] = torch.cat([
-        0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1))),
+        0.04*torch.ones(size=(int(1 / dt), int(hid_dim*0.1))),
+        0.4*torch.ones(size=(int(1 / dt), int(hid_dim*0.1))),
+        torch.zeros(size=(int((3 - 2) / dt), int(hid_dim*0.1))),
         ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
         0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.5 / dt), int(hid_dim*0.1))),
+        torch.zeros(size=(int((3 - 2.5) / dt), int(hid_dim*0.1))),
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
         0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
-        ])
-
-    # Condition 4: 2s
-    inp[3] = torch.cat([
-        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
         ])
 
     # Combine all inputs
-    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2]], batch_first=True)
 
     # Cue Input
     cue_inp_dict = {}
 
-    for cond in range(4):
+    for cond in range(3):
 
-        cue_inp_dict[cond] = torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1))
+        cue_inp_dict[cond] = torch.zeros(size=(int(3 / dt), 1))
         #cue_inp_dict[cond][999:999+100] = 0.01
 
-    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
+    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [int(2.1 / dt), int(2.4 / dt), int(2.7 / dt), int(3 / dt)]
+    len_seq = [int(3 / dt), int(3 / dt), int(3 / dt)]
 
     total_inp = [total_iti_inp, total_cue_inp]
 
     return total_inp, len_seq
 
-def get_ramp(dt):
+def get_data(dt):
 
     '''
         If constraining any network to a specific solution, gather the neural data or create a ramp
@@ -85,19 +81,19 @@ def get_ramp(dt):
         dt: timescale in seconds (0.001 is ms)
     '''
     
-    ramps = {}
+    cond_1 = sio.loadmat("data/firing_rates/alm_fr_population_cond1.mat")
+    cond_2 = sio.loadmat("data/firing_rates/alm_fr_population_cond2.mat")
+    cond_3 = sio.loadmat("data/firing_rates/alm_fr_population_cond3.mat")
 
-    means = [1.1, 1.4, 1.7, 2.0]
-    std = [0.4, 0.5, 0.6, 0.7]
+    neural_data = np.array([cond_1["fr_population"], cond_2["fr_population"], cond_3["fr_population"]])
 
-    for cond in range(4):
+    neural_data[0] = NormalizeData(neural_data[0], np.min(neural_data[0]), np.max(neural_data[0]))
+    neural_data[1] = NormalizeData(neural_data[1], np.min(neural_data[1]), np.max(neural_data[1]))
+    neural_data[2] = NormalizeData(neural_data[2], np.min(neural_data[2]), np.max(neural_data[2]))
 
-        timepoints = torch.linspace(-1, means[cond], steps=100 + int((means[cond]) / dt)).unsqueeze(-1)
-        ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
-
-    total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
-
-    return total_ramp
+    neural_data = torch.Tensor(neural_data)
+    
+    return neural_data    
 
 def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
 
@@ -121,16 +117,16 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
     elif model_type == "stralm":
-        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 2 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 4 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 4 + inp_dim)).cuda()
     
-    inhib_stim = torch.zeros(size=(4, max(len_seq), hn.shape[-1]), device="cuda")
+    inhib_stim = torch.zeros(size=(3, max(len_seq), hn.shape[-1]), device="cuda")
 
     iti_inp, cue_inp = x_data 
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
@@ -164,14 +160,14 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_sile
     '''
 
     if model_type == "d1d2":
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 6 + inp_dim + int(hid_dim * 0.3))).cuda()
     elif model_type == "stralm":
-        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 2 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 2 + inp_dim)).cuda()
     elif model_type == "d1":
-        hn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 4 + inp_dim)).cuda()
+        hn = torch.zeros(size=(1, 3, hid_dim * 4 + inp_dim)).cuda()
+        xn = torch.zeros(size=(1, 3, hid_dim * 4 + inp_dim)).cuda()
 
     inhib_stim = get_inhib_stim_silence(
         rnn, 
@@ -234,9 +230,9 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
     # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
-    inhib_stim_pre = torch.zeros(size=(4, start_silence, total_num_units), device="cuda")
-    inhib_stim_silence = torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
-    inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
+    inhib_stim_pre = torch.zeros(size=(3, start_silence, total_num_units), device="cuda")
+    inhib_stim_silence = torch.ones(size=(3, end_silence - start_silence, total_num_units), device="cuda") * mask
+    inhib_stim_post = torch.zeros(size=(3, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
@@ -248,46 +244,39 @@ def get_input_silence(dt, hid_dim, extra_steps):
     # Condition 1: 1.1s
     inp[0] = torch.cat([
         0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.4*torch.ones(size=(int(1.1 / dt), int(hid_dim*0.1))),
+        0.4*torch.ones(size=(int(1 / dt), int(hid_dim*0.1))),
         0.4*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
         0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.3*torch.ones(size=(int(1.4 / dt), int(hid_dim*0.1))),
+        0.3*torch.ones(size=(int(1.5 / dt), int(hid_dim*0.1))),
         0.3*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
         0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.2*torch.ones(size=(int(1.7 / dt), int(hid_dim*0.1))),
+        0.2*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
         0.2*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
         ])
 
-    # Condition 4: 2s
-    inp[3] = torch.cat([
-        0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-        0.1*torch.ones(size=(int(2 / dt), int(hid_dim*0.1))),
-        0.1*torch.ones(size=(extra_steps, int(hid_dim*0.1))),
-        ])
-
     # Combine all inputs
-    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2]], batch_first=True)
 
     # Cue Input
     cue_inp_dict = {}
 
-    for cond in range(4):
+    for cond in range(3):
 
         cue_inp_dict[cond] = torch.cat([
-            torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1)),
+            torch.zeros(size=(int((2 + 0.5 * cond) / dt), 1)),
             torch.zeros(size=(extra_steps, 1)),
         ])
         #cue_inp_dict[cond][999:999+100] = 0.01
 
-    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
+    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2]], batch_first=True)
     
     return total_iti_inp, total_cue_inp
 
