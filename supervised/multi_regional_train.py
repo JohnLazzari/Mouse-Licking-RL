@@ -15,8 +15,8 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 ALM_HID_DIM = 517
 OUT_DIM = 1                                                                         # Output dim (not used)
-INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 10000                                                                       # Training iterations
+INP_DIM = int(ALM_HID_DIM*0.1)                                                          # Input dimension
+EPOCHS = 2500                                                                       # Training iterations
 LR = 1e-5                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
@@ -28,7 +28,7 @@ CONDS = 3
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.5_itinoise.25_2500iters.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -80,7 +80,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, ALM_HID_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, ALM_HID_DIM, noise_level_act=0.5, noise_level_inp=0.25, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
@@ -94,7 +94,7 @@ def main():
     thresh_criterion = nn.BCELoss()
 
     # Get input and output data
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=ALM_HID_DIM)
     iti_inp, cue_inp = x_data
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
@@ -114,8 +114,8 @@ def main():
         thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
         alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
 
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
+        loss_mask_act = get_masks(rnn, len_seq)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 
@@ -195,7 +195,7 @@ def main():
             )
             
         # Save model
-        if epoch > 4000:
+        if epoch > 100:
             torch.save(rnn.state_dict(), SAVE_PATH)
             #best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 

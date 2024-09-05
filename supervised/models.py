@@ -26,7 +26,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.constrained = constrained
         self.fsi_size = int(hid_dim * 0.3)
         self.total_alm_units = alm_exc_hid_dim + int(alm_exc_hid_dim * 0.3)
-        self.total_num_units = hid_dim * 5 + self.total_alm_units + self.fsi_size
+        self.total_num_units = hid_dim * 5 + self.total_alm_units + self.fsi_size + self.inp_dim
 
         self.alm_ramp_mask = torch.cat([torch.zeros(size=(hid_dim,)), 
                                     torch.zeros(size=(self.fsi_size,)),
@@ -267,15 +267,25 @@ class RNN_MultiRegional_D1D2(nn.Module):
         
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
+        
+        # zeros from and to ALM to other regions
+        self.zeros_from_alm = torch.zeros(size=(hid_dim, self.total_alm_units), device="cuda")
+        self.zeros_to_alm = torch.zeros(size=(self.total_alm_units, hid_dim), device="cuda")
+
+        # zeros from and to iti and other regions
         self.zeros_to_iti = torch.zeros(size=(inp_dim, hid_dim), device="cuda")
         self.zeros_from_iti = torch.zeros(size=(hid_dim, inp_dim), device="cuda")
-        self.zeros_to_iti_alm = torch.zeros(size=(inp_dim, self.total_alm_units), device="cuda")
-        self.zeros_from_iti_alm = torch.zeros(size=(self.total_alm_units, inp_dim), device="cuda")
         self.zeros_rec_iti = torch.zeros(size=(inp_dim, inp_dim), device="cuda")
 
+        # zeros from and to fsi and other regions
         self.zeros_to_fsi = torch.zeros(size=(self.fsi_size, hid_dim), device="cuda")
         self.zeros_from_fsi = torch.zeros(size=(hid_dim, self.fsi_size), device="cuda")
         self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
+
+        # between alm, iti, and fsi
+        self.zeros_alm_to_iti = torch.zeros(size=(inp_dim, self.total_alm_units), device="cuda")
+        self.zeros_alm_from_iti = torch.zeros(size=(self.total_alm_units, inp_dim), device="cuda")
+        self.zeros_alm_from_fsi = torch.zeros(size=(self.total_alm_units, self.fsi_size), device="cuda")
 
         # Time constants for networks
         self.t_const = 0.1
@@ -328,12 +338,12 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                 # STR       GPE         STN         SNR       Thal      ALM         ALM ITI
             W_str = torch.cat([str2str, fsi2str, self.zeros, self.zeros, self.zeros, thal2str, alm2str, inp_weight_str], dim=1)                             # STR
             W_fsi = torch.cat([self.zeros_to_fsi, fsi2fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi, iti2fsi], dim=1)     # FSI
-            W_gpe = torch.cat([str2gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti], dim=1)       # GPE
-            W_stn = torch.cat([self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti], dim=1)       # STN
-            W_snr = torch.cat([str2snr, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti], dim=1)          # SNR
-            W_thal = torch.cat([self.zeros, self.zeros_from_fsi, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_from_iti], dim=1)     # Thal
-            W_alm = torch.cat([self.zeros, self.zeros_from_fsi_alm, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_from_iti], dim=1)         # ALM
-            W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_from_fsi2iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_rec_iti], dim=1)       # ALM
+            W_gpe = torch.cat([str2gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_alm, self.zeros_from_iti], dim=1)       # GPE
+            W_stn = torch.cat([self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros_from_alm, self.zeros_from_iti], dim=1)       # STN
+            W_snr = torch.cat([str2snr, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros_from_alm, self.zeros_from_iti], dim=1)          # SNR
+            W_thal = torch.cat([self.zeros, self.zeros_from_fsi, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros_from_alm, self.zeros_from_iti], dim=1)     # Thal
+            W_alm = torch.cat([self.zeros_to_alm, self.zeros_alm_from_fsi, self.zeros_to_alm, self.zeros_to_alm, self.zeros_to_alm, thal2alm, alm2alm, self.zeros_alm_from_iti], dim=1)         # ALM
+            W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_from_fsi2iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_alm_to_iti, self.zeros_rec_iti], dim=1)       # ALM
 
         else:
 
