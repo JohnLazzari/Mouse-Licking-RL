@@ -21,12 +21,12 @@ plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
-OUT_DIM = 1
+OUT_DIM = 1433
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_5000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100
@@ -80,28 +80,6 @@ def plot_silencing(len_seq,
         DT 
     )
 
-    #plt.plot(np.mean(act_conds_silenced[:, :, 256*5:256*6 - int(256 * 0.3)], axis=-1).T)
-    #plt.plot(np.mean(act_conds_silenced[:, :, 256*6 - int(256 * 0.3):256*6], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_orig[:, :, 128:256], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_silenced[:, :, :128], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*4:HID_DIM*5], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6 + INP_DIM:], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6:HID_DIM*6 + INP_DIM], axis=-1).T)
-    #plt.show()
-
-    #plt.plot(np.mean(act_conds_silenced[:, 50:, HID_DIM*6 + INP_DIM:], axis=-1).T)
-    #plt.show()
-
     orig_baselines = []
     orig_peaks = []
 
@@ -133,7 +111,7 @@ def plot_silencing(len_seq,
     for cond in range(conds):
 
         xs_p[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 50)
-        xs_u[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 50 + extra_steps_control)
+        xs_u[cond] = np.linspace(-0.5, 2 + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 50 + extra_steps_control)
 
     for cond in range(conds):
         if use_label:
@@ -205,7 +183,7 @@ def main():
         silenced_region="str", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=-.45, 
+        stim_strength=-.25, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
@@ -237,7 +215,7 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.45, 
+        stim_strength=-.25, 
         extra_steps_control=EXTRA_STEPS_CONTROL,
         extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True

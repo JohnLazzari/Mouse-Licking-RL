@@ -13,22 +13,21 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
-ALM_HID_DIM = 517
-OUT_DIM = 1                                                                         # Output dim (not used)
+OUT_DIM = 1433                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 10000                                                                       # Training iterations
-LR = 1e-5                                                                           # Learning rate
+EPOCHS = 5000                                                                       # Training iterations
+LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-2                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
 END_SILENCE = 220
-CONDS = 3
+CONDS = 4
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_fsi2str_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_5000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -80,7 +79,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, ALM_HID_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
@@ -114,8 +113,8 @@ def main():
         thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
         alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
 
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
+        loss_mask_act = get_masks(OUT_DIM, len_seq)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 
@@ -152,7 +151,7 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        _, _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
+        _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
 
         # Get masks
         act = act * loss_mask_act
@@ -164,7 +163,7 @@ def main():
                 constraint_criterion, 
                 act, 
                 neural_act, 
-                ALM_HID_DIM, 
+                HID_DIM, 
                 alm_units_start
             )
 
@@ -177,7 +176,6 @@ def main():
                 neural_act, 
                 alm_units_start, 
                 str_units_start, 
-                type=TYPE_LOSS
             )
 
         elif MODEL_TYPE == "d1":
@@ -191,11 +189,10 @@ def main():
                 alm_units_start, 
                 str_units_start, 
                 thal_units_start, 
-                type=TYPE_LOSS
             )
             
         # Save model
-        if epoch > 4000:
+        if epoch > 500:
             torch.save(rnn.state_dict(), SAVE_PATH)
             #best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 
