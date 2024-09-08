@@ -195,7 +195,7 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
+def get_acts_manipulation(len_seq, rnn, hid_dim, alm_hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -233,13 +233,12 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_sile
         end_silence, 
         len_seq, 
         extra_steps, 
-        stim_strength, 
-        hn.shape[-1]
+        stim_strength
     )
 
     iti_inp_silence, cue_inp_silence = get_input_silence(
         dt, 
-        hid_dim,
+        alm_hid_dim,
         extra_steps
     )
 
@@ -273,7 +272,7 @@ def project_ramp_mode(samples, ramp_mode):
     projected = samples @ ramp_mode
     return projected
 
-def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, extra_steps, stim_strength, total_num_units):
+def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, extra_steps, stim_strength):
 
     # Select mask based on region being silenced
     if region == "alm":
@@ -344,12 +343,12 @@ def get_input_silence(dt, hid_dim, extra_steps):
     
     return total_iti_inp, total_cue_inp
 
-def get_region_borders(model_type, region, hid_dim, inp_dim):
+def get_region_borders(model_type, region, hid_dim, alm_hid_dim, inp_dim):
     
     if model_type == "d1d2" and region == "alm":
 
         start = hid_dim*5 + int(hid_dim * 0.3)
-        end = hid_dim*6
+        end = start + alm_hid_dim
 
     elif model_type == "d1d2" and region == "str":
 
