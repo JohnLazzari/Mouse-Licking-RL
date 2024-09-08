@@ -246,10 +246,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
         
-        # zeros from and to ALM to other regions
-        self.zeros_from_alm = torch.zeros(size=(hid_dim, self.total_alm_units), device="cuda")
-        self.zeros_to_alm = torch.zeros(size=(self.total_alm_units, hid_dim), device="cuda")
-
         # zeros from and to iti and other regions
         self.zeros_to_iti = torch.zeros(size=(inp_dim, hid_dim), device="cuda")
         self.zeros_from_iti = torch.zeros(size=(hid_dim, inp_dim), device="cuda")
@@ -259,11 +255,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.zeros_to_fsi = torch.zeros(size=(self.fsi_size, hid_dim), device="cuda")
         self.zeros_from_fsi = torch.zeros(size=(hid_dim, self.fsi_size), device="cuda")
         self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
-
-        # between alm, iti, and fsi
-        self.zeros_alm_to_iti = torch.zeros(size=(inp_dim, self.total_alm_units), device="cuda")
-        self.zeros_alm_from_iti = torch.zeros(size=(self.total_alm_units, inp_dim), device="cuda")
-        self.zeros_alm_from_fsi = torch.zeros(size=(self.total_alm_units, self.fsi_size), device="cuda")
 
         # Time constants for networks
         self.t_const = 0.1

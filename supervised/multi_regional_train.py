@@ -93,7 +93,7 @@ def main():
     thresh_criterion = nn.BCELoss()
 
     # Get input and output data
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=ALM_HID_DIM)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     iti_inp, cue_inp = x_data
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 

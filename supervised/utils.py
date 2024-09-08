@@ -195,7 +195,7 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, hid_dim, alm_hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
+def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -238,7 +238,7 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, alm_hid_dim, inp_dim, model_typ
 
     iti_inp_silence, cue_inp_silence = get_input_silence(
         dt, 
-        alm_hid_dim,
+        hid_dim,
         extra_steps
     )
 
@@ -286,9 +286,9 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
     # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
-    inhib_stim_pre = torch.zeros(size=(4, start_silence, total_num_units), device="cuda")
-    inhib_stim_silence = torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
-    inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
+    inhib_stim_pre = torch.zeros(size=(4, start_silence, rnn.total_num_units), device="cuda")
+    inhib_stim_silence = torch.ones(size=(4, end_silence - start_silence, rnn.total_num_units), device="cuda") * mask
+    inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, rnn.total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
@@ -343,12 +343,13 @@ def get_input_silence(dt, hid_dim, extra_steps):
     
     return total_iti_inp, total_cue_inp
 
-def get_region_borders(model_type, region, hid_dim, alm_hid_dim, inp_dim):
+def get_region_borders(model_type, region, hid_dim, inp_dim):
     
     if model_type == "d1d2" and region == "alm":
 
+        # Only excitatory units
         start = hid_dim*5 + int(hid_dim * 0.3)
-        end = start + alm_hid_dim
+        end = hid_dim * 6
 
     elif model_type == "d1d2" and region == "str":
 
