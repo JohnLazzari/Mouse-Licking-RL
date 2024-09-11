@@ -18,7 +18,7 @@ INP_DIM = int(HID_DIM*0.1)                                                      
 EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-2                                                                 # Weight decay parameter
+WEIGHT_DECAY = 0                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -27,6 +27,8 @@ CONDS = 4
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
+PCA = False
+N_COMPONENTS = 10
 SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
 
 '''
@@ -98,7 +100,7 @@ def main():
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Get ramping activity
-    neural_act = get_data(dt=DT)
+    neural_act = get_data(dt=DT, pca=PCA, n_components=N_COMPONENTS)
     neural_act = neural_act.cuda()
 
     # Specify Optimizer
@@ -160,11 +162,10 @@ def main():
         if MODEL_TYPE == "d1d2":
 
             loss = loss_d1d2(
+                rnn,
                 constraint_criterion, 
                 act, 
                 neural_act, 
-                HID_DIM, 
-                alm_units_start
             )
 
         elif MODEL_TYPE == "stralm":

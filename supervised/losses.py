@@ -8,16 +8,19 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
-def loss_d1d2(constraint_criterion, 
-                act, 
-                neural_act, 
-                alm_hid_dim, 
-                alm_start, 
-                ):
+def loss_d1d2(
+    rnn,
+    constraint_criterion, 
+    act, 
+    neural_act, 
+):
+    
+    all_params = torch.cat([x.view(-1) for x in rnn.parameters()])
 
     loss = (
             constraint_criterion(act[:, 50:, :], neural_act[:, 50:, :])
-            + 1e-3 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
+            + 1e-7 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
+            + 1e-7 * torch.norm(all_params, 1)
             )
     
     return loss

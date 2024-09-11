@@ -8,6 +8,7 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata, spearmanr
+from sklearn.decomposition import PCA
 
 def NormalizeData(data, min, max):
     '''
@@ -79,7 +80,7 @@ def gather_inp_data(dt, hid_dim):
 
     return total_inp, len_seq
 
-def get_data(dt, type="combined"):
+def get_data(dt, pca=False, n_components=10):
 
     '''
         If constraining any network to a specific solution, gather the neural data or create a ramp
@@ -144,19 +145,14 @@ def get_data(dt, type="combined"):
         neural_data_str_dms_strain
     ], axis=-1)
 
-    print(neural_data_combined.shape)
-
-    if type == "alm_strain":
-
-        neural_data = torch.Tensor(neural_data_alm_strain)
-    
-    elif type == "str_strain":
-
-        neural_data = torch.Tensor(neural_data_str_strain)
-    
-    elif type == "combined":
+    if pca:
         
-        neural_data = torch.Tensor(neural_data_combined) 
+        neural_pca = PCA(n_components=n_components)
+        neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
+        neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
+        neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
+        
+    neural_data = torch.Tensor(neural_data_combined) 
     
     return neural_data    
 
