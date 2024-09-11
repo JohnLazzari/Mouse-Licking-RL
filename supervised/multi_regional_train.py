@@ -15,7 +15,7 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1433                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 5000                                                                       # Training iterations
+EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-2                                                                 # Weight decay parameter
@@ -27,7 +27,7 @@ CONDS = 4
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_5000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
