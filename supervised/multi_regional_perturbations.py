@@ -26,14 +26,13 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_10000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
+INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
 ITI_STEPS = 100
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
-EXTRA_STEPS_SILENCE = 100
-EXTRA_STEPS_CONTROL = 0
 
 def plot_silencing(len_seq, 
                    conds, 
@@ -45,8 +44,6 @@ def plot_silencing(len_seq,
                    evaluated_region, 
                    dt, 
                    stim_strength, 
-                   extra_steps_control,
-                   extra_steps_silence,
                    use_label=False, 
                    ):
     
@@ -75,7 +72,6 @@ def plot_silencing(len_seq,
         START_SILENCE,
         END_SILENCE,
         stim_strength, 
-        extra_steps_silence, 
         silenced_region,
         DT 
     )
@@ -98,10 +94,10 @@ def plot_silencing(len_seq,
 
     for cond in range(conds):
 
-        projected_orig = project_ramp_mode(act_conds_orig[cond, :len_seq[cond] + extra_steps_control, start:end], ramp_mode)
+        projected_orig = project_ramp_mode(act_conds_orig[cond, :, start:end], ramp_mode)
         ramp_orig[cond] = projected_orig
 
-        projected_silenced = project_ramp_mode(act_conds_silenced[cond, :int((1 + 0.3 * cond) / dt) + extra_steps_silence + ITI_STEPS, start:end], ramp_mode)
+        projected_silenced = project_ramp_mode(act_conds_silenced[cond, :, start:end], ramp_mode)
         ramp_silenced[cond] = projected_silenced
 
     plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
@@ -110,8 +106,8 @@ def plot_silencing(len_seq,
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(-0.5, 1.1 + 0.3 * cond + (extra_steps_silence * dt), ramp_silenced[cond].shape[0] - 50)
-        xs_u[cond] = np.linspace(-0.5, 2 + (extra_steps_control * dt), ramp_orig[cond].shape[0] - 50 + extra_steps_control)
+        xs_p[cond] = np.linspace(-0.5, 2 + ((END_SILENCE - START_SILENCE) * dt), ramp_silenced[cond].shape[0] - 50)
+        xs_u[cond] = np.linspace(-0.5, 2, ramp_orig[cond].shape[0] - 50)
 
     for cond in range(conds):
         if use_label:
@@ -160,7 +156,7 @@ def main():
 
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
     
     plot_silencing(
         len_seq, 
@@ -173,8 +169,6 @@ def main():
         evaluated_region="alm", 
         dt=DT, 
         stim_strength=2, 
-        extra_steps_control=EXTRA_STEPS_CONTROL,
-        extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
     )
 
@@ -189,8 +183,6 @@ def main():
         evaluated_region="alm", 
         dt=DT, 
         stim_strength=-.25, 
-        extra_steps_control=EXTRA_STEPS_CONTROL,
-        extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
     )
 
@@ -205,8 +197,6 @@ def main():
         evaluated_region="str", 
         dt=DT, 
         stim_strength=2,
-        extra_steps_control=EXTRA_STEPS_CONTROL,
-        extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
     )
 
@@ -221,8 +211,6 @@ def main():
         evaluated_region="str", 
         dt=DT, 
         stim_strength=-.25, 
-        extra_steps_control=EXTRA_STEPS_CONTROL,
-        extra_steps_silence=EXTRA_STEPS_SILENCE,
         use_label=True
     )
     

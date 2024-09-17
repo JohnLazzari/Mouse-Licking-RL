@@ -19,8 +19,8 @@ def loss_d1d2(
 
     loss = (
             constraint_criterion(act[:, 50:, :], neural_act[:, 50:, :])
-            + 1e-7 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
-            + 1e-7 * torch.norm(all_params, 1)
+            + 1e-3 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
+            #+ 1e-7 * torch.norm(all_params, 1)
             )
     
     return loss

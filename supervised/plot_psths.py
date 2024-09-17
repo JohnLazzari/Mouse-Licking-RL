@@ -26,8 +26,9 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_256n_almnoise.1_itinoise.05_10000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.1_itinoise.1_10000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
+INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
 ITI_STEPS = 100
 START_SILENCE = 160                    # timepoint from start of trial to silence at
@@ -58,7 +59,6 @@ def plot_psths(
             START_SILENCE,
             END_SILENCE,
             STIM_STRENGTH, 
-            EXTRA_STEPS_SILENCE, 
             SILENCED_REGION,
             DT 
         )
@@ -131,7 +131,7 @@ def main():
 
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    x_data, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
     
     plot_psths(
         len_seq, 
