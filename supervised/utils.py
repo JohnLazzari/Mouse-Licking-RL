@@ -41,7 +41,7 @@ def gather_inp_data(dt, hid_dim, path):
     averaged_conds.append(iti_projection[5])
     averaged_conds = np.array(averaged_conds)
 
-    averaged_conds = 0.5 * torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
+    averaged_conds = 0.4 * torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
 
     # Cue Input
     cue_inp_dict = {}
@@ -290,7 +290,7 @@ def get_input_silence(dt, hid_dim, start_silence, end_silence, path):
         averaged_conds[:, start_silence:]
     ], axis=-1)
 
-    inp_silence = 0.5 * torch.tensor(inp_silence, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
+    inp_silence = 0.4 * torch.tensor(inp_silence, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
 
     # Cue Input
     cue_inp_dict = {}

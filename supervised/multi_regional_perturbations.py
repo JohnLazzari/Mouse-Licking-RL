@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.1_itinoise.1_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -82,7 +82,7 @@ def plot_silencing(len_seq,
     for cond in range(conds):
 
         baseline_orig_control = np.mean(act_conds_orig[cond, 50:100, start:end], axis=0)
-        peak_orig_control = np.mean(act_conds_orig[cond, 110 + 30*cond - 20 + ITI_STEPS:110 + 30*cond + ITI_STEPS, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond, 80 + 30*cond - 20 + ITI_STEPS:80 + 30*cond + ITI_STEPS, start:end], axis=0)
 
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
@@ -111,8 +111,8 @@ def plot_silencing(len_seq,
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][50:], label=f"Lick Time {1.1 + 0.3 * cond:.1f}s", linewidth=10)
-            plt.axvline(x=1.1 + 0.3 * cond, linestyle='--')
+            plt.plot(xs_u[cond], ramp_orig[cond][50:], label=f"Lick Time {0.8 + 0.3 * cond:.1f}s", linewidth=10)
+            plt.axvline(x=0.8 + 0.3 * cond, linestyle='--')
         else:
             plt.plot(xs_u[cond], ramp_orig[cond][50:], linewidth=10)
 
@@ -168,7 +168,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm", 
         dt=DT, 
-        stim_strength=2, 
+        stim_strength=5, 
         use_label=True
     )
 
@@ -196,7 +196,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=2,
+        stim_strength=5,
         use_label=True
     )
 

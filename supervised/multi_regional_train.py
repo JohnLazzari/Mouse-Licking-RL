@@ -18,7 +18,7 @@ INP_DIM = int(HID_DIM*0.1)                                                      
 EPOCHS = 15000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-6                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -30,7 +30,7 @@ SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.1_itinoise.1_15000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -82,7 +82,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
