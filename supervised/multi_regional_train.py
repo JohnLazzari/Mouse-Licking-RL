@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_data, get_masks, get_acts_manipulation
@@ -18,7 +18,7 @@ INP_DIM = int(HID_DIM*0.1)                                                      
 EPOCHS = 15000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-6                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -29,13 +29,15 @@ EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
+TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
 
 '''
+
 Default Model(s):
     HID_DIM = 256
-    OUT_DIM = 1
+    OUT_DIM = 1451
     INP_DIM = int(HID_DIM*0.1)
     EPOCHS = 1000
     LR = 1E-4
@@ -43,8 +45,9 @@ Default Model(s):
     WEIGHT_DECAY = 1E-3
     MODEL_TYPE = any (d1d2, stralm, d1)
     CONSTRAINED = True
-    TYPE = None (ramping conditions, None means ramp to one across conditions)
-    TYPE_LOSS = alm (Only trained to ramp in alm)
+
+    (no iti input, but data driven)
+
 '''
 
 def test(rnn, len_seq, str_start, str_end, best_steady_state):
@@ -82,11 +85,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
-
-    elif MODEL_TYPE == "d1":
-
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.05, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -96,12 +95,11 @@ def main():
     thresh_criterion = nn.BCELoss()
 
     # Get input and output data
-    x_data, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
-    iti_inp, cue_inp = x_data
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Get ramping activity
-    neural_act = get_data(dt=DT, pca=PCA, n_components=N_COMPONENTS)
+    neural_act = get_data(DT, TRIAL_EPOCH, pca=PCA, n_components=N_COMPONENTS)
     neural_act = neural_act.cuda()
 
     # Specify Optimizer
@@ -131,19 +129,6 @@ def main():
         loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=2)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 2 + INP_DIM), device="cuda")
 
-    elif MODEL_TYPE == "d1":
-
-        hn = torch.zeros(size=(1, CONDS, HID_DIM * 4 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, CONDS, HID_DIM * 4 + INP_DIM)).cuda()
-
-        str_units_start = 0
-        str_units_end = int(HID_DIM/2)
-        thal_units_start = HID_DIM * 2
-        alm_units_start = HID_DIM * 3
-
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=4)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 4 + INP_DIM), device="cuda")
-    
     best_steady_state = np.inf
     prev_steady_state = np.inf
     
@@ -154,10 +139,10 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
+        hidden_act, out = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
 
         # Get masks
-        act = act * loss_mask_act
+        out = out * loss_mask_act
 
         # Get loss
         if MODEL_TYPE == "d1d2":
@@ -165,7 +150,7 @@ def main():
             loss = loss_d1d2(
                 rnn,
                 constraint_criterion, 
-                act, 
+                out, 
                 neural_act, 
             )
 
@@ -174,25 +159,12 @@ def main():
             loss = loss_stralm(
                 constraint_criterion, 
                 thresh_criterion,
-                act, 
+                out, 
                 neural_act, 
                 alm_units_start, 
                 str_units_start, 
             )
 
-        elif MODEL_TYPE == "d1":
-
-            loss = loss_d1d2(
-                constraint_criterion, 
-                thresh_criterion,
-                act, 
-                neural_act, 
-                HID_DIM, 
-                alm_units_start, 
-                str_units_start, 
-                thal_units_start, 
-            )
-            
         # Save model
         if epoch > 500:
             torch.save(rnn.state_dict(), SAVE_PATH)
@@ -207,6 +179,14 @@ def main():
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
         loss.backward()
+
+        '''
+        simple_dynamics_d1d2(
+            hidden_act,
+            rnn,
+            HID_DIM
+        )
+        '''
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)

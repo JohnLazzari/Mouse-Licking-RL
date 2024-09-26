@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRegional_D1
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -26,18 +26,20 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
 ITI_STEPS = 100
+TRIAL_EPOCH = "full"
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
 
 def plot_silencing(len_seq, 
                    conds, 
                    rnn, 
-                   x_data, 
+                   iti_inp, 
+                   cue_inp, 
                    save_name_control, 
                    save_name_silencing, 
                    silenced_region, 
@@ -58,7 +60,8 @@ def plot_silencing(len_seq,
         rnn, 
         HID_DIM, 
         INP_DIM,
-        x_data, 
+        iti_inp, 
+        cue_inp, 
         MODEL_TYPE
     )
 
@@ -82,7 +85,7 @@ def plot_silencing(len_seq,
     for cond in range(conds):
 
         baseline_orig_control = np.mean(act_conds_orig[cond, 50:100, start:end], axis=0)
-        peak_orig_control = np.mean(act_conds_orig[cond, 110 + 30*cond - 20 + ITI_STEPS:110 + 30*cond + ITI_STEPS, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond, 80 + 30*cond - 20 + ITI_STEPS:80 + 30*cond + ITI_STEPS, start:end], axis=0)
 
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
@@ -106,13 +109,13 @@ def plot_silencing(len_seq,
     xs_u = {}
     for cond in range(conds):
 
-        xs_p[cond] = np.linspace(-0.5, 2 + ((END_SILENCE - START_SILENCE) * dt), ramp_silenced[cond].shape[0] - 50)
-        xs_u[cond] = np.linspace(-0.5, 2, ramp_orig[cond].shape[0] - 50)
+        xs_p[cond] = np.linspace(-0.5, ramp_silenced[cond].shape[0] * dt - 1, ramp_silenced[cond].shape[0] - 50)
+        xs_u[cond] = np.linspace(-0.5, ramp_orig[cond].shape[0] * dt - 1, ramp_orig[cond].shape[0] - 50)
 
     for cond in range(conds):
         if use_label:
-            plt.plot(xs_u[cond], ramp_orig[cond][50:], label=f"Lick Time {1.1 + 0.3 * cond:.1f}s", linewidth=10)
-            plt.axvline(x=1.1 + 0.3 * cond, linestyle='--')
+            plt.plot(xs_u[cond], ramp_orig[cond][50:], label=f"Lick Time {.8 + 0.3 * cond:.1f}s", linewidth=10)
+            plt.axvline(x=.8 + 0.3 * cond, linestyle='--')
         else:
             plt.plot(xs_u[cond], ramp_orig[cond][50:], linewidth=10)
 
@@ -150,23 +153,21 @@ def main():
 
         rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
 
-    elif MODEL_TYPE == "d1":
-
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
-
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
     
     plot_silencing(
         len_seq, 
         CONDS, 
         rnn, 
-        x_data, 
+        iti_inp, 
+        cue_inp, 
         SAVE_NAME_PATH + "alm_activity_control", 
         SAVE_NAME_PATH + "alm_activity_alm_silencing",
         silenced_region="alm", 
-        evaluated_region="alm", 
+        evaluated_region="alm_exc", 
         dt=DT, 
         stim_strength=2, 
         use_label=True
@@ -176,11 +177,12 @@ def main():
         len_seq, 
         CONDS, 
         rnn, 
-        x_data, 
+        iti_inp, 
+        cue_inp, 
         SAVE_NAME_PATH + "alm_activity_control", 
         SAVE_NAME_PATH + "alm_activity_str_silencing",
         silenced_region="str", 
-        evaluated_region="alm", 
+        evaluated_region="alm_exc", 
         dt=DT, 
         stim_strength=-.25, 
         use_label=True
@@ -190,7 +192,8 @@ def main():
         len_seq, 
         CONDS, 
         rnn, 
-        x_data, 
+        iti_inp,
+        cue_inp,
         SAVE_NAME_PATH + "str_activity_control", 
         SAVE_NAME_PATH + "str_activity_alm_silencing",
         silenced_region="alm", 
@@ -204,7 +207,8 @@ def main():
         len_seq, 
         CONDS, 
         rnn,
-        x_data, 
+        iti_inp, 
+        cue_inp, 
         SAVE_NAME_PATH + "str_activity_control", 
         SAVE_NAME_PATH + "str_activity_str_silencing",
         silenced_region="str", 

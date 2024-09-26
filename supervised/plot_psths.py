@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRegional_D1
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_nonoise_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -36,12 +36,14 @@ END_SILENCE = 220                      # timepoint from start of trial to end si
 EXTRA_STEPS_SILENCE = 100
 EXTRA_STEPS_CONTROL = 0
 SILENCED_REGION = "alm"
-STIM_STRENGTH = 2
+STIM_STRENGTH = 5
+TRIAL_EPOCH = "full"
 
 def plot_psths(
             len_seq, 
             rnn, 
-            x_data, 
+            iti_inp, 
+            cue_inp, 
             silence=False
         ):
     
@@ -71,11 +73,18 @@ def plot_psths(
             rnn, 
             HID_DIM, 
             INP_DIM,
-            x_data, 
+            iti_inp,
+            cue_inp,
             MODEL_TYPE
         )
 
-    plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6], linewidth=6)
+    '''
+        plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6], linewidth=6)
+        plt.show()
+    '''
+    
+
+    plt.plot(act_conds[0, :, :HID_DIM], linewidth=6)
     plt.show()
 
     fig, axs = plt.subplots(2, 5)
@@ -107,9 +116,6 @@ def plot_psths(
     axs[1, 3].plot(np.mean(act_conds[:, :, HID_DIM * 6:HID_DIM * 6 + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
     axs[1, 3].set_title("ALM Inhibitory PSTH")
 
-    axs[1, 4].plot(np.mean(act_conds[:, :, HID_DIM * 6 + int(HID_DIM * 0.3):HID_DIM * 6 + int(HID_DIM * 0.3) + INP_DIM], axis=-1).T, linewidth=6)
-    axs[1, 4].set_title("ITI PSTH")
-
     plt.show()
 
 def main():
@@ -125,24 +131,23 @@ def main():
 
         rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
 
-    elif MODEL_TYPE == "d1":
-
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
-
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
     
     plot_psths(
         len_seq, 
         rnn, 
-        x_data, 
+        iti_inp, 
+        cue_inp, 
     )
 
     plot_psths(
         len_seq, 
         rnn, 
-        x_data, 
+        iti_inp, 
+        cue_inp, 
         silence=True
     )
 
