@@ -86,6 +86,7 @@ def plot_silencing(len_seq,
 
         baseline_orig_control = np.mean(act_conds_orig[cond, 50:100, start:end], axis=0)
         peak_orig_control = np.mean(act_conds_orig[cond, 80 + 30*cond - 20 + ITI_STEPS:80 + 30*cond + ITI_STEPS, start:end], axis=0)
+        peak_orig_control = np.mean(act_conds_orig[cond, 80 + 30*cond - 20 + ITI_STEPS:80 + 30*cond + ITI_STEPS, start:end], axis=0)
 
         orig_baselines.append(baseline_orig_control)
         orig_peaks.append(peak_orig_control)
@@ -169,7 +170,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm_exc", 
         dt=DT, 
-        stim_strength=2, 
+        stim_strength=5, 
         use_label=True
     )
 
@@ -199,7 +200,7 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=2,
+        stim_strength=5,
         use_label=True
     )
 

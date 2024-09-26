@@ -19,6 +19,7 @@ EPOCHS = 15000                                                                  
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
