@@ -9,6 +9,7 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA
+from scipy.signal import find_peaks
 
 def NormalizeData(
     data, 
@@ -31,7 +32,8 @@ def gather_inp_data(
     dt, 
     hid_dim, 
     path,
-    trial_epoch
+    trial_epoch,
+    peaks=None
 ):
 
     '''
@@ -41,6 +43,8 @@ def gather_inp_data(
             dt:             timescale in seconds (0.001 is ms)
             hid_dim:        number of hidden dimensions in a single region
             path:           path to folder containing ITI data
+            trial_epoch:    Whether to use only delay epoch or full trial
+            peaks:          List of peak times gathered from data for gathering delay data only
     '''
 
     # Load in the data from the mat file and normalize the projections
@@ -58,8 +62,22 @@ def gather_inp_data(
 
     # Choose the appropriate scaling and repeat to simulate a small population of ITI neurons
     averaged_conds = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    averaged_conds[:, :100, :] *= 0.04
-    averaged_conds[:, 100:, :] *= 0.4
+    averaged_conds[:, :100, :] *= 0.1
+    averaged_conds[:, 100:, :] *= 1
+
+    if trial_epoch == "delay":
+        
+        iti_inp_peak_cond_1 = averaged_conds[0, :peaks[0], :]
+        iti_inp_peak_cond_2 = averaged_conds[1, :peaks[1], :]
+        iti_inp_peak_cond_3 = averaged_conds[2, :peaks[2], :]
+        iti_inp_peak_cond_4 = averaged_conds[3, :peaks[3], :]
+
+        averaged_conds = pad_sequence([
+           iti_inp_peak_cond_1,
+           iti_inp_peak_cond_2,
+           iti_inp_peak_cond_3,
+           iti_inp_peak_cond_4,
+        ], batch_first=True)
 
     plt.plot(np.mean(averaged_conds.numpy(), axis=-1).T)
     plt.show()
@@ -80,7 +98,7 @@ def gather_inp_data(
     
     elif trial_epoch == "delay":
         
-        len_seq = [int(2.1 / dt), int(2.4 / dt), int(2.7 / dt), int(3 / dt)]
+        len_seq = [peaks[0], peaks[1], peaks[2], peaks[3]]
     
 
     return averaged_conds, total_cue_inp, len_seq
@@ -103,20 +121,6 @@ def get_data(
             trial_epoch:        Whether to only include delay or full trial
     '''
 
-    if trial_epoch == "delay":
-        
-        cond_1_idx = int(2.1 / dt)
-        cond_2_idx = int(2.4 / dt)
-        cond_3_idx = int(2.7 / dt)
-        cond_4_idx = int(3 / dt)
-    
-    elif trial_epoch == "full":
-
-        cond_1_idx = int(3 / dt)
-        cond_2_idx = int(3 / dt)
-        cond_3_idx = int(3 / dt)
-        cond_4_idx = int(3 / dt)
-    
     # Gather all data from different sessions
     
     # ALM Silencing Sessions
@@ -151,10 +155,10 @@ def get_data(
 
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
-        torch.from_numpy(cond_1_alm_strain["fr_population"][:cond_1_idx, :]), 
-        torch.from_numpy(cond_2_alm_strain["fr_population"][:cond_2_idx, :]), 
-        torch.from_numpy(cond_3_alm_strain["fr_population"][:cond_3_idx, :]),
-        torch.from_numpy(cond_4_alm_strain["fr_population"][:cond_4_idx, :])
+        torch.from_numpy(cond_1_alm_strain["fr_population"]), 
+        torch.from_numpy(cond_2_alm_strain["fr_population"]), 
+        torch.from_numpy(cond_3_alm_strain["fr_population"]),
+        torch.from_numpy(cond_4_alm_strain["fr_population"])
     ], batch_first=True)
     
     
@@ -170,10 +174,10 @@ def get_data(
     cond_4_str_strain["fr_population"] = NormalizeData(cond_4_str_strain["fr_population"], np.min(cond_4_str_strain["fr_population"]), np.max(cond_4_str_strain["fr_population"]))
 
     neural_data_str_strain = pad_sequence([
-        torch.from_numpy(cond_1_str_strain["fr_population"][:cond_1_idx, :]), 
-        torch.from_numpy(cond_2_str_strain["fr_population"][:cond_2_idx, :]), 
-        torch.from_numpy(cond_3_str_strain["fr_population"][:cond_3_idx, :]),
-        torch.from_numpy(cond_4_str_strain["fr_population"][:cond_4_idx, :])
+        torch.from_numpy(cond_1_str_strain["fr_population"]), 
+        torch.from_numpy(cond_2_str_strain["fr_population"]), 
+        torch.from_numpy(cond_3_str_strain["fr_population"]),
+        torch.from_numpy(cond_4_str_strain["fr_population"])
     ], batch_first=True)
 
 
@@ -189,12 +193,11 @@ def get_data(
     cond_4_str_dms_strain["fr_population"] = NormalizeData(cond_4_str_dms_strain["fr_population"], np.min(cond_4_str_dms_strain["fr_population"]), np.max(cond_4_str_dms_strain["fr_population"]))
 
     neural_data_str_dms_strain = pad_sequence([
-        torch.from_numpy(cond_1_str_dms_strain["fr_population"][:cond_1_idx, :]), 
-        torch.from_numpy(cond_2_str_dms_strain["fr_population"][:cond_2_idx, :]), 
-        torch.from_numpy(cond_3_str_dms_strain["fr_population"][:cond_3_idx, :]),
-        torch.from_numpy(cond_4_str_dms_strain["fr_population"][:cond_4_idx, :])
+        torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
+        torch.from_numpy(cond_2_str_dms_strain["fr_population"]), 
+        torch.from_numpy(cond_3_str_dms_strain["fr_population"]),
+        torch.from_numpy(cond_4_str_dms_strain["fr_population"])
     ], batch_first=True)
-
 
     # Combine all sessions
     neural_data_combined = torch.cat([
@@ -203,6 +206,29 @@ def get_data(
         neural_data_str_dms_strain
     ], axis=-1).type(torch.float32)
 
+    neural_data_for_peaks = np.mean(np.array(neural_data_combined), axis=-1)
+    cond_1_peaks = find_peaks(neural_data_for_peaks[0])
+    cond_2_peaks = find_peaks(neural_data_for_peaks[1])
+    cond_3_peaks = find_peaks(neural_data_for_peaks[2])
+    cond_4_peaks = find_peaks(neural_data_for_peaks[3])
+
+    peak_times = [cond_1_peaks[0][-1], cond_2_peaks[0][-1], cond_3_peaks[0][-1], cond_4_peaks[0][-1]]
+
+    if trial_epoch == "delay":
+
+        neural_data_peak_cond_1 = neural_data_combined[0, :cond_1_peaks[0][-1], :]
+        neural_data_peak_cond_2 = neural_data_combined[1, :cond_2_peaks[0][-1], :]
+        neural_data_peak_cond_3 = neural_data_combined[2, :cond_3_peaks[0][-1], :]
+        neural_data_peak_cond_4 = neural_data_combined[3, :cond_4_peaks[0][-1], :]
+
+        # Combine all sessions
+        neural_data_combined = pad_sequence([
+            neural_data_peak_cond_1,
+            neural_data_peak_cond_2,
+            neural_data_peak_cond_3,
+            neural_data_peak_cond_4
+        ], batch_first=True).type(torch.float32)
+    
     if pca:
         
         # Find PCs if pca is specified
@@ -211,7 +237,7 @@ def get_data(
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
         
-    return neural_data_combined
+    return neural_data_combined, peak_times
 
 
 def get_acts_control(
@@ -465,8 +491,8 @@ def get_input_silence(
     
     # Collect and scale input accordingly
     inp_silence = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    inp_silence[:, :100, :] *= 0.04
-    inp_silence[:, 100:, :] *= 0.4
+    inp_silence[:, :100, :] *= 0.1
+    inp_silence[:, 100:, :] *= 1
 
     # Cue Input
     cue_inp_dict = {}

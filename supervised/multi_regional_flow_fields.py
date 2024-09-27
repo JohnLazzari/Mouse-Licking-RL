@@ -20,7 +20,7 @@ CONDITION = 1
 NUM_POINTS = 100
 MODEL_TYPE = "d1d2" # d1d2, d2, stralm
 REGION = "str2thal" # str, alm, str2thal, or snr
-TIME_SKIPS = 100
+TIME_SKIPS = 10
 PERTURBATION = False
 PERTURBED_REGION = "alm" # str or alm
 ITI_STEPS = 100
@@ -35,7 +35,7 @@ LOWER_BOUND_Y = -15
 UPPER_BOUND_Y = 15
 TRIAL_EPOCH = "full"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"
 SAVE_NAME = f"results/flow_fields/multi_regional_{MODEL_TYPE}/multi_regional_{MODEL_TYPE}_flow"
 SAVE_NAME_EPS = f"results/flow_fields/multi_regional_{MODEL_TYPE}_eps/multi_regional_{MODEL_TYPE}_flow"
 

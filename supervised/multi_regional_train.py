@@ -19,7 +19,6 @@ EPOCHS = 15000                                                                  
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
-WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -30,9 +29,9 @@ EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
-TRIAL_EPOCH = "full"                                                                                                           # delay or full
+TRIAL_EPOCH = "delay"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
 
 '''
 
@@ -95,13 +94,13 @@ def main():
     constraint_criterion = nn.MSELoss()
     thresh_criterion = nn.BCELoss()
 
-    # Get input and output data
-    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
-    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
-
     # Get ramping activity
-    neural_act = get_data(DT, TRIAL_EPOCH, pca=PCA, n_components=N_COMPONENTS)
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, pca=PCA, n_components=N_COMPONENTS)
     neural_act = neural_act.cuda()
+
+    # Get input and output data
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peaks=peak_times)
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)

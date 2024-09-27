@@ -89,7 +89,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = 0.8 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.4 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.3 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm_exc = torch.zeros(size=(self.alm_exc_size,), device="cuda")
@@ -253,15 +253,28 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.sigma_recur = noise_level_act
         self.sigma_input = noise_level_inp
 
-    def forward(self, inp, cue_inp, hn, xn, inhib_stim, noise=True):
+        self.h_0 = nn.Parameter(torch.empty(size=(self.total_num_units,)))
+        self.x_0 = nn.Parameter(torch.empty(size=(self.total_num_units,)))
+
+    def forward(
+        self, 
+        inp, 
+        cue_inp, 
+        inhib_stim, 
+        hn=None, 
+        xn=None, 
+        noise=True
+    ):
 
         '''
             Forward pass through the model
             
             Parameters:
                 inp: input sequence, should be scalar values denoting the target time
-                hn: the hidden state of the model
-                x: hidden state before activation
+                cue_inp: input from the cue
+                hn (optional): the hidden state of the model to use instead of learned one
+                xn (optional): the preactivation of the model to use instead of learned one
+                noise (optional): whether or not to add noise to the trial
         '''
 
         # Saving hidden states

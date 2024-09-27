@@ -22,8 +22,9 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDITION = 0
 CONSTRAINED = True
-CHECK_PATH = f"checkpoints/d1d2_datadriven_itiinp_256n_almnoise.01_itinoise.01_15000iters_newloss.pth"                   # Save path
+CHECK_PATH = f"checkpoints/d1d2_datadriven_itiinp_delay_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
+TRIAL_EPOCH = "full"
 
 def get_str2thal_weights_d1d2(
     rnn, 
@@ -186,7 +187,7 @@ def main():
     alm_end_d1d2 = HID_DIM*6 + rnn_d1d2.fsi_size
 
     # Get input and output data
-    iti_data, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH)
+    iti_data, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
     iti_data, cue_inp = iti_data.cuda(), cue_inp.cuda()
     
     # Gather thalamo-strial weights
