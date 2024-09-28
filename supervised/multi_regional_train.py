@@ -29,9 +29,9 @@ EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
-TRIAL_EPOCH = "delay"                                                                                                           # delay or full
+TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"                   # Save path
 
 '''
 
@@ -85,7 +85,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.05, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -180,13 +180,11 @@ def main():
         rnn_optim.zero_grad()
         loss.backward()
 
-        '''
         simple_dynamics_d1d2(
             hidden_act,
             rnn,
             HID_DIM
         )
-        '''
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)

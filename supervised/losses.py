@@ -98,12 +98,10 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
         hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
     ]
 
-    '''
     rnn.alm2str_weight_l0_hh.grad += update[
         :hid_dim, 
         hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
     ]
-    '''
 
     rnn.str2gpe_weight_l0_hh.grad += update[
         hid_dim + fsi_size:hid_dim * 2 + fsi_size, 
@@ -130,19 +128,15 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
         hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size
     ]
 
-    '''
     rnn.thal2alm_weight_l0_hh.grad += update[
         hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
         hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
     ]
-    '''
 
-    '''
     rnn.alm2alm_weight_l0_hh.grad += update[
         hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
         hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
     ]
-    '''
 
     rnn.fsi2str_weight.grad += update[
         :hid_dim, 
@@ -159,10 +153,7 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
         hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
     ]
 
-    '''
     rnn.alm2fsi_weight.grad += update[
         hid_dim:hid_dim + fsi_size, 
         hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
     ]
-    '''
-

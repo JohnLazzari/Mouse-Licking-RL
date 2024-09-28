@@ -88,8 +88,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = 0.8 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.3 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm_exc = torch.zeros(size=(self.alm_exc_size,), device="cuda")
@@ -253,16 +253,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.sigma_recur = noise_level_act
         self.sigma_input = noise_level_inp
 
-        self.h_0 = nn.Parameter(torch.empty(size=(self.total_num_units,)))
-        self.x_0 = nn.Parameter(torch.empty(size=(self.total_num_units,)))
-
     def forward(
         self, 
         inp, 
         cue_inp, 
+        hn, 
+        xn, 
         inhib_stim, 
-        hn=None, 
-        xn=None, 
         noise=True
     ):
 
@@ -362,7 +359,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + (perturb_hid * self.alm_ramp_mask)
                         ))
 
-                hn_next = F.relu(xn_next)
+                hn_next = F.hardtanh(xn_next, 0, 1)
 
                 alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6]
                 out = (out_weight_alm @ alm_exc_act.T).T

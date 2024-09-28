@@ -11,21 +11,30 @@ from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA
 from scipy.signal import find_peaks
 
-def NormalizeData(
-    data, 
-    min, 
-    max
+def NormalizeInp(
+    data
 ):
 
     '''
         Min-Max normalization for any data
 
-        data:       full array of data
-        min:        minimum of data along each row
-        max:        maximum of data along each row
+        data:       1D array of responses
     '''
 
-    return (data - min) / (max - min)
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+def NormalizeData(
+    data, 
+    soft_constraint
+):
+
+    '''
+        Min-Max normalization for any data
+
+        data:       1D array of responses
+    '''
+
+    return data / ((np.max(data) - np.min(data)) + soft_constraint)
 
 
 def gather_inp_data(
@@ -50,7 +59,7 @@ def gather_inp_data(
     # Load in the data from the mat file and normalize the projections
     iti_projection = sio.loadmat(path)
     iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-    iti_projection = NormalizeData(iti_projection, np.min(iti_projection), np.max(iti_projection))
+    iti_projection = NormalizeInp(iti_projection)
 
     # Hacky method right now, need to average some conditions (will get cleaner data in future)
     averaged_conds = []
@@ -62,8 +71,8 @@ def gather_inp_data(
 
     # Choose the appropriate scaling and repeat to simulate a small population of ITI neurons
     averaged_conds = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    averaged_conds[:, :100, :] *= 0.1
-    averaged_conds[:, 100:, :] *= 1
+    averaged_conds[:, :100, :] *= 0.04
+    averaged_conds[:, 100:, :] *= 0.4
 
     if trial_epoch == "delay":
         
@@ -148,10 +157,12 @@ def get_data(
     ####################################
 
     # Normalize the data for each condition
-    cond_1_alm_strain["fr_population"] = NormalizeData(cond_1_alm_strain["fr_population"], np.min(cond_1_alm_strain["fr_population"]), np.max(cond_1_alm_strain["fr_population"]))
-    cond_2_alm_strain["fr_population"] = NormalizeData(cond_2_alm_strain["fr_population"], np.min(cond_2_alm_strain["fr_population"]), np.max(cond_2_alm_strain["fr_population"]))
-    cond_3_alm_strain["fr_population"] = NormalizeData(cond_3_alm_strain["fr_population"], np.min(cond_3_alm_strain["fr_population"]), np.max(cond_3_alm_strain["fr_population"]))
-    cond_4_alm_strain["fr_population"] = NormalizeData(cond_4_alm_strain["fr_population"], np.min(cond_4_alm_strain["fr_population"]), np.max(cond_4_alm_strain["fr_population"]))
+    for n in range(cond_1_alm_strain["fr_population"].shape[-1]):
+
+        cond_1_alm_strain["fr_population"][:, n] = NormalizeData(cond_1_alm_strain["fr_population"][:, n], 5)
+        cond_2_alm_strain["fr_population"][:, n] = NormalizeData(cond_2_alm_strain["fr_population"][:, n], 5)
+        cond_3_alm_strain["fr_population"][:, n] = NormalizeData(cond_3_alm_strain["fr_population"][:, n], 5)
+        cond_4_alm_strain["fr_population"][:, n] = NormalizeData(cond_4_alm_strain["fr_population"][:, n], 5)
 
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
@@ -168,10 +179,13 @@ def get_data(
     #                                  #
     ####################################
 
-    cond_1_str_strain["fr_population"] = NormalizeData(cond_1_str_strain["fr_population"], np.min(cond_1_str_strain["fr_population"]), np.max(cond_1_str_strain["fr_population"]))
-    cond_2_str_strain["fr_population"] = NormalizeData(cond_2_str_strain["fr_population"], np.min(cond_2_str_strain["fr_population"]), np.max(cond_2_str_strain["fr_population"]))
-    cond_3_str_strain["fr_population"] = NormalizeData(cond_3_str_strain["fr_population"], np.min(cond_3_str_strain["fr_population"]), np.max(cond_3_str_strain["fr_population"]))
-    cond_4_str_strain["fr_population"] = NormalizeData(cond_4_str_strain["fr_population"], np.min(cond_4_str_strain["fr_population"]), np.max(cond_4_str_strain["fr_population"]))
+    # Normalize the data for each condition
+    for n in range(cond_1_str_strain["fr_population"].shape[-1]):
+
+        cond_1_str_strain["fr_population"][:, n] = NormalizeData(cond_1_str_strain["fr_population"][:, n], 5)
+        cond_2_str_strain["fr_population"][:, n] = NormalizeData(cond_2_str_strain["fr_population"][:, n], 5)
+        cond_3_str_strain["fr_population"][:, n] = NormalizeData(cond_3_str_strain["fr_population"][:, n], 5)
+        cond_4_str_strain["fr_population"][:, n] = NormalizeData(cond_4_str_strain["fr_population"][:, n], 5)
 
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
@@ -187,10 +201,13 @@ def get_data(
     #                                  #
     ####################################
 
-    cond_1_str_dms_strain["fr_population"] = NormalizeData(cond_1_str_dms_strain["fr_population"], np.min(cond_1_str_dms_strain["fr_population"]), np.max(cond_1_str_dms_strain["fr_population"]))
-    cond_2_str_dms_strain["fr_population"] = NormalizeData(cond_2_str_dms_strain["fr_population"], np.min(cond_2_str_dms_strain["fr_population"]), np.max(cond_2_str_dms_strain["fr_population"]))
-    cond_3_str_dms_strain["fr_population"] = NormalizeData(cond_3_str_dms_strain["fr_population"], np.min(cond_3_str_dms_strain["fr_population"]), np.max(cond_3_str_dms_strain["fr_population"]))
-    cond_4_str_dms_strain["fr_population"] = NormalizeData(cond_4_str_dms_strain["fr_population"], np.min(cond_4_str_dms_strain["fr_population"]), np.max(cond_4_str_dms_strain["fr_population"]))
+    # Normalize the data for each condition
+    for n in range(cond_1_str_dms_strain["fr_population"].shape[-1]):
+
+        cond_1_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_1_str_dms_strain["fr_population"][:, n], 5)
+        cond_2_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_2_str_dms_strain["fr_population"][:, n], 5)
+        cond_3_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_3_str_dms_strain["fr_population"][:, n], 5)
+        cond_4_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_4_str_dms_strain["fr_population"][:, n], 5)
 
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
@@ -228,6 +245,9 @@ def get_data(
             neural_data_peak_cond_3,
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
+
+        #plt.plot(neural_data_combined.numpy()[0])
+        #plt.show()
     
     if pca:
         
@@ -236,7 +256,7 @@ def get_data(
         neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
-        
+
     return neural_data_combined, peak_times
 
 
@@ -469,7 +489,7 @@ def get_input_silence(
 
     iti_projection = sio.loadmat(path)
     iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-    iti_projection = NormalizeData(iti_projection, np.min(iti_projection), np.max(iti_projection))
+    iti_projection = NormalizeInp(iti_projection)
 
     # Hacky method right now, need to average some conditions
     averaged_conds = []
@@ -491,8 +511,8 @@ def get_input_silence(
     
     # Collect and scale input accordingly
     inp_silence = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    inp_silence[:, :100, :] *= 0.1
-    inp_silence[:, 100:, :] *= 1
+    inp_silence[:, :100, :] *= 0.04
+    inp_silence[:, 100:, :] *= .4
 
     # Cue Input
     cue_inp_dict = {}
