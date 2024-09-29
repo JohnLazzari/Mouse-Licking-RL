@@ -87,11 +87,11 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     ]).cuda()
 
         self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_gpe = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_thal_int = 0.1 * torch.ones(size=(int(hid_dim/2),), device="cuda")
+        self.tonic_inp_thal_alm = 0.1 * torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_alm_exc = torch.zeros(size=(self.alm_exc_size,), device="cuda")
         self.tonic_inp_alm_inhib = torch.zeros(size=(self.alm_inhib_size,), device="cuda")
         self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,), device="cuda")
@@ -215,6 +215,12 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
             # FSI to FSI D
             self.fsi2fsi_D = -1 * torch.eye(self.fsi_size).cuda()
+
+            # Thal 2 STR mask
+            self.thal2str_mask = torch.cat([
+                torch.ones(size=(int(hid_dim/2), hid_dim)), 
+                torch.zeros(size=(int(hid_dim/2), hid_dim))
+            ], dim=0).cuda()
             
         else:
 
@@ -253,14 +259,16 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.sigma_recur = noise_level_act
         self.sigma_input = noise_level_inp
 
+        self.x_0 = torch.zeros(size=(self.total_num_units,)).cuda()
+
     def forward(
         self, 
         inp, 
         cue_inp, 
-        hn, 
-        xn, 
         inhib_stim, 
-        noise=True
+        noise=True,
+        hn=None, 
+        xn=None, 
     ):
 
         '''
@@ -275,12 +283,10 @@ class RNN_MultiRegional_D1D2(nn.Module):
         '''
 
         # Saving hidden states
-        hn_next = hn.squeeze(0)
-        xn_next = xn.squeeze(0)
-        size = inp.shape[1]
         new_hs = []
         new_xs = []
         new_outs = []
+        size = inp.shape[1]
 
         if self.constrained:
 
@@ -289,7 +295,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
             alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-10, 1)
             thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
-            thal2str = F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
+            thal2str = self.thal2str_mask * F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
             str2snr = (self.str2snr_mask * F.hardtanh(self.str2snr_weight_l0_hh, 1e-10, 1)) @ self.str2snr_D
             str2gpe = (self.str2gpe_mask * F.hardtanh(self.str2gpe_weight_l0_hh, 1e-10, 1)) @ self.str2gpe_D
             gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
@@ -328,8 +334,46 @@ class RNN_MultiRegional_D1D2(nn.Module):
         # Putting all weights together
         W_rec = torch.cat([W_str, W_fsi, W_gpe, W_stn, W_snr, W_thal, W_alm], dim=0)
 
+        if hn == None and xn == None:
+
+            start = 1
+            x_0 = self.x_0.unsqueeze(0).repeat(4, 1)
+            h_0 = F.relu(x_0)
+
+            # Get the ITI mode input to the network
+            iti_act = inp[:, 0, :]
+            iti_projected = (inp_weight_str @ iti_act.T).T
+            non_iti_mask = torch.zeros(size=(iti_projected.shape[0], self.hid_dim * 5), device="cuda")
+            full_inp = torch.cat([iti_projected, non_iti_mask], dim=-1)
+
+            xn_next = (x_0
+                        + self.t_const * (
+                        -x_0
+                        + (W_rec @ h_0.T).T
+                        + full_inp
+                        + self.tonic_inp
+                        + inhib_stim[:, 0, :]
+                        + (cue_inp[:, 0, :] * self.str_mask)
+                    ))
+
+            hn_next = F.relu(xn_next)
+
+            alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6]
+            out = (out_weight_alm @ alm_exc_act.T).T
+
+            # append activity to list
+            new_xs.append(xn_next)
+            new_hs.append(hn_next)
+            new_outs.append(out)
+        
+        else:
+            
+            hn_next = hn.squeeze(0)
+            xn_next = xn.squeeze(0)
+            start = 0
+
         # Loop through RNN
-        for t in range(size):
+        for t in range(start, size):
 
             # Add noise to the system if specified
             if noise and t > 100:
@@ -356,10 +400,10 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.str_mask)
-                            + (perturb_hid * self.alm_ramp_mask)
+                            + (perturb_hid + self.alm_ramp_mask)
                         ))
 
-                hn_next = F.hardtanh(xn_next, 0, 1)
+                hn_next = F.relu(xn_next)
 
                 alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6]
                 out = (out_weight_alm @ alm_exc_act.T).T

@@ -42,7 +42,8 @@ def gather_inp_data(
     hid_dim, 
     path,
     trial_epoch,
-    peaks=None
+    peaks,
+    inp_type="simulated",
 ):
 
     '''
@@ -53,42 +54,128 @@ def gather_inp_data(
             hid_dim:        number of hidden dimensions in a single region
             path:           path to folder containing ITI data
             trial_epoch:    Whether to use only delay epoch or full trial
+            inp_type:       Whether to use simulated input or data input
             peaks:          List of peak times gathered from data for gathering delay data only
     '''
 
-    # Load in the data from the mat file and normalize the projections
-    iti_projection = sio.loadmat(path)
-    iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-    iti_projection = NormalizeInp(iti_projection)
+    if inp_type == "data":
 
-    # Hacky method right now, need to average some conditions (will get cleaner data in future)
-    averaged_conds = []
-    averaged_conds.append(iti_projection[0])
-    averaged_conds.append(np.mean(iti_projection[1:3, :], axis=0))
-    averaged_conds.append(np.mean(iti_projection[3:5, :], axis=0))
-    averaged_conds.append(iti_projection[5])
-    averaged_conds = np.array(averaged_conds)
+        # Load in the data from the mat file and normalize the projections
+        iti_projection = sio.loadmat(path)
+        iti_projection = iti_projection["meanData"][:, 2500:5500:10]
+        iti_projection = NormalizeInp(iti_projection)
 
-    # Choose the appropriate scaling and repeat to simulate a small population of ITI neurons
-    averaged_conds = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    averaged_conds[:, :100, :] *= 0.04
-    averaged_conds[:, 100:, :] *= 0.4
+        # Hacky method right now, need to average some conditions (will get cleaner data in future)
+        averaged_conds = []
+        averaged_conds.append(iti_projection[0])
+        averaged_conds.append(np.mean(iti_projection[1:3, :], axis=0))
+        averaged_conds.append(np.mean(iti_projection[3:5, :], axis=0))
+        averaged_conds.append(iti_projection[5])
+        averaged_conds = np.array(averaged_conds)
 
-    if trial_epoch == "delay":
+        # Choose the appropriate scaling and repeat to simulate a small population of ITI neurons
+        averaged_conds = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
+        averaged_conds[:, :100, :] *= 0.04
+        averaged_conds[:, 100:, :] *= 0.4
+
+        if trial_epoch == "full":
+
+            # Combine all sequence lengths
+            total_iti_inp = averaged_conds
+            len_seq = [total_iti_inp[0].shape[0], total_iti_inp[1].shape[0], total_iti_inp[2].shape[0], total_iti_inp[3].shape[0]]
+
+        elif trial_epoch == "delay":
+            
+            iti_inp_peak_cond_1 = averaged_conds[0, :peaks[0], :]
+            iti_inp_peak_cond_2 = averaged_conds[1, :peaks[1], :]
+            iti_inp_peak_cond_3 = averaged_conds[2, :peaks[2], :]
+            iti_inp_peak_cond_4 = averaged_conds[3, :peaks[3], :]
+
+            total_iti_inp = pad_sequence([
+                iti_inp_peak_cond_1,
+                iti_inp_peak_cond_2,
+                iti_inp_peak_cond_3,
+                iti_inp_peak_cond_4,
+            ], batch_first=True)
+
+            # Combine all sequence lengths
+            len_seq = [iti_inp_peak_cond_1.shape[0], iti_inp_peak_cond_2.shape[0], iti_inp_peak_cond_3.shape[0], iti_inp_peak_cond_4.shape[0]]
+
+    elif inp_type == "simulated":
+
+        if trial_epoch == "delay":
+
+            inp = {}
+
+            # Condition 1: 1.1s
+            inp[0] = torch.cat([
+                0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.4*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                ])
+
+            # Condition 2: 1.4s
+            inp[1] = torch.cat([
+                0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.3*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                ])
+
+            # Condition 3: 1.7s
+            inp[2] = torch.cat([
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                ])
+
+            # Condition 4: 2s
+            inp[3] = torch.cat([
+                0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.1*torch.ones(size=(peaks[3] - 100, int(hid_dim*0.1))),
+                ])
+
+            # Combine all inputs
+            total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+
+            # Combine all sequence lengths
+            len_seq = [peaks[0], peaks[1], peaks[2], peaks[3]]
         
-        iti_inp_peak_cond_1 = averaged_conds[0, :peaks[0], :]
-        iti_inp_peak_cond_2 = averaged_conds[1, :peaks[1], :]
-        iti_inp_peak_cond_3 = averaged_conds[2, :peaks[2], :]
-        iti_inp_peak_cond_4 = averaged_conds[3, :peaks[3], :]
+        elif trial_epoch == "full":
 
-        averaged_conds = pad_sequence([
-           iti_inp_peak_cond_1,
-           iti_inp_peak_cond_2,
-           iti_inp_peak_cond_3,
-           iti_inp_peak_cond_4,
-        ], batch_first=True)
+            inp = {}
 
-    plt.plot(np.mean(averaged_conds.numpy(), axis=-1).T)
+            # Condition 1: 1.1s
+            inp[0] = torch.cat([
+                0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.4*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                torch.zeros(size=(300 - peaks[0], int(hid_dim*0.1)))
+                ])
+
+            # Condition 2: 1.4s
+            inp[1] = torch.cat([
+                0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.3*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                torch.zeros(size=(300 - peaks[1], int(hid_dim*0.1)))
+                ])
+
+            # Condition 3: 1.7s
+            inp[2] = torch.cat([
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                torch.zeros(size=(300 - peaks[2], int(hid_dim*0.1)))
+                ])
+
+            # Condition 4: 2s
+            inp[3] = torch.cat([
+                0.01*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.1*torch.ones(size=(peaks[3] - 100, int(hid_dim*0.1))),
+                torch.zeros(size=(300 - peaks[3], int(hid_dim*0.1)))
+                ])
+
+            # Combine all inputs
+            total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+
+            # Combine all sequence lengths
+            len_seq = [total_iti_inp[0].shape[0], total_iti_inp[1].shape[0], total_iti_inp[2].shape[0], total_iti_inp[3].shape[0]]
+
+    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
     plt.show()
 
     # Cue Input, currently not in use
@@ -100,17 +187,7 @@ def gather_inp_data(
     # Gather all conditions for cue input
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
-    # Combine all sequence lengths
-    if trial_epoch == "full":
-        
-        len_seq = [int(3 / dt), int(3 / dt), int(3 / dt), int(3 / dt)]
-    
-    elif trial_epoch == "delay":
-        
-        len_seq = [peaks[0], peaks[1], peaks[2], peaks[3]]
-    
-
-    return averaged_conds, total_cue_inp, len_seq
+    return total_iti_inp, total_cue_inp, len_seq
 
 
 def get_data(
@@ -159,11 +236,11 @@ def get_data(
     # Normalize the data for each condition
     for n in range(cond_1_alm_strain["fr_population"].shape[-1]):
 
-        cond_1_alm_strain["fr_population"][:, n] = NormalizeData(cond_1_alm_strain["fr_population"][:, n], 5)
-        cond_2_alm_strain["fr_population"][:, n] = NormalizeData(cond_2_alm_strain["fr_population"][:, n], 5)
-        cond_3_alm_strain["fr_population"][:, n] = NormalizeData(cond_3_alm_strain["fr_population"][:, n], 5)
-        cond_4_alm_strain["fr_population"][:, n] = NormalizeData(cond_4_alm_strain["fr_population"][:, n], 5)
-
+        cond_1_alm_strain["fr_population"][:, n] = NormalizeData(cond_1_alm_strain["fr_population"][:, n], 15)
+        cond_2_alm_strain["fr_population"][:, n] = NormalizeData(cond_2_alm_strain["fr_population"][:, n], 15)
+        cond_3_alm_strain["fr_population"][:, n] = NormalizeData(cond_3_alm_strain["fr_population"][:, n], 15)
+        cond_4_alm_strain["fr_population"][:, n] = NormalizeData(cond_4_alm_strain["fr_population"][:, n], 15)
+        
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
         torch.from_numpy(cond_1_alm_strain["fr_population"]), 
@@ -182,10 +259,10 @@ def get_data(
     # Normalize the data for each condition
     for n in range(cond_1_str_strain["fr_population"].shape[-1]):
 
-        cond_1_str_strain["fr_population"][:, n] = NormalizeData(cond_1_str_strain["fr_population"][:, n], 5)
-        cond_2_str_strain["fr_population"][:, n] = NormalizeData(cond_2_str_strain["fr_population"][:, n], 5)
-        cond_3_str_strain["fr_population"][:, n] = NormalizeData(cond_3_str_strain["fr_population"][:, n], 5)
-        cond_4_str_strain["fr_population"][:, n] = NormalizeData(cond_4_str_strain["fr_population"][:, n], 5)
+        cond_1_str_strain["fr_population"][:, n] = NormalizeData(cond_1_str_strain["fr_population"][:, n], 15)
+        cond_2_str_strain["fr_population"][:, n] = NormalizeData(cond_2_str_strain["fr_population"][:, n], 15)
+        cond_3_str_strain["fr_population"][:, n] = NormalizeData(cond_3_str_strain["fr_population"][:, n], 15)
+        cond_4_str_strain["fr_population"][:, n] = NormalizeData(cond_4_str_strain["fr_population"][:, n], 15)
 
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
@@ -204,10 +281,10 @@ def get_data(
     # Normalize the data for each condition
     for n in range(cond_1_str_dms_strain["fr_population"].shape[-1]):
 
-        cond_1_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_1_str_dms_strain["fr_population"][:, n], 5)
-        cond_2_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_2_str_dms_strain["fr_population"][:, n], 5)
-        cond_3_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_3_str_dms_strain["fr_population"][:, n], 5)
-        cond_4_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_4_str_dms_strain["fr_population"][:, n], 5)
+        cond_1_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_1_str_dms_strain["fr_population"][:, n], 15)
+        cond_2_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_2_str_dms_strain["fr_population"][:, n], 15)
+        cond_3_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_3_str_dms_strain["fr_population"][:, n], 15)
+        cond_4_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_4_str_dms_strain["fr_population"][:, n], 15)
 
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
@@ -246,8 +323,8 @@ def get_data(
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
 
-        #plt.plot(neural_data_combined.numpy()[0])
-        #plt.show()
+    plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
+    plt.show()
     
     if pca:
         
@@ -302,7 +379,7 @@ def get_acts_control(
     # Loop through network to get activities, no training performed
     with torch.no_grad():        
 
-        acts, out = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
+        acts, out = rnn(iti_inp, cue_inp, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
         out = out.squeeze().cpu().numpy()
     
@@ -321,7 +398,10 @@ def get_acts_manipulation(
     end_silence, 
     stim_strength, 
     region, 
-    dt
+    dt,
+    trial_epoch,
+    peaks,
+    inp_type
 ):
 
     '''
@@ -376,7 +456,10 @@ def get_acts_manipulation(
         hid_dim,
         start_silence,
         end_silence,
-        "data/firing_rates/ITIProj_trialPlotAll1.mat"
+        "data/firing_rates/ITIProj_trialPlotAll1.mat",
+        trial_epoch,
+        peaks,
+        inp_type
     )
 
     iti_inp_silence, cue_inp_silence = iti_inp_silence.cuda(), cue_inp_silence.cuda()
@@ -384,7 +467,7 @@ def get_acts_manipulation(
     # Loop through network without training
     with torch.no_grad():        
 
-        acts, _ = rnn(iti_inp_silence, cue_inp_silence, hn, xn, inhib_stim, noise=False)
+        acts, _ = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -472,7 +555,10 @@ def get_input_silence(
     hid_dim, 
     start_silence, 
     end_silence, 
-    path
+    path,
+    trial_epoch,
+    peaks,
+    inp_type,
 ):
 
     '''
@@ -487,32 +573,27 @@ def get_input_silence(
             path:               path to the folder containing the ITI mode data
     '''
 
-    iti_projection = sio.loadmat(path)
-    iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-    iti_projection = NormalizeInp(iti_projection)
-
-    # Hacky method right now, need to average some conditions
-    averaged_conds = []
-    averaged_conds.append(iti_projection[0])
-    averaged_conds.append(np.mean(iti_projection[1:3, :], axis=0))
-    averaged_conds.append(np.mean(iti_projection[3:5, :], axis=0))
-    averaged_conds.append(iti_projection[5])
-    averaged_conds = np.array(averaged_conds)
+    total_iti_inp, _, _ = gather_inp_data(
+                                                dt, 
+                                                hid_dim, 
+                                                path,
+                                                trial_epoch,
+                                                peaks,
+                                                inp_type
+                                            )
 
     if region == "alm":
 
         # Silence the input only during ALM silencing since it is technically ALM activity
-        averaged_conds = np.concatenate([
-            averaged_conds[:, :start_silence],
-            np.zeros(shape=(averaged_conds.shape[0], end_silence - start_silence)),
-            averaged_conds[:, start_silence:start_silence+1].repeat(20, axis=-1),
-            averaged_conds[:, start_silence:]
-        ], axis=-1)
-    
-    # Collect and scale input accordingly
-    inp_silence = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-    inp_silence[:, :100, :] *= 0.04
-    inp_silence[:, 100:, :] *= .4
+        total_iti_inp = torch.cat([
+            total_iti_inp[:, :start_silence, :],
+            torch.zeros(size=(total_iti_inp.shape[0], end_silence - start_silence, total_iti_inp.shape[-1])),
+            total_iti_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
+            total_iti_inp[:, start_silence:, :]
+        ], dim=1)
+
+    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    #plt.show()
 
     # Cue Input
     cue_inp_dict = {}
@@ -528,7 +609,7 @@ def get_input_silence(
     # Pad the data to same sequence length if necessary
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
     
-    return inp_silence, total_cue_inp
+    return total_iti_inp, total_cue_inp
 
 def get_region_borders(
     model_type, 

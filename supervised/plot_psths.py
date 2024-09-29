@@ -9,7 +9,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp_mode, project_ramp_mode, get_region_borders
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_data
 import tqdm
 import time
 
@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -37,13 +37,16 @@ EXTRA_STEPS_SILENCE = 100
 EXTRA_STEPS_CONTROL = 0
 SILENCED_REGION = "alm"
 STIM_STRENGTH = 5
+PCA = False
 TRIAL_EPOCH = "full"
+INP_TYPE = "data"
 
 def plot_psths(
             len_seq, 
             rnn, 
             iti_inp, 
             cue_inp, 
+            peaks,
             silence=False
         ):
     
@@ -62,7 +65,10 @@ def plot_psths(
             END_SILENCE,
             STIM_STRENGTH, 
             SILENCED_REGION,
-            DT 
+            DT,
+            TRIAL_EPOCH,
+            peaks,
+            INP_TYPE
         )
     
     else:
@@ -133,7 +139,11 @@ def main():
 
     rnn.load_state_dict(checkpoint)
 
-    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
+    # Get ramping activity
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, pca=PCA)
+    neural_act = neural_act.cuda()
+
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peak_times, inp_type=INP_TYPE)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
     
     plot_psths(
@@ -141,6 +151,7 @@ def main():
         rnn, 
         iti_inp, 
         cue_inp, 
+        peak_times
     )
 
     plot_psths(
@@ -148,6 +159,7 @@ def main():
         rnn, 
         iti_inp, 
         cue_inp, 
+        peak_times,
         silence=True
     )
 

@@ -9,7 +9,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp_mode, project_ramp_mode, get_region_borders
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp_mode, project_ramp_mode, get_region_borders, get_data
 import tqdm
 import time
 
@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -34,6 +34,8 @@ ITI_STEPS = 100
 TRIAL_EPOCH = "full"
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
+INP_TYPE = "data"
+PCA = False
 
 def plot_silencing(len_seq, 
                    conds, 
@@ -46,6 +48,7 @@ def plot_silencing(len_seq,
                    evaluated_region, 
                    dt, 
                    stim_strength, 
+                   peaks,
                    use_label=False, 
                    ):
     
@@ -76,7 +79,10 @@ def plot_silencing(len_seq,
         END_SILENCE,
         stim_strength, 
         silenced_region,
-        DT 
+        DT,
+        TRIAL_EPOCH,
+        peaks,
+        INP_TYPE
     )
 
     orig_baselines = []
@@ -156,7 +162,11 @@ def main():
 
     rnn.load_state_dict(checkpoint)
 
-    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
+    # Get ramping activity
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, pca=PCA)
+    neural_act = neural_act.cuda()
+
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peak_times, inp_type=INP_TYPE)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
     
     plot_silencing(
@@ -170,7 +180,8 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm_exc", 
         dt=DT, 
-        stim_strength=5, 
+        stim_strength=5,
+        peaks=peak_times, 
         use_label=True
     )
 
@@ -186,6 +197,7 @@ def main():
         evaluated_region="alm_exc", 
         dt=DT, 
         stim_strength=-.5, 
+        peaks=peak_times, 
         use_label=True
     )
 
@@ -201,6 +213,7 @@ def main():
         evaluated_region="str", 
         dt=DT, 
         stim_strength=5,
+        peaks=peak_times, 
         use_label=True
     )
 
@@ -216,6 +229,7 @@ def main():
         evaluated_region="str", 
         dt=DT, 
         stim_strength=-.5, 
+        peaks=peak_times, 
         use_label=True
     )
     

@@ -29,9 +29,10 @@ EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
+INP_TYPE = "data"
 TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"                   # Save path
 
 '''
 
@@ -85,7 +86,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -99,16 +100,13 @@ def main():
     neural_act = neural_act.cuda()
 
     # Get input and output data
-    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peaks=peak_times)
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peak_times, inp_type=INP_TYPE)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
     if MODEL_TYPE == "d1d2":
-
-        hn = torch.zeros(size=(1, CONDS, rnn.total_num_units)).cuda()
-        xn = torch.zeros(size=(1, CONDS, rnn.total_num_units)).cuda()
 
         str_units_start = 0
         thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
@@ -118,9 +116,6 @@ def main():
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
 
     elif MODEL_TYPE == "stralm":
-
-        hn = torch.zeros(size=(1, CONDS, HID_DIM * 2 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, CONDS, HID_DIM * 2 + INP_DIM)).cuda()
 
         str_units_start = 0
         str_units_end = int(HID_DIM/2)
@@ -139,7 +134,7 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        hidden_act, out = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
+        hidden_act, out = rnn(iti_inp, cue_inp, inhib_stim, noise=True)
 
         # Get masks
         out = out * loss_mask_act
@@ -180,11 +175,13 @@ def main():
         rnn_optim.zero_grad()
         loss.backward()
 
+        '''
         simple_dynamics_d1d2(
             hidden_act,
             rnn,
             HID_DIM
         )
+        '''
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
