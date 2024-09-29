@@ -21,7 +21,7 @@ plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
-OUT_DIM = 1451
+OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4

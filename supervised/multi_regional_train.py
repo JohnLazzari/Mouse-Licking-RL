@@ -8,12 +8,12 @@ import numpy as np
 from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_data, get_masks, get_acts_manipulation
+from utils import gather_inp_data, get_data, get_masks, get_acts_manipulation, get_region_borders
 from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
-OUT_DIM = 1451                                                                         # Output dim (not used)
+OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
 EPOCHS = 15000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
@@ -29,10 +29,10 @@ EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
-INP_TYPE = "data"
-TRIAL_EPOCH = "full"                                                                                                           # delay or full
+INP_TYPE = "simulated"
+TRIAL_EPOCH = "delay"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_simulated_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"                   # Save path
 
 '''
 
@@ -86,7 +86,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -109,8 +109,7 @@ def main():
     if MODEL_TYPE == "d1d2":
 
         str_units_start = 0
-        thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
-        alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
+        alm_start, alm_end = get_region_borders(MODEL_TYPE, "alm_exc", HID_DIM, INP_DIM)
 
         loss_mask_act = get_masks(OUT_DIM, len_seq)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
@@ -118,14 +117,16 @@ def main():
     elif MODEL_TYPE == "stralm":
 
         str_units_start = 0
-        str_units_end = int(HID_DIM/2)
-        alm_units_start = HID_DIM
+        alm_start, alm_end = get_region_borders(MODEL_TYPE, "alm_exc", HID_DIM, INP_DIM)
 
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=2)
+        loss_mask_act = get_masks(OUT_DIM, len_seq)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 2 + INP_DIM), device="cuda")
 
     best_steady_state = np.inf
     prev_steady_state = np.inf
+
+    hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
     
     ###########################
     #    Begin Training       # 
@@ -134,19 +135,21 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        hidden_act, out = rnn(iti_inp, cue_inp, inhib_stim, noise=True)
+        act = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=True)
 
         # Get masks
-        out = out * loss_mask_act
+        act = act * loss_mask_act
 
-        # Get loss
+    # Get loss
         if MODEL_TYPE == "d1d2":
 
             loss = loss_d1d2(
                 rnn,
                 constraint_criterion, 
-                out, 
+                act, 
                 neural_act, 
+                alm_start,
+                alm_end
             )
 
         elif MODEL_TYPE == "stralm":
@@ -154,9 +157,9 @@ def main():
             loss = loss_stralm(
                 constraint_criterion, 
                 thresh_criterion,
-                out, 
+                act, 
                 neural_act, 
-                alm_units_start, 
+                alm_start, 
                 str_units_start, 
             )
 

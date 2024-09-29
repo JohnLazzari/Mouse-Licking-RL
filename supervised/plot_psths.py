@@ -21,12 +21,12 @@ plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
-OUT_DIM = 1451
+OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_simulated_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -39,7 +39,7 @@ SILENCED_REGION = "alm"
 STIM_STRENGTH = 5
 PCA = False
 TRIAL_EPOCH = "full"
-INP_TYPE = "data"
+INP_TYPE = "simulated"
 
 def plot_psths(
             len_seq, 

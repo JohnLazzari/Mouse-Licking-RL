@@ -13,14 +13,15 @@ def loss_d1d2(
     constraint_criterion, 
     act, 
     neural_act, 
+    alm_start,
+    alm_end
 ):
     
-    all_params = torch.cat([x.view(-1) for x in rnn.parameters()])
-
+    alm_act = act[:, :, alm_start:alm_end]
+    
     loss = (
-            constraint_criterion(act[:, 50:, :], neural_act[:, 50:, :])
-            + 1e-4 * torch.mean(torch.pow(act[:, 50:, :], 2), dim=(1, 2, 0))
-            #+ 1e-7 * torch.norm(all_params, 1)
+            constraint_criterion(torch.mean(alm_act[:, 50:, :], dim=-1, keepdim=True), neural_act[:, 50:, :])
+            + 1e-4 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
             )
     
     return loss

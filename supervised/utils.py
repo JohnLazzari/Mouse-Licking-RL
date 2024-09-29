@@ -25,7 +25,6 @@ def NormalizeInp(
 
 def NormalizeData(
     data, 
-    soft_constraint
 ):
 
     '''
@@ -34,7 +33,7 @@ def NormalizeData(
         data:       1D array of responses
     '''
 
-    return data / ((np.max(data) - np.min(data)) + soft_constraint)
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 
 def gather_inp_data(
@@ -233,14 +232,6 @@ def get_data(
     #                                  #
     ####################################
 
-    # Normalize the data for each condition
-    for n in range(cond_1_alm_strain["fr_population"].shape[-1]):
-
-        cond_1_alm_strain["fr_population"][:, n] = NormalizeData(cond_1_alm_strain["fr_population"][:, n], 15)
-        cond_2_alm_strain["fr_population"][:, n] = NormalizeData(cond_2_alm_strain["fr_population"][:, n], 15)
-        cond_3_alm_strain["fr_population"][:, n] = NormalizeData(cond_3_alm_strain["fr_population"][:, n], 15)
-        cond_4_alm_strain["fr_population"][:, n] = NormalizeData(cond_4_alm_strain["fr_population"][:, n], 15)
-        
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
         torch.from_numpy(cond_1_alm_strain["fr_population"]), 
@@ -256,14 +247,6 @@ def get_data(
     #                                  #
     ####################################
 
-    # Normalize the data for each condition
-    for n in range(cond_1_str_strain["fr_population"].shape[-1]):
-
-        cond_1_str_strain["fr_population"][:, n] = NormalizeData(cond_1_str_strain["fr_population"][:, n], 15)
-        cond_2_str_strain["fr_population"][:, n] = NormalizeData(cond_2_str_strain["fr_population"][:, n], 15)
-        cond_3_str_strain["fr_population"][:, n] = NormalizeData(cond_3_str_strain["fr_population"][:, n], 15)
-        cond_4_str_strain["fr_population"][:, n] = NormalizeData(cond_4_str_strain["fr_population"][:, n], 15)
-
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
         torch.from_numpy(cond_2_str_strain["fr_population"]), 
@@ -277,14 +260,6 @@ def get_data(
     #       DMS Silencing Sessions     #
     #                                  #
     ####################################
-
-    # Normalize the data for each condition
-    for n in range(cond_1_str_dms_strain["fr_population"].shape[-1]):
-
-        cond_1_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_1_str_dms_strain["fr_population"][:, n], 15)
-        cond_2_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_2_str_dms_strain["fr_population"][:, n], 15)
-        cond_3_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_3_str_dms_strain["fr_population"][:, n], 15)
-        cond_4_str_dms_strain["fr_population"][:, n] = NormalizeData(cond_4_str_dms_strain["fr_population"][:, n], 15)
 
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
@@ -300,32 +275,35 @@ def get_data(
         neural_data_str_dms_strain
     ], axis=-1).type(torch.float32)
 
-    neural_data_for_peaks = np.mean(np.array(neural_data_combined), axis=-1)
-    cond_1_peaks = find_peaks(neural_data_for_peaks[0])
-    cond_2_peaks = find_peaks(neural_data_for_peaks[1])
-    cond_3_peaks = find_peaks(neural_data_for_peaks[2])
-    cond_4_peaks = find_peaks(neural_data_for_peaks[3])
+    mean_psths = np.mean(neural_data_combined.numpy(), axis=-1)
+    cond_1_peaks = find_peaks(mean_psths[0])
+    cond_2_peaks = find_peaks(mean_psths[1])
+    cond_3_peaks = find_peaks(mean_psths[2])
+    cond_4_peaks = find_peaks(mean_psths[3])
 
     peak_times = [cond_1_peaks[0][-1], cond_2_peaks[0][-1], cond_3_peaks[0][-1], cond_4_peaks[0][-1]]
 
+    mean_psths[0, :] = NormalizeData(mean_psths[0, :])
+    mean_psths[1, :] = NormalizeData(mean_psths[1, :])
+    mean_psths[2, :] = NormalizeData(mean_psths[2, :])
+    mean_psths[3, :] = NormalizeData(mean_psths[3, :])
+    mean_psths = torch.tensor(mean_psths).unsqueeze(-1)
+
     if trial_epoch == "delay":
 
-        neural_data_peak_cond_1 = neural_data_combined[0, :cond_1_peaks[0][-1], :]
-        neural_data_peak_cond_2 = neural_data_combined[1, :cond_2_peaks[0][-1], :]
-        neural_data_peak_cond_3 = neural_data_combined[2, :cond_3_peaks[0][-1], :]
-        neural_data_peak_cond_4 = neural_data_combined[3, :cond_4_peaks[0][-1], :]
+        neural_data_peak_cond_1 = mean_psths[0, :cond_1_peaks[0][-1], :]
+        neural_data_peak_cond_2 = mean_psths[1, :cond_2_peaks[0][-1], :]
+        neural_data_peak_cond_3 = mean_psths[2, :cond_3_peaks[0][-1], :]
+        neural_data_peak_cond_4 = mean_psths[3, :cond_4_peaks[0][-1], :]
 
         # Combine all sessions
-        neural_data_combined = pad_sequence([
+        mean_psths = pad_sequence([
             neural_data_peak_cond_1,
             neural_data_peak_cond_2,
             neural_data_peak_cond_3,
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
 
-    plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
-    plt.show()
-    
     if pca:
         
         # Find PCs if pca is specified
@@ -334,7 +312,10 @@ def get_data(
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
 
-    return neural_data_combined, peak_times
+    plt.plot(mean_psths.squeeze().numpy().T)
+    plt.show()
+
+    return mean_psths, peak_times
 
 
 def get_acts_control(
@@ -379,9 +360,8 @@ def get_acts_control(
     # Loop through network to get activities, no training performed
     with torch.no_grad():        
 
-        acts, out = rnn(iti_inp, cue_inp, inhib_stim, noise=False)
+        acts = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
-        out = out.squeeze().cpu().numpy()
     
     #plt.plot(np.mean(out, axis=-1).T)
     #plt.show()
@@ -467,7 +447,7 @@ def get_acts_manipulation(
     # Loop through network without training
     with torch.no_grad():        
 
-        acts, _ = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, noise=False)
+        acts = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
