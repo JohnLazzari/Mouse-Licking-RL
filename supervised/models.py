@@ -68,6 +68,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(inp_dim,)),
                                     ]).cuda()
 
+        self.integrator_mask = torch.cat([torch.ones(size=(int(hid_dim/2),)), 
+                                    torch.zeros(size=(int(hid_dim/2),)),
+                                    torch.ones(size=(self.fsi_size,)),
+                                    torch.zeros(size=(hid_dim * 2,)),
+                                    torch.zeros(size=(hid_dim * 2,)),
+                                    torch.zeros(size=(hid_dim,)),
+                                    torch.zeros(size=(inp_dim,)),
+                                    ]).cuda()
+
         self.str_d2_mask = torch.cat([torch.zeros(size=(int(hid_dim/2),)), 
                                     torch.ones(size=(int(hid_dim/2),)),
                                     torch.zeros(size=(self.fsi_size,)),
@@ -104,6 +113,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.tonic_inp_alm,
             self.tonic_inp_iti,
         ])
+
+        self.tonic_inp = nn.Parameter(self.tonic_inp)
         
         # Inhibitory Connections
         self.str2str_weight_l0_hh = nn.Parameter(torch.empty(size=(hid_dim, hid_dim)))
@@ -141,22 +152,22 @@ class RNN_MultiRegional_D1D2(nn.Module):
         if constrained:
 
             # Initialize weights to be all positive for Dale's Law
-            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.str2gpe_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.gpe2stn_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.stn2snr_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 3e-2)
-            nn.init.uniform_(self.fsi2str_weight, 0, 3e-2)
-            nn.init.uniform_(self.thal2fsi_weight, 0, 3e-2)
-            nn.init.uniform_(self.alm2fsi_weight, 0, 3e-2)
-            nn.init.uniform_(self.iti2fsi_weight, 0, 3e-2)
-            nn.init.uniform_(self.fsi2fsi_weight, 0, 3e-2)
+            nn.init.uniform_(self.str2str_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.thal2alm_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.thal2str_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.alm2alm_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.alm2str_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.alm2thal_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.str2snr_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.str2gpe_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.gpe2stn_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.stn2snr_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.snr2thal_weight_l0_hh, 0, 1e-2)
+            nn.init.uniform_(self.fsi2str_weight, 0, 1e-2)
+            nn.init.uniform_(self.thal2fsi_weight, 0, 1e-2)
+            nn.init.uniform_(self.alm2fsi_weight, 0, 1e-2)
+            nn.init.uniform_(self.iti2fsi_weight, 0, 1e-2)
+            nn.init.uniform_(self.fsi2fsi_weight, 0, 1e-2)
 
             # Implement Necessary Masks
             # Striatum recurrent weights
@@ -240,6 +251,41 @@ class RNN_MultiRegional_D1D2(nn.Module):
                 self.thal2alm_mask_inhibitory
             ]).cuda()
 
+            # Thal 2 STR mask
+            self.thal2str_mask = torch.cat([
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
+                torch.ones(size=(int(hid_dim/4), hid_dim)), 
+                torch.zeros(size=(int(hid_dim/2), hid_dim))
+            ], dim=0).cuda()
+
+            self.thal2fsi_mask = torch.cat([
+                torch.zeros(size=(int(self.fsi_size/2), hid_dim)), 
+                torch.ones(size=(int(self.fsi_size/2), hid_dim)), 
+            ], dim=0).cuda()
+
+            self.alm_ramp_2_d1_mask = torch.cat([
+                torch.ones(size=(int(hid_dim/4), hid_dim)), 
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
+                torch.ones(size=(int(hid_dim/2), hid_dim))
+            ], dim=0).cuda()
+
+            self.iti_2_d1_mask = torch.cat([
+                torch.zeros(size=(int(hid_dim/4), inp_dim)), 
+                torch.ones(size=(int(hid_dim/4), inp_dim)), 
+                torch.ones(size=(int(hid_dim/2), inp_dim))
+            ], dim=0).cuda()
+
+            self.alm_ramp_2_fsi_mask = torch.cat([
+                torch.ones(size=(int(self.fsi_size/2), hid_dim)), 
+                torch.zeros(size=(int(self.fsi_size/2), hid_dim))
+            ], dim=0).cuda()
+
+            self.iti_2_fsi_mask = torch.cat([
+                torch.zeros(size=(int(self.fsi_size/2), inp_dim)), 
+                torch.ones(size=(int(self.fsi_size/2), inp_dim))
+            ], dim=0).cuda()
+
+
         else:
 
             # Initialize all weights randomly
@@ -299,21 +345,21 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Get full weights for training
             str2str = (self.str2str_sparse_mask * F.hardtanh(self.str2str_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
-            alm2str = self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-10, 1)
+            alm2str = self.alm_ramp_2_d1_mask * self.alm2str_mask * F.hardtanh(self.alm2str_weight_l0_hh, 1e-10, 1)
             alm2thal = self.alm2thal_mask * F.hardtanh(self.alm2thal_weight_l0_hh, 1e-10, 1)
             thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
-            thal2str = F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
+            thal2str = self.thal2str_mask * F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
             str2snr = (self.str2snr_mask * F.hardtanh(self.str2snr_weight_l0_hh, 1e-10, 1)) @ self.str2snr_D
             str2gpe = (self.str2gpe_mask * F.hardtanh(self.str2gpe_weight_l0_hh, 1e-10, 1)) @ self.str2gpe_D
             gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
             stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
             snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
             fsi2str = F.hardtanh(self.fsi2str_weight, 1e-10, 1) @ self.fsi2str_D
-            thal2fsi = F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
-            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
-            iti2fsi = F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
+            thal2fsi = self.thal2fsi_mask * F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
+            alm2fsi = self.alm_ramp_2_fsi_mask * self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
+            iti2fsi = self.iti_2_fsi_mask * F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
             fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
-            inp_weight_str = F.hardtanh(self.inp_weight_str, 1e-10, 1)
+            inp_weight_str = self.iti_2_d1_mask * F.hardtanh(self.inp_weight_str, 1e-10, 1)
 
             # Concatenate into single weight matrix
 
@@ -370,7 +416,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.str_mask)
-                            + (perturb_hid * self.alm_ramp_mask)
+                            + (perturb_hid * self.integrator_mask)
                         ))
 
                 hn_next = F.relu(xn_next)

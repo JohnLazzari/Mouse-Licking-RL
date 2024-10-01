@@ -9,7 +9,7 @@ from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRe
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp_mode, project_ramp_mode, get_region_borders
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp
 import tqdm
 import time
 
@@ -20,19 +20,19 @@ plt.rcParams['figure.figsize'] = [10, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-HID_DIM = 100
+HID_DIM = 256
 OUT_DIM = 1
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_nonoise_25000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
-STIM_STRENGTH = 1 
+STIM_STRENGTH = 2 
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 
@@ -73,6 +73,9 @@ def plot_psths(
             SILENCED_REGION,
             DT 
         )
+    
+    plt.plot(act_conds[0, :, HID_DIM * 4 fsi_size:HID_DIM * 5 fsi_size], linewidth=6)
+    plt.show()
         
     fig, axs = plt.subplots(2, 5)
 
@@ -127,7 +130,10 @@ def main():
 
     rnn.load_state_dict(checkpoint)
 
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    # Get ramping activity
+    neural_act = get_ramp(dt=DT)
+    neural_act = neural_act.cuda()
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM, ramp=neural_act)
     
     plot_psths(
         len_seq, 
