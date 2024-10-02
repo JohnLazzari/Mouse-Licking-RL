@@ -27,7 +27,7 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_nonoise_25000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_integratornoise.1_25000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -84,7 +84,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
@@ -111,16 +111,15 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 4, HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3))).cuda()
+        xn = torch.zeros(size=(1, 4, HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3))).cuda()
 
         str_units_start = 0
-        str_units_end = int(HID_DIM/2)
-        thal_units_start = HID_DIM * 4 + int(HID_DIM * 0.3)
-        alm_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
+        thal_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
+        alm_units_start = HID_DIM * 6 + int(HID_DIM * 0.3)
 
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=6)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 6 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
+        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=7)
+        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 

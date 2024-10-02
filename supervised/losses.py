@@ -18,36 +18,10 @@ def loss_d1d2(constraint_criterion,
                 thal_start,
                 type="alm"):
 
-    if type == "alm":
-
-        loss = (
-                constraint_criterion(torch.mean(act[:, 50:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act[:, 50:, :])
-                + 1e-4 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
-                )
-    
-    elif type == "threshold":
-
-        mean_act = torch.mean(act[:, :, alm_start:alm_start+hid_dim], dim=-1, keepdim=True)
-
-        loss = (
-                # event target should be only for delay (in terms of number of timesteps it has)
-                constraint_criterion(mean_act[0, 2000-1, :], neural_act[0, 2000-1, :])
-                + constraint_criterion(mean_act[1, 2500-1, :], neural_act[1, 2500-1, :])
-                + constraint_criterion(mean_act[2, 3000-1, :], neural_act[2, 3000-1, :])
-                + constraint_criterion(mean_act[3, 3500-1, :], neural_act[3, 3500-1, :])
-                + constraint_criterion(mean_act[4, 4000-1, :], neural_act[4, 4000-1, :])
-                + constraint_criterion(mean_act[:, 500:1000, :], neural_act_alm[:, 500:1000, :])
-                + 1e-1 * torch.mean(torch.pow(act[:, 1001:, :], 2), dim=(1, 2, 0))  
-                )
-
-    else:
-
-        loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:alm_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                + 1e-3 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                + constraint_criterion(torch.mean(act[:, 500:, str_start:str_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                + constraint_criterion(torch.mean(act[:, 500:, thal_start:thal_start+hid_dim], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                )
+    loss = (
+            constraint_criterion(torch.mean(act[:, 50:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act[:, 50:, :])
+            + 1e-4 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
+            )
     
     return loss
 

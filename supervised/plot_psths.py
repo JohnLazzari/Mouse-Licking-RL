@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM * 0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_nonoise_25000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_integratornoise.1_25000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100
@@ -79,34 +79,34 @@ def plot_psths(
         
     fig, axs = plt.subplots(2, 5)
 
-    axs[0, 0].plot(np.mean(act_conds[:, 50:, :int(HID_DIM/2)], axis=-1).T, linewidth=6)
+    axs[0, 0].plot(np.mean(act_conds[:, 50:, :HID_DIM], axis=-1).T, linewidth=6)
     axs[0, 0].set_title("D1 PSTH")
 
-    axs[0, 1].plot(np.mean(act_conds[:, 50:, int(HID_DIM/2):HID_DIM], axis=-1).T, linewidth=6)
+    axs[0, 1].plot(np.mean(act_conds[:, 50:, HID_DIM:HID_DIM*2], axis=-1).T, linewidth=6)
     axs[0, 1].set_title("D2 PSTH")
 
-    axs[0, 2].plot(np.mean(act_conds[:, 50:, HID_DIM:HID_DIM + fsi_size], axis=-1).T, linewidth=6)
+    axs[0, 2].plot(np.mean(act_conds[:, 50:, HID_DIM*2:HID_DIM*2 + fsi_size], axis=-1).T, linewidth=6)
     axs[0, 2].set_title("FSI PSTH")
 
-    axs[0, 3].plot(np.mean(act_conds[:, 50:, HID_DIM + fsi_size:HID_DIM * 2 + fsi_size], axis=-1).T, linewidth=6)
+    axs[0, 3].plot(np.mean(act_conds[:, 50:, HID_DIM*2 + fsi_size:HID_DIM * 3 + fsi_size], axis=-1).T, linewidth=6)
     axs[0, 3].set_title("GPe PSTH")
 
-    axs[0, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 2 + fsi_size:HID_DIM * 3 + fsi_size], axis=-1).T, linewidth=6)
+    axs[0, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 3 + fsi_size:HID_DIM * 4 + fsi_size], axis=-1).T, linewidth=6)
     axs[0, 4].set_title("STN PSTH")
 
-    axs[1, 0].plot(np.mean(act_conds[:, 50:, HID_DIM * 3 + fsi_size:HID_DIM * 4 + fsi_size], axis=-1).T, linewidth=6)
+    axs[1, 0].plot(np.mean(act_conds[:, 50:, HID_DIM * 4 + fsi_size:HID_DIM * 5 + fsi_size], axis=-1).T, linewidth=6)
     axs[1, 0].set_title("SNr PSTH")
 
-    axs[1, 1].plot(np.mean(act_conds[:, 50:, HID_DIM * 4 + fsi_size:HID_DIM * 5 + fsi_size], axis=-1).T, linewidth=6)
+    axs[1, 1].plot(np.mean(act_conds[:, 50:, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], axis=-1).T, linewidth=6)
     axs[1, 1].set_title("Thal PSTH")
 
-    axs[1, 2].plot(np.mean(act_conds[:, 50:, HID_DIM * 5 + fsi_size:HID_DIM * 6], axis=-1).T, linewidth=6)
+    axs[1, 2].plot(np.mean(act_conds[:, 50:, HID_DIM * 6 + fsi_size:HID_DIM * 7], axis=-1).T, linewidth=6)
     axs[1, 2].set_title("ALM Excitatory PSTH")
 
-    axs[1, 3].plot(np.mean(act_conds[:, 50:, HID_DIM * 6:HID_DIM * 6 + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
+    axs[1, 3].plot(np.mean(act_conds[:, 50:, HID_DIM * 7:HID_DIM * 7 + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
     axs[1, 3].set_title("ALM Inhibitory PSTH")
 
-    axs[1, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 6 + int(HID_DIM * 0.3):HID_DIM * 6 + int(HID_DIM * 0.3) + INP_DIM], axis=-1).T, linewidth=6)
+    axs[1, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 7 + int(HID_DIM * 0.3):HID_DIM * 7 + int(HID_DIM * 0.3) + INP_DIM], axis=-1).T, linewidth=6)
     axs[1, 4].set_title("ITI PSTH")
 
     plt.show()
