@@ -34,42 +34,51 @@ def gather_inp_data(dt, hid_dim, ramp):
     inp = {}
 
     # Condition 1: 1.1s
-    inp[0] = F.relu(ramp[0, 1:, :] - ramp[0, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+    inp[0] = torch.cat([
+        torch.zeros(size=(100, int(hid_dim * 0.1))),
+        0.4 * torch.ones(size=(110, int(hid_dim * 0.1))),
+        torch.zeros(size=(290, int(hid_dim * 0.1)))
+    ])
 
     # Condition 2: 1.4s
-    inp[1] = F.relu(ramp[1, 1:, :] - ramp[1, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+    inp[1] = torch.cat([
+        torch.zeros(size=(100, int(hid_dim * 0.1))),
+        0.3 * torch.ones(size=(140, int(hid_dim * 0.1))),
+        torch.zeros(size=(260, int(hid_dim * 0.1)))
+    ])
 
     # Condition 3: 1.7s
-    inp[2] = F.relu(ramp[2, 1:, :] - ramp[2, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+    inp[2] = torch.cat([
+        torch.zeros(size=(100, int(hid_dim * 0.1))),
+        0.2 * torch.ones(size=(170, int(hid_dim * 0.1))),
+        torch.zeros(size=(230, int(hid_dim * 0.1)))
+    ])
 
     # Condition 4: 2s
-    inp[3] = F.relu(ramp[3, 1:, :] - ramp[3, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+    inp[3] = torch.cat([
+        torch.zeros(size=(100, int(hid_dim * 0.1))),
+        0.1 * torch.ones(size=(200, int(hid_dim * 0.1))),
+        torch.zeros(size=(200, int(hid_dim * 0.1)))
+    ])
 
     # Combine all inputs
     total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
 
-    zero = torch.zeros(size=(total_iti_inp.shape[0], 1, total_iti_inp.shape[2]))
-
-    total_iti_inp = 10 * torch.cat([
-        zero,
-        total_iti_inp
-    ], dim=1)
-
-    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    plt.show()
+    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    #plt.show()
 
     # Cue Input
     cue_inp_dict = {}
 
     for cond in range(4):
 
-        cue_inp_dict[cond] = torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1))
+        cue_inp_dict[cond] = torch.zeros(size=(int((4.1 + 0.3 * cond) / dt), 1))
         #cue_inp_dict[cond][999:999+100] = 0.01
 
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [int(2.1 / dt), int(2.4 / dt), int(2.7 / dt), int(3 / dt)]
+    len_seq = [int(5 / dt), int(5 / dt), int(5 / dt), int(5 / dt)]
 
     total_inp = [total_iti_inp, total_cue_inp]
 
@@ -86,17 +95,17 @@ def get_ramp(dt):
     ramps = {}
 
     means = [1.1, 1.4, 1.7, 2.0]
-    std = [0.4, 0.5, 0.6, 0.7]
+    std = [0.35, 0.45, 0.55, 0.6]
 
     for cond in range(4):
 
-        timepoints = torch.linspace(-1, 2, steps=300).unsqueeze(-1)
+        timepoints = torch.linspace(-1, 4, steps=500).unsqueeze(-1)
         ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
 
     total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
 
-    plt.plot(total_ramp.squeeze().numpy().T)
-    plt.show()
+    #plt.plot(total_ramp.squeeze().numpy().T)
+    #plt.show()
 
     return total_ramp
 
@@ -225,7 +234,7 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask_inhib_units = stim_strength * (rnn.alm_inhib_mask)
+        mask_inhib_units = -stim_strength * (rnn.full_alm_mask)
         mask_iti_units = 0 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
     elif region == "str":
@@ -292,7 +301,7 @@ def get_input_silence(dt, hid_dim, extra_steps):
     for cond in range(4):
 
         cue_inp_dict[cond] = torch.cat([
-            torch.zeros(size=(int((2.1 + 0.3 * cond) / dt), 1)),
+            torch.zeros(size=(int((4.1 + 0.3 * cond) / dt), 1)),
             torch.zeros(size=(extra_steps, 1)),
         ])
         #cue_inp_dict[cond][999:999+100] = 0.01

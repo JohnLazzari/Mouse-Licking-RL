@@ -69,10 +69,10 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     ]).cuda()
 
         self.integrator_mask = torch.cat([torch.ones(size=(int(hid_dim/2),)), 
-                                    torch.zeros(size=(int(hid_dim/2),)),
+                                    torch.ones(size=(int(hid_dim/2),)),
                                     torch.ones(size=(self.fsi_size,)),
-                                    torch.zeros(size=(hid_dim * 2,)),
-                                    torch.zeros(size=(hid_dim * 2,)),
+                                    torch.ones(size=(hid_dim * 2,)),
+                                    torch.ones(size=(hid_dim * 2,)),
                                     torch.zeros(size=(hid_dim,)),
                                     torch.zeros(size=(inp_dim,)),
                                     ]).cuda()
@@ -255,7 +255,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.thal2str_mask = torch.cat([
                 torch.zeros(size=(int(hid_dim/4), hid_dim)), 
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
-                torch.zeros(size=(int(hid_dim/2), hid_dim))
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
             ], dim=0).cuda()
 
             self.thal2fsi_mask = torch.cat([
@@ -266,13 +267,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.alm_ramp_2_d1_mask = torch.cat([
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
                 torch.zeros(size=(int(hid_dim/4), hid_dim)), 
-                torch.ones(size=(int(hid_dim/2), hid_dim))
+                torch.ones(size=(int(hid_dim/4), hid_dim)), 
+                torch.ones(size=(int(hid_dim/4), hid_dim)), 
             ], dim=0).cuda()
 
             self.iti_2_d1_mask = torch.cat([
                 torch.zeros(size=(int(hid_dim/4), inp_dim)), 
                 torch.ones(size=(int(hid_dim/4), inp_dim)), 
-                torch.ones(size=(int(hid_dim/2), inp_dim))
+                torch.ones(size=(int(hid_dim/4), inp_dim)), 
+                torch.ones(size=(int(hid_dim/4), inp_dim)), 
             ], dim=0).cuda()
 
             self.alm_ramp_2_fsi_mask = torch.cat([
@@ -283,6 +286,27 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.iti_2_fsi_mask = torch.cat([
                 torch.zeros(size=(int(self.fsi_size/2), inp_dim)), 
                 torch.ones(size=(int(self.fsi_size/2), inp_dim))
+            ], dim=0).cuda()
+
+            fsi_2_d1_mask = torch.cat([
+                torch.cat([
+                    torch.ones(size=(int(hid_dim/4), int(self.fsi_size/2))),
+                    torch.zeros(size=(int(hid_dim/4), int(self.fsi_size/2)))
+                    ], dim=1), 
+                torch.cat([
+                    torch.zeros(size=(int(hid_dim/4), int(self.fsi_size/2))),
+                    torch.ones(size=(int(hid_dim/4), int(self.fsi_size/2)))
+                    ], dim=1), 
+            ], dim=0)
+
+            fsi_2_d2_mask = torch.cat([
+                torch.ones(size=(int(hid_dim/2), int(self.fsi_size/2))), 
+                torch.zeros(size=(int(hid_dim/2), int(self.fsi_size/2))), 
+            ], dim=1)
+
+            self.fsi_2_str_mask = torch.cat([
+                fsi_2_d1_mask,
+                fsi_2_d2_mask
             ], dim=0).cuda()
 
 
@@ -303,7 +327,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         # Input weights STR
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim, inp_dim)))
-        nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
+        nn.init.uniform_(self.inp_weight_str, 0, 1e-1)
         
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
@@ -354,7 +378,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
             stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
             snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
-            fsi2str = F.hardtanh(self.fsi2str_weight, 1e-10, 1) @ self.fsi2str_D
+            fsi2str = self.fsi_2_str_mask * F.hardtanh(self.fsi2str_weight, 1e-10, 1) @ self.fsi2str_D
             thal2fsi = self.thal2fsi_mask * F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
             alm2fsi = self.alm_ramp_2_fsi_mask * self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
             iti2fsi = self.iti_2_fsi_mask * F.hardtanh(self.iti2fsi_weight, 1e-10, 1)

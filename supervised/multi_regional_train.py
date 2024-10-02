@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
-INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
+INP_DIM = int(HID_DIM * 0.1)                                                          # Input dimension
 EPOCHS = 25000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
@@ -27,7 +27,7 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_nonoise_25000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_integratornoise.25_25000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -79,7 +79,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.25, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
@@ -208,6 +208,9 @@ def main():
             print("Best steady state at epoch {}:{}".format(epoch, best_steady_state))
             print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
             print("")
+
+        simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)
+        loss += simple_loss
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
