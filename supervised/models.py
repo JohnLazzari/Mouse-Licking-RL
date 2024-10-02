@@ -68,14 +68,18 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(inp_dim,)),
                                     ]).cuda()
 
-        self.integrator_mask = torch.cat([torch.ones(size=(int(hid_dim/2),)), 
-                                    torch.ones(size=(int(hid_dim/2),)),
-                                    torch.ones(size=(self.fsi_size,)),
-                                    torch.ones(size=(hid_dim * 2,)),
-                                    torch.ones(size=(hid_dim * 2,)),
-                                    torch.zeros(size=(hid_dim,)),
-                                    torch.zeros(size=(inp_dim,)),
-                                    ]).cuda()
+        self.integrator_mask = torch.cat([
+            torch.zeros(size=(int(hid_dim/4),)), 
+            torch.ones(size=(int(hid_dim/4),)), 
+            torch.zeros(size=(int(hid_dim/4),)), 
+            torch.ones(size=(int(hid_dim/4),)), 
+            torch.zeros(size=(int(self.fsi_size/2),)),
+            torch.ones(size=(int(self.fsi_size/2),)),
+            torch.ones(size=(hid_dim * 2,)),
+            torch.ones(size=(hid_dim * 2,)),
+            torch.zeros(size=(hid_dim,)),
+            torch.zeros(size=(inp_dim,)),
+        ]).cuda()
 
         self.str_d2_mask = torch.cat([torch.zeros(size=(int(hid_dim/2),)), 
                                     torch.ones(size=(int(hid_dim/2),)),
@@ -231,8 +235,33 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
             # STR to GPE D
             self.str2gpe_D = -1 * torch.eye(hid_dim).cuda()
-            self.str2gpe_mask = torch.cat([torch.zeros(size=(hid_dim, int(hid_dim/2))), 
-                                        torch.ones(size=(hid_dim, int(hid_dim/2)))], dim=1).cuda()
+
+            d2_2_gpe_mask = torch.cat([
+                torch.cat([
+                    torch.ones(size=(int(hid_dim/2), int(hid_dim/4))),
+                    torch.zeros(size=(int(hid_dim/2), int(hid_dim/4)))
+                ], dim=1), 
+                torch.cat([
+                    torch.zeros(size=(int(hid_dim/2), int(hid_dim/4))),
+                    torch.ones(size=(int(hid_dim/2), int(hid_dim/4)))
+                ], dim=1)
+            ], dim=0)
+            
+            self.str2gpe_mask = torch.cat([
+                torch.zeros(size=(hid_dim, int(hid_dim/2))),
+                d2_2_gpe_mask
+            ], dim=1).cuda()
+            
+            self.gpe2stn_mask = torch.cat([
+                torch.cat([
+                    torch.ones(size=(int(hid_dim/2), int(hid_dim/2))),
+                    torch.zeros(size=(int(hid_dim/2), int(hid_dim/2)))
+                ], dim=1), 
+                torch.cat([
+                    torch.zeros(size=(int(hid_dim/2), int(hid_dim/2))),
+                    torch.ones(size=(int(hid_dim/2), int(hid_dim/2)))
+                ], dim=1)
+            ], dim=0).cuda()
 
             # GPE to STN D
             self.gpe2stn_D = -1 * torch.eye(hid_dim).cuda()
@@ -316,6 +345,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             ], dim=0).cuda()
 
 
+
         else:
 
             # Initialize all weights randomly
@@ -333,7 +363,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         # Input weights STR
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim, inp_dim)))
-        nn.init.uniform_(self.inp_weight_str, 0, 1e-1)
+        nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
         
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
@@ -381,7 +411,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             thal2str = self.thal2str_mask * F.hardtanh(self.thal2str_weight_l0_hh, 1e-10, 1)
             str2snr = (self.str2snr_mask * F.hardtanh(self.str2snr_weight_l0_hh, 1e-10, 1)) @ self.str2snr_D
             str2gpe = (self.str2gpe_mask * F.hardtanh(self.str2gpe_weight_l0_hh, 1e-10, 1)) @ self.str2gpe_D
-            gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
+            gpe2stn = (self.gpe2stn_mask * F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1)) @ self.gpe2stn_D
             stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
             snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
             fsi2str = self.fsi_2_str_mask * F.hardtanh(self.fsi2str_weight, 1e-10, 1) @ self.fsi2str_D

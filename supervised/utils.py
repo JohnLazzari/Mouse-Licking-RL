@@ -33,6 +33,7 @@ def gather_inp_data(dt, hid_dim, ramp):
     
     inp = {}
 
+    '''
     # Condition 1: 1.1s
     inp[0] = torch.cat([
         torch.zeros(size=(100, int(hid_dim * 0.1))),
@@ -60,9 +61,29 @@ def gather_inp_data(dt, hid_dim, ramp):
         0.1 * torch.ones(size=(200, int(hid_dim * 0.1))),
         torch.zeros(size=(200, int(hid_dim * 0.1)))
     ])
+    '''
+
+    # Condition 1: 1.1s
+    inp[0] = F.relu(ramp[0, 1:, :] - ramp[0, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+
+    # Condition 2: 1.4s
+    inp[1] = F.relu(ramp[1, 1:, :] - ramp[1, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+
+    # Condition 3: 1.7s
+    inp[2] = F.relu(ramp[2, 1:, :] - ramp[2, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
+
+    # Condition 4: 2s
+    inp[3] = F.relu(ramp[3, 1:, :] - ramp[3, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
 
     # Combine all inputs
     total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+
+    zero = torch.zeros(size=(total_iti_inp.shape[0], 1, total_iti_inp.shape[2]))
+
+    total_iti_inp = 100 * torch.cat([
+        zero,
+        total_iti_inp
+    ], dim=1)
 
     #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
     #plt.show()
