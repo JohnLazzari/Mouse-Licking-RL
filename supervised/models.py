@@ -256,7 +256,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                 torch.zeros(size=(int(hid_dim/4), hid_dim)), 
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
                 torch.zeros(size=(int(hid_dim/4), hid_dim)), 
-                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
+                torch.ones(size=(int(hid_dim/4), hid_dim)), 
             ], dim=0).cuda()
 
             self.thal2fsi_mask = torch.cat([
@@ -268,13 +268,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
                 torch.zeros(size=(int(hid_dim/4), hid_dim)), 
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
-                torch.ones(size=(int(hid_dim/4), hid_dim)), 
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
             ], dim=0).cuda()
 
             self.iti_2_d1_mask = torch.cat([
                 torch.zeros(size=(int(hid_dim/4), inp_dim)), 
                 torch.ones(size=(int(hid_dim/4), inp_dim)), 
-                torch.ones(size=(int(hid_dim/4), inp_dim)), 
+                torch.zeros(size=(int(hid_dim/4), inp_dim)), 
                 torch.ones(size=(int(hid_dim/4), inp_dim)), 
             ], dim=0).cuda()
 
@@ -300,9 +300,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
             ], dim=0)
 
             fsi_2_d2_mask = torch.cat([
-                torch.ones(size=(int(hid_dim/2), int(self.fsi_size/2))), 
-                torch.zeros(size=(int(hid_dim/2), int(self.fsi_size/2))), 
-            ], dim=1)
+                torch.cat([
+                    torch.ones(size=(int(hid_dim/4), int(self.fsi_size/2))),
+                    torch.zeros(size=(int(hid_dim/4), int(self.fsi_size/2)))
+                    ], dim=1), 
+                torch.cat([
+                    torch.zeros(size=(int(hid_dim/4), int(self.fsi_size/2))),
+                    torch.ones(size=(int(hid_dim/4), int(self.fsi_size/2)))
+                    ], dim=1), 
+            ], dim=0)
 
             self.fsi_2_str_mask = torch.cat([
                 fsi_2_d1_mask,

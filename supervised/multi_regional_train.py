@@ -27,7 +27,7 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_integratornoise.25_25000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_tonicsnr_fsi2str_256n_nonoise_25000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -76,10 +76,15 @@ def main():
     #        Training Params           #
     ####################################
 
+    # TODO both the parallel pathways of integration and no integration in full striatum as well as parallel pathways only in d1 and fsi seem to work ok (mostly parallel pathways in both but not sure)
+    # model still isnt achieving perfect steady state and eventually goes off the rails and goes to a single point for each condition (in parallel pathways full str)
+    # test different things to see how to avoid this (regularization, making iti input the perfect integral again, learning rate, etc.)
+    # continue to test theories of both models above
+
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.25, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 
@@ -209,8 +214,8 @@ def main():
             print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
             print("")
 
-        simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)
-        loss += simple_loss
+        #simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)
+        #loss += simple_loss
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
