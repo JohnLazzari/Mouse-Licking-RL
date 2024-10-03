@@ -80,18 +80,18 @@ class RNN_MultiRegional_D1D2(nn.Module):
         ]).cuda()
 
         self.integrator_mask = torch.cat([
-            torch.zeros(size=(int(hid_dim/2),)), 
             torch.ones(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(hid_dim/2),)), 
             torch.ones(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(self.fsi_size/2),)),
+            torch.ones(size=(int(hid_dim/2),)), 
+            torch.ones(size=(int(hid_dim/2),)), 
             torch.ones(size=(int(self.fsi_size/2),)),
-            torch.zeros(size=(int(hid_dim/2),)), 
+            torch.ones(size=(int(self.fsi_size/2),)),
             torch.ones(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(hid_dim/2),)), 
             torch.ones(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(hid_dim * 2,)),
-            torch.zeros(size=(hid_dim,)),
+            torch.ones(size=(int(hid_dim/2),)), 
+            torch.ones(size=(int(hid_dim/2),)), 
+            torch.ones(size=(hid_dim * 2,)),
+            torch.ones(size=(hid_dim,)),
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
 
@@ -117,7 +117,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_d2 = torch.zeros(size=(hid_dim,), device="cuda")
         self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,), device="cuda")
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.25 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
@@ -330,6 +330,11 @@ class RNN_MultiRegional_D1D2(nn.Module):
                     torch.ones(size=(int(hid_dim/2), int(hid_dim/2)))
                 ], dim=1)
             ], dim=0).cuda()
+
+            self.thal2alm_mask = torch.cat([
+                torch.zeros(size=(hid_dim, int(hid_dim/2))),
+                torch.ones(size=(hid_dim, int(hid_dim/2))),
+            ], dim=1).cuda()
 
             # GPE to STN D
             self.gpe2stn_D = -1 * torch.eye(hid_dim).cuda()

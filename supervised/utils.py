@@ -33,6 +33,7 @@ def gather_inp_data(dt, hid_dim, ramp):
     
     inp = {}
 
+    '''
     # Condition 1: 1.1s
     inp[0] = torch.cat([
         torch.zeros(size=(100, int(hid_dim * 0.1))),
@@ -63,8 +64,8 @@ def gather_inp_data(dt, hid_dim, ramp):
 
     # Combine all inputs
     total_iti_inp = 10 * pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
-
     '''
+
     # Condition 1: 1.1s
     inp[0] = F.relu(ramp[0, 1:, :] - ramp[0, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
 
@@ -86,7 +87,6 @@ def gather_inp_data(dt, hid_dim, ramp):
         zero,
         total_iti_inp
     ], dim=1)
-    '''
 
     #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
     #plt.show()
