@@ -15,10 +15,10 @@ from tqdm import tqdm
 HID_DIM = 256                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM * 0.1)                                                          # Input dimension
-EPOCHS = 5000                                                                       # Training iterations
+EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
+WEIGHT_DECAY = 0                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
@@ -27,7 +27,7 @@ END_SILENCE = 220
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_parallel_256n_integratornoise.05_5000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_nonoise_10000iters_newloss.pth"                   # Save path
 
 '''
 Default Model(s):
@@ -84,7 +84,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.05, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 

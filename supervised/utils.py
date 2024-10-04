@@ -33,7 +33,6 @@ def gather_inp_data(dt, hid_dim, ramp):
     
     inp = {}
 
-    '''
     # Condition 1: 1.1s
     inp[0] = torch.cat([
         torch.zeros(size=(100, int(hid_dim * 0.1))),
@@ -63,9 +62,9 @@ def gather_inp_data(dt, hid_dim, ramp):
     ])
 
     # Combine all inputs
-    total_iti_inp = 10 * pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
-    '''
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
 
+    '''
     # Condition 1: 1.1s
     inp[0] = F.relu(ramp[0, 1:, :] - ramp[0, :-1, :]).repeat(1, int(hid_dim * 0.1)).cpu()
 
@@ -87,9 +86,10 @@ def gather_inp_data(dt, hid_dim, ramp):
         zero,
         total_iti_inp
     ], dim=1)
+    '''
 
-    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    #plt.show()
+    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    plt.show()
 
     # Cue Input
     cue_inp_dict = {}
@@ -119,7 +119,7 @@ def get_ramp(dt):
     ramps = {}
 
     means = [1.1, 1.4, 1.7, 2.0]
-    std = [0.35, 0.45, 0.55, 0.6]
+    std = [0.5, 0.55, 0.6, 0.65]
 
     for cond in range(4):
 
@@ -128,8 +128,8 @@ def get_ramp(dt):
 
     total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
 
-    #plt.plot(total_ramp.squeeze().numpy().T)
-    #plt.show()
+    plt.plot(total_ramp.squeeze().numpy().T)
+    plt.show()
 
     return total_ramp
 
@@ -258,8 +258,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask_inhib_units = -stim_strength * (rnn.full_alm_mask)
-        mask_iti_units = 0 * rnn.iti_mask
+        mask_inhib_units = -stim_strength * (rnn.alm_ramp_mask)
+        mask_iti_units = -1 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
@@ -285,29 +285,25 @@ def get_input_silence(dt, hid_dim, extra_steps):
 
     iti_inp_silence_cond_1 = torch.cat([
         iti_inp_silence[0, :160, :],
-        torch.zeros(size=(60, iti_inp_silence.shape[-1])),
-        iti_inp_silence[0, 160:161, :].repeat(10, 1),
+        iti_inp_silence[0, 160:161, :].repeat(60, 1),
         iti_inp_silence[0, 160:, :]
     ])
 
     iti_inp_silence_cond_2 = torch.cat([
         iti_inp_silence[1, :160, :],
-        torch.zeros(size=(60, iti_inp_silence.shape[-1])),
-        iti_inp_silence[1, 160:161, :].repeat(10, 1),
+        iti_inp_silence[1, 160:161, :].repeat(60, 1),
         iti_inp_silence[1, 160:, :]
     ])
 
     iti_inp_silence_cond_3 = torch.cat([
         iti_inp_silence[2, :160, :],
-        torch.zeros(size=(60, iti_inp_silence.shape[-1])),
-        iti_inp_silence[2, 160:161, :].repeat(10, 1),
+        iti_inp_silence[2, 160:161, :].repeat(60, 1),
         iti_inp_silence[2, 160:, :]
     ])
 
     iti_inp_silence_cond_4 = torch.cat([
         iti_inp_silence[3, :160, :],
-        torch.zeros(size=(60, iti_inp_silence.shape[-1])),
-        iti_inp_silence[3, 160:161, :].repeat(10, 1),
+        iti_inp_silence[3, 160:161, :].repeat(60, 1),
         iti_inp_silence[3, 160:, :]
     ])
 
@@ -318,7 +314,6 @@ def get_input_silence(dt, hid_dim, extra_steps):
         iti_inp_silence_cond_4
     ], batch_first=True)
 
-    
     # Cue Input
     cue_inp_dict = {}
 

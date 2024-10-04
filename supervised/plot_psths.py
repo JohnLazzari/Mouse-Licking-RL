@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM * 0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_parallel_256n_integratornoise.05_5000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_nonoise_10000iters_newloss.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 CONSTRAINED = True
 ITI_STEPS = 100
@@ -73,9 +73,9 @@ def plot_psths(
             SILENCED_REGION,
             DT 
         )
-    
-    #plt.plot(act_conds[0, :, HID_DIM * 4 + fsi_size:HID_DIM * 5 + fsi_size], linewidth=6)
-    #plt.show()
+        
+    plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], linewidth=6)
+    plt.show()
         
     fig, axs = plt.subplots(2, 5)
 

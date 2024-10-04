@@ -86,12 +86,12 @@ class RNN_MultiRegional_D1D2(nn.Module):
             torch.ones(size=(int(hid_dim/2),)), 
             torch.ones(size=(int(self.fsi_size/2),)),
             torch.ones(size=(int(self.fsi_size/2),)),
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(hid_dim * 2,)),
-            torch.ones(size=(hid_dim,)),
+            torch.zeros(size=(int(hid_dim/2),)), 
+            torch.zeros(size=(int(hid_dim/2),)), 
+            torch.zeros(size=(int(hid_dim/2),)), 
+            torch.zeros(size=(int(hid_dim/2),)), 
+            torch.zeros(size=(hid_dim * 2,)),
+            torch.zeros(size=(hid_dim,)),
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
 
@@ -113,16 +113,16 @@ class RNN_MultiRegional_D1D2(nn.Module):
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
 
-        self.tonic_inp_d1 = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_d2 = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,), device="cuda")
-        self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = 0.25 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_alm = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_iti = torch.zeros(size=(inp_dim,), device="cuda")
+        self.tonic_inp_d1 = torch.zeros(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_d2 = torch.zeros(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,),         device="cuda")
+        self.tonic_inp_gpe = torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_stn = 0.8 * torch.ones(size=(hid_dim,),          device="cuda")
+        self.tonic_inp_snr = 0.4 * torch.ones(size=(hid_dim,),          device="cuda")
+        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),),    device="cuda")
+        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),),    device="cuda")
+        self.tonic_inp_alm = torch.zeros(size=(hid_dim,),               device="cuda")
+        self.tonic_inp_iti = torch.zeros(size=(inp_dim,),               device="cuda")
 
         self.tonic_inp = torch.cat([
             self.tonic_inp_d1,
@@ -442,6 +442,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.zeros_rec_iti = torch.zeros(size=(inp_dim, inp_dim), device="cuda")
 
         self.zeros_to_fsi = torch.zeros(size=(self.fsi_size, hid_dim), device="cuda")
+        self.zeros_to_fsi_iti = torch.zeros(size=(self.fsi_size, inp_dim), device="cuda")
+        self.zeros_rec_fsi = torch.zeros(size=(self.fsi_size, self.fsi_size), device="cuda")
         self.zeros_from_fsi = torch.zeros(size=(hid_dim, self.fsi_size), device="cuda")
         self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
 
@@ -478,31 +480,31 @@ class RNN_MultiRegional_D1D2(nn.Module):
             d12d2 = (self.str2str_sparse_mask * F.hardtanh(self.d12d2_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
             d22d1 = (self.str2str_sparse_mask * F.hardtanh(self.d22d1_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
-            alm2d1 = self.alm_ramp_2_d1_mask * self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 1e-10, 1)
-            alm2d2 = self.alm_ramp_2_d2_mask * self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 1e-10, 1)
+            alm2d1 = self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 1e-10, 1)
+            alm2d2 = self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 1e-10, 1)
             thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
-            thal2d1 = self.thal2d1_mask * F.hardtanh(self.thal2d1_weight_l0_hh, 1e-10, 1)
-            thal2d2 = self.thal2d2_mask * F.hardtanh(self.thal2d2_weight_l0_hh, 1e-10, 1)
-            d12snr = (self.d12snr_mask * F.hardtanh(self.d12snr_weight_l0_hh, 1e-10, 1)) @ self.d12snr_D
-            d22gpe = (self.d22gpe_mask * F.hardtanh(self.d22gpe_weight_l0_hh, 1e-10, 1)) @ self.d22gpe_D
-            gpe2stn = (self.gpe2stn_mask * F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1)) @ self.gpe2stn_D
-            stn2snr = self.stn2snr_mask * F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
-            snr2thal = (self.snr2thal_mask * F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1)) @ self.snr2thal_D
-            fsi2d1 = self.fsi_2_d1_mask * F.hardtanh(self.fsi2d1_weight, 1e-10, 1) @ self.fsi2str_D
-            fsi2d2 = self.fsi_2_d2_mask * F.hardtanh(self.fsi2d2_weight, 1e-10, 1) @ self.fsi2str_D
-            thal2fsi = self.thal2fsi_mask * F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
-            alm2fsi = self.alm_ramp_2_fsi_mask * self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
-            iti2fsi = self.iti_2_fsi_mask * F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
+            thal2d1 = F.hardtanh(self.thal2d1_weight_l0_hh, 1e-10, 1)
+            thal2d2 = F.hardtanh(self.thal2d2_weight_l0_hh, 1e-10, 1)
+            d12snr = F.hardtanh(self.d12snr_weight_l0_hh, 1e-10, 1) @ self.d12snr_D
+            d22gpe = F.hardtanh(self.d22gpe_weight_l0_hh, 1e-10, 1) @ self.d22gpe_D
+            gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
+            stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
+            snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
+            fsi2d1 = F.hardtanh(self.fsi2d1_weight, 1e-10, 1) @ self.fsi2str_D
+            fsi2d2 = F.hardtanh(self.fsi2d2_weight, 1e-10, 1) @ self.fsi2str_D
+            thal2fsi = F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
+            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
+            iti2fsi = F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
             fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
-            inp_weight_d1 = self.iti_2_d1_mask * F.hardtanh(self.inp_weight_d1, 1e-10, 1)
-            inp_weight_d2 = self.iti_2_d2_mask * F.hardtanh(self.inp_weight_d2, 1e-10, 1)
+            inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 1e-10, 1)
+            inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 1e-10, 1)
 
             # Concatenate into single weight matrix
 
                             #  D1      D2     FSI         GPE        STN         SNR       Thal    ALM         ALM ITI
-            W_d1 = torch.cat([d12d1, d22d1, fsi2d1, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
-            W_d2 = torch.cat([d22d2, d12d2, fsi2d2, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
-            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, fsi2fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi, iti2fsi],                                                     dim=1)      # FSI
+            W_d1 = torch.cat([d12d1, d22d1, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
+            W_d2 = torch.cat([d12d2, d22d2, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
+            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_rec_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi_iti],                                                     dim=1)      # FSI
             W_gpe = torch.cat([self.zeros, d22gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                               dim=1)      # GPE
             W_stn = torch.cat([self.zeros, self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                              dim=1)      # STN
             W_snr = torch.cat([d12snr, self.zeros, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                                  dim=1)      # SNR
@@ -536,21 +538,21 @@ class RNN_MultiRegional_D1D2(nn.Module):
             stds = {}
 
             zeros_pre_cue = torch.zeros(size=(4, 100, 1))
-            zeros_post_lick = torch.zeros(size=(200, 1))
+            zeros_post_lick = torch.zeros(size=(230, 1))
 
-            means[0] = torch.zeros(size=(110, 1))
-            means[1] = torch.zeros(size=(140, 1))
-            means[2] = torch.zeros(size=(170, 1))
+            means[0] = torch.zeros(size=(80, 1))
+            means[1] = torch.zeros(size=(110, 1))
+            means[2] = torch.zeros(size=(140, 1))
             means[3] = torch.cat([
-                torch.zeros(size=(200, 1)),
+                torch.zeros(size=(170, 1)),
                 zeros_post_lick
             ], dim=0)
 
-            stds[0] = torch.ones(size=(110, 1))
-            stds[1] = torch.ones(size=(140, 1))
-            stds[2] = torch.ones(size=(170, 1))
+            stds[0] = torch.ones(size=(80, 1))
+            stds[1] = torch.ones(size=(110, 1))
+            stds[2] = torch.ones(size=(140, 1))
             stds[3] = torch.cat([
-                torch.ones(size=(200, 1)),
+                torch.ones(size=(170, 1)),
                 zeros_post_lick
             ], dim=0)
 
@@ -587,7 +589,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.str_mask)
-                            + (perturb_hid[:, t, :] * self.integrator_mask)
+                            + (perturb_hid[:, t, :] * (self.alm_ramp_mask + self.alm_inhib_mask))
                         ))
 
                 hn_next = F.relu(xn_next)
