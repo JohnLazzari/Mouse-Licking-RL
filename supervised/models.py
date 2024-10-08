@@ -117,8 +117,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_d2 = torch.zeros(size=(hid_dim,),                device="cuda")
         self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,),         device="cuda")
         self.tonic_inp_gpe = torch.ones(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_stn = 0.8 * torch.ones(size=(hid_dim,),          device="cuda")
-        self.tonic_inp_snr = 0.4 * torch.ones(size=(hid_dim,),          device="cuda")
+        self.tonic_inp_stn = torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_snr = 0.8 * torch.ones(size=(hid_dim,),          device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),),    device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),),    device="cuda")
         self.tonic_inp_alm = torch.zeros(size=(hid_dim,),               device="cuda")
@@ -242,7 +242,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Implement Necessary Masks
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.d12d1_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.9)
+            nn.init.sparse_(sparse_matrix, 0.7)
             self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             self.str2str_D = -1 * torch.eye(hid_dim).cuda()
 
@@ -502,9 +502,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Concatenate into single weight matrix
 
                             #  D1      D2     FSI         GPE        STN         SNR       Thal    ALM         ALM ITI
-            W_d1 = torch.cat([d12d1, d22d1, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
-            W_d2 = torch.cat([d12d2, d22d2, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
-            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_rec_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi_iti],                                                     dim=1)      # FSI
+            W_d1 = torch.cat([d12d1, d22d1, fsi2d1, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
+            W_d2 = torch.cat([d12d2, d22d2, fsi2d2, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
+            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, fsi2fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi, iti2fsi],                                                     dim=1)      # FSI
             W_gpe = torch.cat([self.zeros, d22gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                               dim=1)      # GPE
             W_stn = torch.cat([self.zeros, self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                              dim=1)      # STN
             W_snr = torch.cat([d12snr, self.zeros, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                                  dim=1)      # SNR
