@@ -11,18 +11,6 @@ from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA
 from scipy.signal import find_peaks
 
-def NormalizeInp(
-    data
-):
-
-    '''
-        Min-Max normalization for any data
-
-        data:       1D array of responses
-    '''
-
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
-
 def NormalizeData(
     data, 
 ):
@@ -62,7 +50,7 @@ def gather_inp_data(
         # Load in the data from the mat file and normalize the projections
         iti_projection = sio.loadmat(path)
         iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-        iti_projection = NormalizeInp(iti_projection)
+        iti_projection = NormalizeData(iti_projection)
 
         # Hacky method right now, need to average some conditions (will get cleaner data in future)
         averaged_conds = []
@@ -74,8 +62,7 @@ def gather_inp_data(
 
         # Choose the appropriate scaling and repeat to simulate a small population of ITI neurons
         averaged_conds = torch.tensor(averaged_conds, dtype=torch.float32).unsqueeze(-1).repeat(1, 1, int(hid_dim * 0.1))
-        averaged_conds[:, :100, :] *= 0.04
-        averaged_conds[:, 100:, :] *= 0.4
+        averaged_conds *= 0.1
 
         if trial_epoch == "full":
 
@@ -108,20 +95,20 @@ def gather_inp_data(
 
             # Condition 1: 1.1s
             inp[0] = torch.cat([
-                0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.4*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.25*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 2: 1.4s
             inp[1] = torch.cat([
-                0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.3*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 3: 1.7s
             inp[2] = torch.cat([
-                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.2*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.15*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 4: 2s
@@ -142,22 +129,22 @@ def gather_inp_data(
 
             # Condition 1: 1.1s
             inp[0] = torch.cat([
-                0.04*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.4*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.25*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[0], int(hid_dim*0.1)))
                 ])
 
             # Condition 2: 1.4s
             inp[1] = torch.cat([
-                0.03*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.3*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[1], int(hid_dim*0.1)))
                 ])
 
             # Condition 3: 1.7s
             inp[2] = torch.cat([
-                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.2*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.15*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[2], int(hid_dim*0.1)))
                 ])
 
@@ -232,6 +219,12 @@ def get_data(
     #                                  #
     ####################################
 
+    # Normalize the data for each condition
+    cond_1_alm_strain["fr_population"] = NormalizeData(cond_1_alm_strain["fr_population"])
+    cond_2_alm_strain["fr_population"] = NormalizeData(cond_2_alm_strain["fr_population"])
+    cond_3_alm_strain["fr_population"] = NormalizeData(cond_3_alm_strain["fr_population"])
+    cond_4_alm_strain["fr_population"] = NormalizeData(cond_4_alm_strain["fr_population"])
+
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
         torch.from_numpy(cond_1_alm_strain["fr_population"]), 
@@ -247,6 +240,11 @@ def get_data(
     #                                  #
     ####################################
 
+    cond_1_str_strain["fr_population"] = NormalizeData(cond_1_str_strain["fr_population"])
+    cond_2_str_strain["fr_population"] = NormalizeData(cond_2_str_strain["fr_population"])
+    cond_3_str_strain["fr_population"] = NormalizeData(cond_3_str_strain["fr_population"])
+    cond_4_str_strain["fr_population"] = NormalizeData(cond_4_str_strain["fr_population"])
+
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
         torch.from_numpy(cond_2_str_strain["fr_population"]), 
@@ -261,12 +259,18 @@ def get_data(
     #                                  #
     ####################################
 
+    cond_1_str_dms_strain["fr_population"] = NormalizeData(cond_1_str_dms_strain["fr_population"])
+    cond_2_str_dms_strain["fr_population"] = NormalizeData(cond_2_str_dms_strain["fr_population"])
+    cond_3_str_dms_strain["fr_population"] = NormalizeData(cond_3_str_dms_strain["fr_population"])
+    cond_4_str_dms_strain["fr_population"] = NormalizeData(cond_4_str_dms_strain["fr_population"])
+
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
         torch.from_numpy(cond_2_str_dms_strain["fr_population"]), 
         torch.from_numpy(cond_3_str_dms_strain["fr_population"]),
         torch.from_numpy(cond_4_str_dms_strain["fr_population"])
     ], batch_first=True)
+
 
     # Combine all sessions
     neural_data_combined = torch.cat([
@@ -283,21 +287,15 @@ def get_data(
 
     peak_times = [cond_1_peaks[0][-1], cond_2_peaks[0][-1], cond_3_peaks[0][-1], cond_4_peaks[0][-1]]
 
-    mean_psths[0, :] = NormalizeData(mean_psths[0, :])
-    mean_psths[1, :] = NormalizeData(mean_psths[1, :])
-    mean_psths[2, :] = NormalizeData(mean_psths[2, :])
-    mean_psths[3, :] = NormalizeData(mean_psths[3, :])
-    mean_psths = torch.tensor(mean_psths).unsqueeze(-1)
-
     if trial_epoch == "delay":
 
-        neural_data_peak_cond_1 = mean_psths[0, :cond_1_peaks[0][-1], :]
-        neural_data_peak_cond_2 = mean_psths[1, :cond_2_peaks[0][-1], :]
-        neural_data_peak_cond_3 = mean_psths[2, :cond_3_peaks[0][-1], :]
-        neural_data_peak_cond_4 = mean_psths[3, :cond_4_peaks[0][-1], :]
+        neural_data_peak_cond_1 = neural_data_combined[0, :cond_1_peaks[0][-1], :]
+        neural_data_peak_cond_2 = neural_data_combined[1, :cond_2_peaks[0][-1], :]
+        neural_data_peak_cond_3 = neural_data_combined[2, :cond_3_peaks[0][-1], :]
+        neural_data_peak_cond_4 = neural_data_combined[3, :cond_4_peaks[0][-1], :]
 
         # Combine all sessions
-        mean_psths = pad_sequence([
+        neural_data_combined = pad_sequence([
             neural_data_peak_cond_1,
             neural_data_peak_cond_2,
             neural_data_peak_cond_3,
@@ -312,10 +310,10 @@ def get_data(
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
 
-    plt.plot(mean_psths.squeeze().numpy().T)
-    plt.show()
+    #plt.plot(np.mean(neural_data_combined.squeeze().numpy(), axis=-1).T)
+    #plt.show()
 
-    return mean_psths, peak_times
+    return neural_data_combined, peak_times
 
 
 def get_acts_control(
@@ -342,8 +340,8 @@ def get_acts_control(
     # Gather initial hidden and activation states
     if model_type == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
     elif model_type == "stralm":
 
@@ -360,7 +358,7 @@ def get_acts_control(
     # Loop through network to get activities, no training performed
     with torch.no_grad():        
 
-        acts = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
+        acts, _ = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     #plt.plot(np.mean(out, axis=-1).T)
@@ -406,8 +404,8 @@ def get_acts_manipulation(
     # Gather initial hidden and activation states
     if model_type == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
     elif model_type == "stralm":
 
@@ -447,7 +445,7 @@ def get_acts_manipulation(
     # Loop through network without training
     with torch.no_grad():        
 
-        acts = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, hn, xn, noise=False)
+        acts, _ = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -554,13 +552,13 @@ def get_input_silence(
     '''
 
     total_iti_inp, _, _ = gather_inp_data(
-                                                dt, 
-                                                hid_dim, 
-                                                path,
-                                                trial_epoch,
-                                                peaks,
-                                                inp_type
-                                            )
+        dt, 
+        hid_dim, 
+        path,
+        trial_epoch,
+        peaks,
+        inp_type
+    )
 
     if region == "alm":
 
@@ -615,69 +613,52 @@ def get_region_borders(
     #                                         #
     ###########################################
 
-    fsi_size = int(hid_dim * 0.3)
-
     if model_type == "d1d2":
 
         if region == "str":
 
             start = 0
-            end = hid_dim + int(hid_dim * 0.3)
+            end = hid_dim * 2
 
         elif region == "d1":
 
             start = 0
-            end = int(hid_dim / 2)
+            end = hid_dim
 
         elif region == "d2":
 
-            start = int(hid_dim / 2)
-            end = hid_dim
-
-        elif region == "fsi":
-
             start = hid_dim
-            end = hid_dim + fsi_size
-
-        elif region == "gpe":
-
-            start = hid_dim + fsi_size
-            end = hid_dim * 2 + fsi_size
+            end = hid_dim * 2
 
         elif region == "stn":
 
-            start = hid_dim * 2 + fsi_size
-            end = hid_dim * 3 + fsi_size
+            start = hid_dim * 2
+            end = hid_dim * 3
 
-        elif region == "snr":
-
-            start = hid_dim * 3 + fsi_size
-            end = hid_dim * 4 + fsi_size
-            
         elif region == "thal":
 
-            start = hid_dim * 4 + fsi_size
-            end = hid_dim * 5 + fsi_size
+            start = hid_dim * 3 
+            end = hid_dim * 4
 
         elif region == "alm_exc":
 
-            start = hid_dim * 5 + fsi_size
-            end = hid_dim * 6
+            start = hid_dim * 4
+            end = hid_dim * 5 - int(hid_dim * 0.3)
 
         elif region == "alm_inhib":
 
-            start = hid_dim * 6
-            end = hid_dim * 6 + fsi_size
+            start = hid_dim * 5 - int(hid_dim * 0.3)
+            end = hid_dim * 5
 
         elif region == "alm_full":
 
-            start = hid_dim * 5 + fsi_size
-            end = hid_dim * 6 + fsi_size
+            start = hid_dim * 4
+            end = hid_dim * 5
 
         elif region == "str2thal":
 
             start = 0
-            end = hid_dim * 5 + fsi_size
+            end = hid_dim * 4
 
 
     ###########################################

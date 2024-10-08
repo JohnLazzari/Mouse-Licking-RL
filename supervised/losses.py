@@ -17,11 +17,8 @@ def loss_d1d2(
     alm_end
 ):
     
-    alm_act = act[:, :, alm_start:alm_end]
-    
     loss = (
-            constraint_criterion(torch.mean(alm_act[:, 50:, :], dim=-1, keepdim=True), neural_act[:, 50:, :])
-            + 1e-4 * torch.mean(torch.pow(act[:, 100:, :], 2), dim=(1, 2, 0))
+            constraint_criterion(act[:, :, :], neural_act[:, :, :])
             )
     
     return loss
@@ -52,109 +49,42 @@ def loss_stralm(constraint_criterion,
 
 def simple_dynamics_d1d2(act, rnn, hid_dim):
 
-    fsi_size = int(hid_dim * 0.3)
-
     # Get full weights for training
-    str2str = (rnn.str2str_sparse_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
+    d12d1 = (rnn.str2str_sparse_mask * F.hardtanh(rnn.d12d1_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
+    d12d2 = (rnn.str2str_sparse_mask * F.hardtanh(rnn.d12d2_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
+    d22d1 = (rnn.str2str_sparse_mask * F.hardtanh(rnn.d22d1_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
+    d22d2 = (rnn.str2str_sparse_mask * F.hardtanh(rnn.d22d2_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
+    d22stn = F.hardtanh(rnn.d22stn_weight_l0_hh, 1e-10, 1)
+    d12thal = F.hardtanh(rnn.d12thal_weight_l0_hh, 1e-10, 1)
     alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-10, 1) @ rnn.alm2alm_D
-    alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)
+    alm2d1 = rnn.alm2str_mask * F.hardtanh(rnn.alm2d1_weight_l0_hh, 1e-10, 1)
+    alm2d2 = rnn.alm2str_mask * F.hardtanh(rnn.alm2d2_weight_l0_hh, 1e-10, 1)
     thal2alm = F.hardtanh(rnn.thal2alm_weight_l0_hh, 1e-10, 1)
-    thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-10, 1)
-    str2snr = (rnn.str2snr_mask * F.hardtanh(rnn.str2snr_weight_l0_hh, 1e-10, 1)) @ rnn.str2snr_D
-    str2gpe = (rnn.str2gpe_mask * F.hardtanh(rnn.str2gpe_weight_l0_hh, 1e-10, 1)) @ rnn.str2gpe_D
-    gpe2stn = F.hardtanh(rnn.gpe2stn_weight_l0_hh, 1e-10, 1) @ rnn.gpe2stn_D
-    stn2snr = F.hardtanh(rnn.stn2snr_weight_l0_hh, 1e-10, 1)
-    snr2thal = F.hardtanh(rnn.snr2thal_weight_l0_hh, 1e-10, 1) @ rnn.snr2thal_D
-    fsi2str = F.hardtanh(rnn.fsi2str_weight, 1e-10, 1) @ rnn.fsi2str_D
-    thal2fsi = F.hardtanh(rnn.thal2fsi_weight, 1e-10, 1)
-    alm2fsi = rnn.alm2fsi_mask * F.hardtanh(rnn.alm2fsi_weight, 1e-10, 1)
-    fsi2fsi = F.hardtanh(rnn.fsi2fsi_weight, 1e-10, 1) @ rnn.fsi2fsi_D
+    thal2d1 = F.hardtanh(rnn.thal2d1_weight_l0_hh, 1e-10, 1)
+    thal2d2 = F.hardtanh(rnn.thal2d2_weight_l0_hh, 1e-10, 1)
+    stn2thal = F.hardtanh(rnn.stn2thal_weight_l0_hh, 1e-10, 1) @ rnn.stn2thal_D
+    inp_weight_d1 = F.hardtanh(rnn.inp_weight_d1, 1e-10, 1)
+    inp_weight_d2 = F.hardtanh(rnn.inp_weight_d2, 1e-10, 1)
+    out_weight_alm = F.hardtanh(rnn.out_weight_alm, 1e-10, 1)
 
     # Concatenate into single weight matrix
 
-                        # STR       GPE         STN         SNR       Thal      ALM         ALM ITI
-    W_str = torch.cat([str2str, fsi2str, rnn.zeros, rnn.zeros, rnn.zeros, thal2str, alm2str],                               dim=1)                                     # STR
-    W_fsi = torch.cat([rnn.zeros_to_fsi, fsi2fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, thal2fsi, alm2fsi], dim=1)                    # FSI
-    W_gpe = torch.cat([str2gpe, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],                 dim=1)                    # GPE
-    W_stn = torch.cat([rnn.zeros, rnn.zeros_from_fsi, gpe2stn, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],                 dim=1)                    # STN
-    W_snr = torch.cat([str2snr, rnn.zeros_from_fsi, rnn.zeros, stn2snr, rnn.zeros, rnn.zeros, rnn.zeros],                   dim=1)                    # SNR
-    W_thal = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, snr2thal, rnn.zeros, rnn.zeros],               dim=1)                    # Thal
-    W_alm = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, thal2alm, alm2alm],                  dim=1)                    # ALM
+                        # D1   D2     STN       Thal       ALM    
+    W_d1 = torch.cat([d12d1, d22d1, rnn.small_to_small, thal2d1, alm2d1, inp_weight_d1],                     dim=1) # D1
+    W_d2 = torch.cat([d12d2, d22d2, rnn.small_to_small, thal2d2, alm2d2, inp_weight_d2],                     dim=1) # D2
+    W_stn = torch.cat([rnn.small_to_small, d22stn, rnn.small_to_small, rnn.large_to_small, rnn.large_to_small, rnn.zeros_from_iti_small],                dim=1) # STN
+    W_thal = torch.cat([d12thal, rnn.small_to_large, stn2thal, rnn.large_to_large, rnn.large_to_large, rnn.zeros_from_iti_large],                dim=1) # Thal
+    W_alm = torch.cat([rnn.small_to_large, rnn.small_to_large, rnn.small_to_large, thal2alm, alm2alm, rnn.zeros_from_iti_large],                  dim=1) # ALM
+    W_iti = torch.cat([rnn.zeros_to_iti_small, rnn.zeros_to_iti_small, rnn.zeros_to_iti_small, rnn.zeros_to_iti_large, rnn.zeros_to_iti_large, rnn.zeros_rec_iti], dim=1)
 
     # Putting all weights together
-    W_rec = torch.cat([W_str, W_fsi, W_gpe, W_stn, W_snr, W_thal, W_alm], dim=0)
+    W_rec = torch.cat([W_d1, W_d2, W_stn, W_thal, W_alm, W_iti], dim=0)
 
     # Penalize complex trajectories
-    d_act = torch.mean(torch.where(act[:, 50:, :] > 0, 1., 0.), dim=(1, 0))
+    d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
     update = 1e-4 * W_rec * d_act
 
-    rnn.str2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        :hid_dim
-    ]
+    update = torch.mean(update)
 
-    rnn.thal2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
-
-    rnn.str2gpe_weight_l0_hh.grad += update[
-        hid_dim + fsi_size:hid_dim * 2 + fsi_size, 
-        :hid_dim
-    ]
-
-    rnn.gpe2stn_weight_l0_hh.grad += update[
-        hid_dim * 2 + fsi_size:hid_dim * 3 + fsi_size, 
-        hid_dim + fsi_size:hid_dim * 2 + fsi_size
-    ]
-
-    rnn.str2snr_weight_l0_hh.grad += update[
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size, 
-        :hid_dim
-    ]
-
-    rnn.stn2snr_weight_l0_hh.grad += update[
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size, 
-        hid_dim * 2 + fsi_size:hid_dim * 3 + fsi_size
-    ]
-
-    rnn.snr2thal_weight_l0_hh.grad += update[
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size, 
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size
-    ]
-
-    rnn.thal2alm_weight_l0_hh.grad += update[
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2alm_weight_l0_hh.grad += update[
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
-
-    rnn.fsi2str_weight.grad += update[
-        :hid_dim, 
-        hid_dim:hid_dim + fsi_size
-    ]
-    
-    rnn.fsi2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim:hid_dim + fsi_size
-    ]
-
-    rnn.thal2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
+    return update
