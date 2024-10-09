@@ -87,8 +87,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     ]).cuda()
 
         self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_gpe = torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_gpe = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.25 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
         self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
@@ -241,6 +241,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim + self.fsi_size, inp_dim)))
         nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
 
+        self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.alm_exc_size)))
+        nn.init.uniform_(self.out_weight_alm, 0, 1e-2)
+
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
         
@@ -282,6 +285,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         xn_next = xn.squeeze(0)
         new_hs = []
         new_xs = []
+        new_outs = []
         size = inp.shape[1]
 
         if self.constrained:
@@ -302,6 +306,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
             fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
             inp_weight_str = F.hardtanh(self.inp_weight_str, 1e-10, 1)
+            out_weight_alm = F.hardtanh(self.out_weight_alm, 1e-10, 1)
 
             # Concatenate into single weight matrix
 
@@ -357,10 +362,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.str_mask)
-                            + (perturb_hid + self.alm_ramp_mask)
+                            + (perturb_hid * self.alm_ramp_mask)
                         ))
 
                 hn_next = F.relu(xn_next)
+
+                alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6]
+                out = (out_weight_alm @ alm_exc_act.T).T
 
             else:
 
@@ -378,11 +386,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # append activity to list
             new_xs.append(xn_next)
             new_hs.append(hn_next)
+            new_outs.append(out)
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
+        alm_out = torch.stack(new_outs, dim=1)
 
-        return rnn_out
+        return rnn_out, alm_out
 
 
 class RNN_MultiRegional_STRALM(nn.Module):

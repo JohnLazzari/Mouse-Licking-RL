@@ -13,9 +13,9 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
-OUT_DIM = 1                                                                         # Output dim (not used)
+OUT_DIM = 1451                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
-EPOCHS = 15000                                                                       # Training iterations
+EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
 WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
@@ -30,9 +30,9 @@ SILENCED_REGION = "alm"
 PCA = False
 N_COMPONENTS = 10
 INP_TYPE = "simulated"
-TRIAL_EPOCH = "delay"                                                                                                           # delay or full
+TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_delay_simulated_256n_almnoise.1_itinoise.05_15000iters_newloss.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_256n_nonoise_10000iters.pth"                   # Save path
 
 '''
 
@@ -86,7 +86,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -135,10 +135,10 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        act = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=True)
+        act, out = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=True)
 
         # Get masks
-        act = act * loss_mask_act
+        out = out * loss_mask_act
 
     # Get loss
         if MODEL_TYPE == "d1d2":
@@ -146,7 +146,7 @@ def main():
             loss = loss_d1d2(
                 rnn,
                 constraint_criterion, 
-                act, 
+                out, 
                 neural_act, 
                 alm_start,
                 alm_end

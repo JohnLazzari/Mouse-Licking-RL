@@ -11,18 +11,6 @@ from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA
 from scipy.signal import find_peaks
 
-def NormalizeInp(
-    data
-):
-
-    '''
-        Min-Max normalization for any data
-
-        data:       1D array of responses
-    '''
-
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
-
 def NormalizeData(
     data, 
 ):
@@ -62,7 +50,7 @@ def gather_inp_data(
         # Load in the data from the mat file and normalize the projections
         iti_projection = sio.loadmat(path)
         iti_projection = iti_projection["meanData"][:, 2500:5500:10]
-        iti_projection = NormalizeInp(iti_projection)
+        iti_projection = NormalizeData(iti_projection)
 
         # Hacky method right now, need to average some conditions (will get cleaner data in future)
         averaged_conds = []
@@ -226,11 +214,18 @@ def get_data(
     cond_3_str_dms_strain = sio.loadmat("data/firing_rates/alm_fr_population_1.7s_DMS_D1silencing_control.mat")
     cond_4_str_dms_strain = sio.loadmat("data/firing_rates/alm_fr_population_2.0s_DMS_D1silencing_control.mat")
 
+
     ####################################
     #                                  #
     #       ALM Silencing Sessions     #
     #                                  #
     ####################################
+
+    # Normalize the data for each condition
+    cond_1_alm_strain["fr_population"] = NormalizeData(cond_1_alm_strain["fr_population"])
+    cond_2_alm_strain["fr_population"] = NormalizeData(cond_2_alm_strain["fr_population"])
+    cond_3_alm_strain["fr_population"] = NormalizeData(cond_3_alm_strain["fr_population"])
+    cond_4_alm_strain["fr_population"] = NormalizeData(cond_4_alm_strain["fr_population"])
 
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
@@ -247,6 +242,11 @@ def get_data(
     #                                  #
     ####################################
 
+    cond_1_str_strain["fr_population"] = NormalizeData(cond_1_str_strain["fr_population"])
+    cond_2_str_strain["fr_population"] = NormalizeData(cond_2_str_strain["fr_population"])
+    cond_3_str_strain["fr_population"] = NormalizeData(cond_3_str_strain["fr_population"])
+    cond_4_str_strain["fr_population"] = NormalizeData(cond_4_str_strain["fr_population"])
+
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
         torch.from_numpy(cond_2_str_strain["fr_population"]), 
@@ -260,6 +260,11 @@ def get_data(
     #       DMS Silencing Sessions     #
     #                                  #
     ####################################
+
+    cond_1_str_dms_strain["fr_population"] = NormalizeData(cond_1_str_dms_strain["fr_population"])
+    cond_2_str_dms_strain["fr_population"] = NormalizeData(cond_2_str_dms_strain["fr_population"])
+    cond_3_str_dms_strain["fr_population"] = NormalizeData(cond_3_str_dms_strain["fr_population"])
+    cond_4_str_dms_strain["fr_population"] = NormalizeData(cond_4_str_dms_strain["fr_population"])
 
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
@@ -275,29 +280,23 @@ def get_data(
         neural_data_str_dms_strain
     ], axis=-1).type(torch.float32)
 
-    mean_psths = np.mean(neural_data_combined.numpy(), axis=-1)
-    cond_1_peaks = find_peaks(mean_psths[0])
-    cond_2_peaks = find_peaks(mean_psths[1])
-    cond_3_peaks = find_peaks(mean_psths[2])
-    cond_4_peaks = find_peaks(mean_psths[3])
+    neural_data_for_peaks = np.mean(np.array(neural_data_combined), axis=-1)
+    cond_1_peaks = find_peaks(neural_data_for_peaks[0])
+    cond_2_peaks = find_peaks(neural_data_for_peaks[1])
+    cond_3_peaks = find_peaks(neural_data_for_peaks[2])
+    cond_4_peaks = find_peaks(neural_data_for_peaks[3])
 
     peak_times = [cond_1_peaks[0][-1], cond_2_peaks[0][-1], cond_3_peaks[0][-1], cond_4_peaks[0][-1]]
 
-    mean_psths[0, :] = NormalizeData(mean_psths[0, :])
-    mean_psths[1, :] = NormalizeData(mean_psths[1, :])
-    mean_psths[2, :] = NormalizeData(mean_psths[2, :])
-    mean_psths[3, :] = NormalizeData(mean_psths[3, :])
-    mean_psths = torch.tensor(mean_psths).unsqueeze(-1)
-
     if trial_epoch == "delay":
 
-        neural_data_peak_cond_1 = mean_psths[0, :cond_1_peaks[0][-1], :]
-        neural_data_peak_cond_2 = mean_psths[1, :cond_2_peaks[0][-1], :]
-        neural_data_peak_cond_3 = mean_psths[2, :cond_3_peaks[0][-1], :]
-        neural_data_peak_cond_4 = mean_psths[3, :cond_4_peaks[0][-1], :]
+        neural_data_peak_cond_1 = neural_data_combined[0, :cond_1_peaks[0][-1], :]
+        neural_data_peak_cond_2 = neural_data_combined[1, :cond_2_peaks[0][-1], :]
+        neural_data_peak_cond_3 = neural_data_combined[2, :cond_3_peaks[0][-1], :]
+        neural_data_peak_cond_4 = neural_data_combined[3, :cond_4_peaks[0][-1], :]
 
         # Combine all sessions
-        mean_psths = pad_sequence([
+        neural_data_combined = pad_sequence([
             neural_data_peak_cond_1,
             neural_data_peak_cond_2,
             neural_data_peak_cond_3,
@@ -312,10 +311,7 @@ def get_data(
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
 
-    plt.plot(mean_psths.squeeze().numpy().T)
-    plt.show()
-
-    return mean_psths, peak_times
+    return neural_data_combined, peak_times
 
 
 def get_acts_control(
@@ -342,8 +338,8 @@ def get_acts_control(
     # Gather initial hidden and activation states
     if model_type == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
     elif model_type == "stralm":
 
@@ -360,7 +356,7 @@ def get_acts_control(
     # Loop through network to get activities, no training performed
     with torch.no_grad():        
 
-        acts = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
+        acts, _ = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     #plt.plot(np.mean(out, axis=-1).T)
@@ -406,8 +402,8 @@ def get_acts_manipulation(
     # Gather initial hidden and activation states
     if model_type == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 6 + int(hid_dim * 0.3))).cuda()
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
     elif model_type == "stralm":
 
@@ -447,7 +443,7 @@ def get_acts_manipulation(
     # Loop through network without training
     with torch.no_grad():        
 
-        acts = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, hn, xn, noise=False)
+        acts, _ = rnn(iti_inp_silence, cue_inp_silence, inhib_stim, hn, xn, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
