@@ -95,20 +95,20 @@ def gather_inp_data(
 
             # Condition 1: 1.1s
             inp[0] = torch.cat([
-                0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.25*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 2: 1.4s
             inp[1] = torch.cat([
-                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.2*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                0.016*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.16*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 3: 1.7s
             inp[2] = torch.cat([
-                0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.15*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                0.013*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.13*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
                 ])
 
             # Condition 4: 2s
@@ -129,22 +129,22 @@ def gather_inp_data(
 
             # Condition 1: 1.1s
             inp[0] = torch.cat([
-                0.025*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.25*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
+                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.2*torch.ones(size=(peaks[0] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[0], int(hid_dim*0.1)))
                 ])
 
             # Condition 2: 1.4s
             inp[1] = torch.cat([
-                0.02*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.2*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
+                0.016*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.16*torch.ones(size=(peaks[1] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[1], int(hid_dim*0.1)))
                 ])
 
             # Condition 3: 1.7s
             inp[2] = torch.cat([
-                0.015*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
-                0.15*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
+                0.013*torch.ones(size=(int(1.0 / dt), int(hid_dim*0.1))),
+                0.13*torch.ones(size=(peaks[2] - 100, int(hid_dim*0.1))),
                 torch.zeros(size=(300 - peaks[2], int(hid_dim*0.1)))
                 ])
 
@@ -512,7 +512,7 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, sti
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask = -stim_strength * (rnn.alm_ramp_mask + rnn.alm_inhib_mask)
+        mask = -stim_strength * (rnn.alm_ramp_mask)
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":

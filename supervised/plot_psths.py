@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_full_simulated_256n_almnoise.25_10000iters.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_full_simulated_256n_nonoise_10000iters.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -88,8 +88,8 @@ def plot_psths(
     '''
     
 
-    #plt.plot(act_conds[0, :, :HID_DIM], linewidth=6)
-    #plt.show()
+    plt.plot(act_conds[0, :, :HID_DIM], linewidth=6)
+    plt.show()
 
     fig, axs = plt.subplots(2, 3)
 

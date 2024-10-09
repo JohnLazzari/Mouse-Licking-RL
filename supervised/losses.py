@@ -13,8 +13,9 @@ def loss_d1d2(
     constraint_criterion, 
     act, 
     neural_act, 
+   hidden_act,
     alm_start,
-    alm_end
+    alm_end,
 ):
     
     loss = (
@@ -83,7 +84,7 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
     # Penalize complex trajectories
     d_act = torch.mean(torch.where(act > 0, 1., 0.), dim=(1, 0))
 
-    update = 1e-4 * W_rec * d_act
+    update = 1e-2 * W_rec * d_act
 
     update = torch.mean(update)
 

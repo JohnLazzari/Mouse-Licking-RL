@@ -18,7 +18,7 @@ INP_DIM = int(HID_DIM*0.1)                                                      
 EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-2                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -32,7 +32,7 @@ N_COMPONENTS = 10
 INP_TYPE = "simulated"
 TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_full_simulated_256n_almnoise.25_10000iters.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_full_simulated_256n_nonoise_10000iters.pth"                   # Save path
 
 '''
 
@@ -148,6 +148,7 @@ def main():
                 constraint_criterion, 
                 out, 
                 neural_act, 
+                act,
                 alm_start,
                 alm_end
             )

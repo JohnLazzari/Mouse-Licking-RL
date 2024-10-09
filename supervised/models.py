@@ -139,13 +139,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Implement Necessary Masks
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.d12d1_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.95)
+            nn.init.sparse_(sparse_matrix, 0.9)
             self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
             self.str2str_D = -1 * torch.eye(int(hid_dim/2)).cuda()
 
             self.alm2alm_D = torch.eye(hid_dim).cuda()
             self.alm2alm_D[self.alm_exc_size:, self.alm_exc_size:] *= -1
-            
+    
             # ALM to striatum weights
             self.alm_mask_excitatory = torch.ones(size=(int(hid_dim/2), self.alm_exc_size))
             self.alm_mask_inhibitory = torch.zeros(size=(int(hid_dim/2), self.alm_inhib_size))
@@ -162,6 +162,17 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.thal2d1_mask = torch.cat([
                 torch.ones(size=(int(hid_dim/4), hid_dim)), 
                 torch.zeros(size=(int(hid_dim/4), hid_dim))
+            ], dim=0).cuda()
+
+            # ALM 2 D1 mask
+            self.alm2d1_mask = torch.cat([
+                torch.zeros(size=(int(hid_dim/4), hid_dim)), 
+                torch.ones(size=(int(hid_dim/4), hid_dim))
+            ], dim=0).cuda()
+            
+            self.iti2d1_mask = torch.cat([
+                torch.ones(size=(int(hid_dim/4), inp_dim)), 
+                torch.zeros(size=(int(hid_dim/4), inp_dim))
             ], dim=0).cuda()
             
         else:
@@ -249,13 +260,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
             d22stn = F.hardtanh(self.d22stn_weight_l0_hh, 1e-10, 1)
             d12thal = F.hardtanh(self.d12thal_weight_l0_hh, 1e-10, 1)
             alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
-            alm2d1 = self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 1e-10, 1)
+            alm2d1 = self.alm2d1_mask * self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 1e-10, 1)
             alm2d2 = self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 1e-10, 1)
             thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
-            thal2d1 = F.hardtanh(self.thal2d1_weight_l0_hh, 1e-10, 1)
+            thal2d1 = self.thal2d1_mask * F.hardtanh(self.thal2d1_weight_l0_hh, 1e-10, 1)
             thal2d2 = F.hardtanh(self.thal2d2_weight_l0_hh, 1e-10, 1)
             stn2thal = F.hardtanh(self.stn2thal_weight_l0_hh, 1e-10, 1) @ self.stn2thal_D
-            inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 1e-10, 1)
+            inp_weight_d1 = self.iti2d1_mask * F.hardtanh(self.inp_weight_d1, 1e-10, 1)
             inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 1e-10, 1)
             out_weight_alm = F.hardtanh(self.out_weight_alm, 1e-10, 1)
 
@@ -263,7 +274,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
                                 # D1   D2     STN       Thal       ALM    
             W_d1 = torch.cat([d12d1, d22d1, self.small_to_small, thal2d1, alm2d1, inp_weight_d1],                     dim=1) # D1
-            W_d2 = torch.cat([d12d2, d22d2, self.small_to_small, thal2d2, alm2d2, inp_weight_d2],                     dim=1) # D2
+            W_d2 = torch.cat([d12d2, d22d2, self.small_to_small, self.large_to_small, alm2d2, self.zeros_from_iti_small],                     dim=1) # D2
             W_stn = torch.cat([self.small_to_small, d22stn, self.small_to_small, self.large_to_small, self.large_to_small, self.zeros_from_iti_small],                dim=1) # STN
             W_thal = torch.cat([d12thal, self.small_to_large, stn2thal, self.large_to_large, self.large_to_large, self.zeros_from_iti_large],                dim=1) # Thal
             W_alm = torch.cat([self.small_to_large, self.small_to_large, self.small_to_large, thal2alm, alm2alm, self.zeros_from_iti_large],                  dim=1) # ALM
