@@ -86,15 +86,14 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(hid_dim * 5,)),
                                     ]).cuda()
 
-        self.tonic_inp_str = torch.zeros(size=(hid_dim,), device="cuda")
-        self.tonic_inp_gpe = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = 0.25 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),), device="cuda")
-        self.tonic_inp_alm_exc = torch.zeros(size=(self.alm_exc_size,), device="cuda")
-        self.tonic_inp_alm_inhib = torch.zeros(size=(self.alm_inhib_size,), device="cuda")
-        self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,), device="cuda")
+        self.tonic_inp_str = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_gpe = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.3 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_thal = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_alm_exc = 0.1 * torch.ones(size=(self.alm_exc_size,), device="cuda")
+        self.tonic_inp_alm_inhib = 0.1 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
+        self.tonic_inp_fsi = 0.1 * torch.ones(size=(self.fsi_size,), device="cuda")
 
         self.tonic_inp = torch.cat([
             self.tonic_inp_str,
@@ -102,8 +101,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             self.tonic_inp_gpe,
             self.tonic_inp_stn,
             self.tonic_inp_snr,
-            self.tonic_inp_thal_int,
-            self.tonic_inp_thal_alm,
+            self.tonic_inp_thal,
             self.tonic_inp_alm_exc,
             self.tonic_inp_alm_inhib,
         ])
@@ -361,7 +359,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + full_inp
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
-                            + (cue_inp[:, t, :] * self.str_mask)
+                            + (cue_inp[:, t, :] * self.thal_mask)
                             + (perturb_hid * self.alm_ramp_mask)
                         ))
 

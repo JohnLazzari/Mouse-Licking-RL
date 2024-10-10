@@ -162,17 +162,21 @@ def gather_inp_data(
             # Combine all sequence lengths
             len_seq = [total_iti_inp[0].shape[0], total_iti_inp[1].shape[0], total_iti_inp[2].shape[0], total_iti_inp[3].shape[0]]
 
-    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    plt.show()
-
     # Cue Input, currently not in use
     cue_inp_dict = {}
+    zeros_precue = torch.zeros(size=(100, 1))
 
     for cond in range(4):
-        cue_inp_dict[cond] = torch.zeros(size=(int(3 / dt), 1))
+        cue_inp_dict[cond] = torch.cat([
+            zeros_precue,
+            0.9 * torch.ones(size=(len_seq[cond], 1))
+        ])
 
     # Gather all conditions for cue input
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
+
+    plt.plot(np.mean(total_cue_inp.numpy(), axis=-1).T)
+    plt.show()
 
     return total_iti_inp, total_cue_inp, len_seq
 
@@ -510,7 +514,7 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, sti
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask = -stim_strength * (rnn.alm_ramp_mask + rnn.alm_inhib_mask)
+        mask = -stim_strength * (rnn.alm_ramp_mask)
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":
@@ -549,7 +553,7 @@ def get_input_silence(
             path:               path to the folder containing the ITI mode data
     '''
 
-    total_iti_inp, _, _ = gather_inp_data(
+    total_iti_inp, total_cue_inp, _ = gather_inp_data(
                                                 dt, 
                                                 hid_dim, 
                                                 path,
@@ -568,23 +572,16 @@ def get_input_silence(
             total_iti_inp[:, start_silence:, :]
         ], dim=1)
 
+        total_cue_inp = torch.cat([
+            total_cue_inp[:, :start_silence, :],
+            0.9 * torch.ones(size=(total_cue_inp.shape[0], end_silence - start_silence, total_cue_inp.shape[-1])),
+            total_cue_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
+            total_cue_inp[:, start_silence:, :]
+        ], dim=1)
+
     #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
     #plt.show()
 
-    # Cue Input
-    cue_inp_dict = {}
-
-    for cond in range(4):
-
-        # Gather cue input (not in use)
-        cue_inp_dict[cond] = torch.cat([
-            torch.zeros(size=(int((2.1 + 0.3 * cond) / dt) + 20, 1)),
-            torch.zeros(size=(end_silence - start_silence, 1)),
-        ])
-
-    # Pad the data to same sequence length if necessary
-    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
-    
     return total_iti_inp, total_cue_inp
 
 def get_region_borders(
