@@ -32,7 +32,7 @@ N_COMPONENTS = 10
 INP_TYPE = "simulated"
 TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_256n_nonoise_10000iters.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_256n_noise.1_itinoise.1_10000iters.pth"                   # Save path
 
 '''
 
@@ -86,7 +86,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.0, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
@@ -174,17 +174,17 @@ def main():
             print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
             print("")
 
-        # Zero out and compute gradients of above losses
-        rnn_optim.zero_grad()
-        loss.backward()
-
-        '''
-        simple_dynamics_d1d2(
-            hidden_act,
+        simple_loss = simple_dynamics_d1d2(
+            act,
             rnn,
             HID_DIM
         )
-        '''
+
+        loss += simple_loss
+
+        # Zero out and compute gradients of above losses
+        rnn_optim.zero_grad()
+        loss.backward()
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)

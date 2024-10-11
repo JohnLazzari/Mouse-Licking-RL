@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_se
 from sklearn.decomposition import PCA
 import scipy
 import scipy.io as sio
-from utils import gather_inp_data, get_acts_manipulation
+from utils import gather_inp_data, get_acts_manipulation, get_data
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
@@ -22,9 +22,10 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDITION = 0
 CONSTRAINED = True
-CHECK_PATH = f"checkpoints/d1d2_datadriven_itiinp_delay_256n_almnoise.05_itinoise.05_15000iters_newloss.pth"                   # Save path
-INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
+INP_TYPE = "simulated"
 TRIAL_EPOCH = "full"
+CHECK_PATH = f"checkpoints/d1d2_full_simulated_256n_noise.1_itinoise.1_10000iters.pth"                   # Save path
+INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 
 def get_str2thal_weights_d1d2(
     rnn, 
@@ -106,8 +107,8 @@ def analysis(
     '''
 
     # Get the eigenvalues and top eigenvector
-    eigenvalues, eigenvectors = np.linalg.eig(str2thal_weight.T)
-    left_unitary_eigenvector = eigenvectors[np.argmax(eigenvalues)]
+    eigenvalues_str2thal, eigenvectors = np.linalg.eig(str2thal_weight.T)
+    left_unitary_eigenvector = eigenvectors[np.argmax(eigenvalues_str2thal)]
 
     # Scale the input weights by the ITI input throughout the trial
     # This will capture how the magnitude changes during the trial but the direction will stay the same
@@ -132,10 +133,13 @@ def analysis(
 
     # Get original trajectory
     with torch.no_grad():
-        act, _ = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
+        act, _ = rnn(iti_inp, cue_inp, inhib_stim, hn, xn, noise=False)
     
     # Multiply ALM activity by weights going into striatum
     # This will get the input from the ALM ramp going into the striatum
+    alm2alm_weights = (F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-10, 1) @ rnn.alm2alm_D).detach().cpu().numpy()
+    eigenvalues_alm2alm, _ = np.linalg.eig(alm2alm_weights.T)
+
     alm2str_weights = (rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)).detach().cpu().numpy()
     alm_act = np.transpose(act[:, :, alm_start:alm_end].detach().cpu().numpy(), axes=(2, 1, 0))
 
@@ -171,7 +175,10 @@ def analysis(
     plt.xticks([])
     plt.show()
 
-    plt.plot(np.real(eigenvalues))
+    plt.plot(np.real(eigenvalues_str2thal))
+    plt.show()
+
+    plt.plot(np.real(eigenvalues_alm2alm))
     plt.show()
 
 def main():
@@ -186,9 +193,13 @@ def main():
     alm_start_d1d2 = HID_DIM*5 + rnn_d1d2.fsi_size
     alm_end_d1d2 = HID_DIM*6 + rnn_d1d2.fsi_size
 
+    # Get ramping activity
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH)
+    neural_act = neural_act.cuda()
+
     # Get input and output data
-    iti_data, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH)
-    iti_data, cue_inp = iti_data.cuda(), cue_inp.cuda()
+    iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peak_times, inp_type=INP_TYPE)
+    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
     
     # Gather thalamo-strial weights
     str2thal_weight_d1d2 = get_str2thal_weights_d1d2(rnn_d1d2, constrained=CONSTRAINED) 
@@ -197,7 +208,7 @@ def main():
     analysis(
         rnn_d1d2, 
         str2thal_weight_d1d2, 
-        iti_data, 
+        iti_inp, 
         cue_inp,
         len_seq, 
         alm_start_d1d2, 

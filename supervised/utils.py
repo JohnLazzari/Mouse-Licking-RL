@@ -11,6 +11,11 @@ from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA
 from scipy.signal import find_peaks
 
+# creating a dictionary
+font = {'size': 20}
+# using rc function
+plt.rc('font', **font)
+
 def NormalizeData(
     data, 
 ):
@@ -169,14 +174,29 @@ def gather_inp_data(
     for cond in range(4):
         cue_inp_dict[cond] = torch.cat([
             zeros_precue,
-            0.9 * torch.ones(size=(len_seq[cond], 1))
+            torch.ones(size=(len_seq[cond] - 100, 1))
         ])
 
     # Gather all conditions for cue input
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
-    plt.plot(np.mean(total_cue_inp.numpy(), axis=-1).T)
+    '''
+    x = np.linspace(-1, 2, 300)
+    plt.plot(x, np.mean(total_cue_inp.numpy(), axis=-1).T, c="black", linewidth=10)
+    plt.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
+    plt.tick_params(
+        axis='y',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
     plt.show()
+    '''
 
     return total_iti_inp, total_cue_inp, len_seq
 
@@ -314,6 +334,9 @@ def get_data(
         neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
         neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
+
+    plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
+    plt.show()
 
     return neural_data_combined, peak_times
 
@@ -574,7 +597,7 @@ def get_input_silence(
 
         total_cue_inp = torch.cat([
             total_cue_inp[:, :start_silence, :],
-            0.9 * torch.ones(size=(total_cue_inp.shape[0], end_silence - start_silence, total_cue_inp.shape[-1])),
+            torch.ones(size=(total_cue_inp.shape[0], end_silence - start_silence, total_cue_inp.shape[-1])),
             total_cue_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
             total_cue_inp[:, start_silence:, :]
         ], dim=1)

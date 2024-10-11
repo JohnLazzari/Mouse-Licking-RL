@@ -88,7 +88,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         self.tonic_inp_str = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = 0.3 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.4 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_alm_exc = 0.1 * torch.ones(size=(self.alm_exc_size,), device="cuda")
@@ -360,7 +360,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.thal_mask)
-                            + (perturb_hid * self.alm_ramp_mask)
+                            + perturb_hid
                         ))
 
                 hn_next = F.relu(xn_next)

@@ -69,14 +69,14 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
 
     # Concatenate into single weight matrix
 
-                        # STR       GPE         STN         SNR       Thal      ALM         ALM ITI
-    W_str = torch.cat([str2str, fsi2str, rnn.zeros, rnn.zeros, rnn.zeros, thal2str, alm2str],                               dim=1)                                     # STR
-    W_fsi = torch.cat([rnn.zeros_to_fsi, fsi2fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, thal2fsi, alm2fsi], dim=1)                    # FSI
-    W_gpe = torch.cat([str2gpe, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],                 dim=1)                    # GPE
-    W_stn = torch.cat([rnn.zeros, rnn.zeros_from_fsi, gpe2stn, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],                 dim=1)                    # STN
-    W_snr = torch.cat([str2snr, rnn.zeros_from_fsi, rnn.zeros, stn2snr, rnn.zeros, rnn.zeros, rnn.zeros],                   dim=1)                    # SNR
-    W_thal = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, snr2thal, rnn.zeros, rnn.zeros],               dim=1)                    # Thal
-    W_alm = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, thal2alm, alm2alm],                  dim=1)                    # ALM
+                        # STR       GPE         STN         SNR       Thal      ALM    
+    W_str = torch.cat([str2str, fsi2str, rnn.zeros, rnn.zeros, rnn.zeros, thal2str, alm2str],                                dim=1) # STR
+    W_fsi = torch.cat([rnn.zeros_to_fsi, fsi2fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, rnn.zeros_to_fsi, thal2fsi, alm2fsi], dim=1) # FSI
+    W_gpe = torch.cat([str2gpe, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],               dim=1) # GPE
+    W_stn = torch.cat([rnn.zeros, rnn.zeros_from_fsi, gpe2stn, rnn.zeros, rnn.zeros, rnn.zeros, rnn.zeros],               dim=1) # STN
+    W_snr = torch.cat([str2snr, rnn.zeros_from_fsi, rnn.zeros, stn2snr, rnn.zeros, rnn.zeros, rnn.zeros],                  dim=1) # SNR
+    W_thal = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, snr2thal, rnn.zeros, rnn.zeros],             dim=1) # Thal
+    W_alm = torch.cat([rnn.zeros, rnn.zeros_from_fsi, rnn.zeros, rnn.zeros, rnn.zeros, thal2alm, alm2alm],                 dim=1) # ALM
 
     # Putting all weights together
     W_rec = torch.cat([W_str, W_fsi, W_gpe, W_stn, W_snr, W_thal, W_alm], dim=0)
@@ -85,73 +85,7 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
     d_act = torch.mean(torch.where(act[:, 50:, :] > 0, 1., 0.), dim=(1, 0))
 
     update = 1e-4 * W_rec * d_act
+    update = torch.mean(update)
 
-    rnn.str2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        :hid_dim
-    ]
+    return update
 
-    rnn.thal2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2str_weight_l0_hh.grad += update[
-        :hid_dim, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
-
-    rnn.str2gpe_weight_l0_hh.grad += update[
-        hid_dim + fsi_size:hid_dim * 2 + fsi_size, 
-        :hid_dim
-    ]
-
-    rnn.gpe2stn_weight_l0_hh.grad += update[
-        hid_dim * 2 + fsi_size:hid_dim * 3 + fsi_size, 
-        hid_dim + fsi_size:hid_dim * 2 + fsi_size
-    ]
-
-    rnn.str2snr_weight_l0_hh.grad += update[
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size, 
-        :hid_dim
-    ]
-
-    rnn.stn2snr_weight_l0_hh.grad += update[
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size, 
-        hid_dim * 2 + fsi_size:hid_dim * 3 + fsi_size
-    ]
-
-    rnn.snr2thal_weight_l0_hh.grad += update[
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size, 
-        hid_dim * 3 + fsi_size:hid_dim * 4 + fsi_size
-    ]
-
-    rnn.thal2alm_weight_l0_hh.grad += update[
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2alm_weight_l0_hh.grad += update[
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
-
-    rnn.fsi2str_weight.grad += update[
-        :hid_dim, 
-        hid_dim:hid_dim + fsi_size
-    ]
-    
-    rnn.fsi2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim:hid_dim + fsi_size
-    ]
-
-    rnn.thal2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim * 4 + fsi_size:hid_dim * 5 + fsi_size
-    ]
-
-    rnn.alm2fsi_weight.grad += update[
-        hid_dim:hid_dim + fsi_size, 
-        hid_dim * 5 + fsi_size:hid_dim * 6 + fsi_size
-    ]
