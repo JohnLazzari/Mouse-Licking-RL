@@ -8,7 +8,7 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata, spearmanr
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, NMF
 from scipy.signal import find_peaks
 
 # creating a dictionary
@@ -26,7 +26,7 @@ def NormalizeData(
         data:       1D array of responses
     '''
 
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
+    return (data) / (np.percentile(data, 99) - np.percentile(data, 1) + 5)
 
 
 def gather_inp_data(
@@ -164,6 +164,9 @@ def gather_inp_data(
             # Combine all inputs
             total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
 
+            plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+            plt.show()
+
             # Combine all sequence lengths
             len_seq = [total_iti_inp[0].shape[0], total_iti_inp[1].shape[0], total_iti_inp[2].shape[0], total_iti_inp[3].shape[0]]
 
@@ -186,7 +189,7 @@ def gather_inp_data(
 def get_data(
     dt, 
     trial_epoch,
-    pca=False, 
+    nmf=False, 
     n_components=10,
 ):
 
@@ -227,12 +230,6 @@ def get_data(
     #                                  #
     ####################################
 
-    # Normalize the data for each condition
-    cond_1_alm_strain["fr_population"] = NormalizeData(cond_1_alm_strain["fr_population"])
-    cond_2_alm_strain["fr_population"] = NormalizeData(cond_2_alm_strain["fr_population"])
-    cond_3_alm_strain["fr_population"] = NormalizeData(cond_3_alm_strain["fr_population"])
-    cond_4_alm_strain["fr_population"] = NormalizeData(cond_4_alm_strain["fr_population"])
-
     # Gather conditions
     neural_data_alm_strain = pad_sequence([
         torch.from_numpy(cond_1_alm_strain["fr_population"]), 
@@ -241,17 +238,14 @@ def get_data(
         torch.from_numpy(cond_4_alm_strain["fr_population"])
     ], batch_first=True)
 
+    # Normalize the data for each condition
+    neural_data_alm_strain = NormalizeData(neural_data_alm_strain)
     
     ####################################
     #                                  #
     #       VLS Silencing Sessions     #
     #                                  #
     ####################################
-
-    cond_1_str_strain["fr_population"] = NormalizeData(cond_1_str_strain["fr_population"])
-    cond_2_str_strain["fr_population"] = NormalizeData(cond_2_str_strain["fr_population"])
-    cond_3_str_strain["fr_population"] = NormalizeData(cond_3_str_strain["fr_population"])
-    cond_4_str_strain["fr_population"] = NormalizeData(cond_4_str_strain["fr_population"])
 
     neural_data_str_strain = pad_sequence([
         torch.from_numpy(cond_1_str_strain["fr_population"]), 
@@ -260,6 +254,8 @@ def get_data(
         torch.from_numpy(cond_4_str_strain["fr_population"])
     ], batch_first=True)
 
+    neural_data_str_strain = NormalizeData(neural_data_str_strain)
+
 
     ####################################
     #                                  #
@@ -267,17 +263,14 @@ def get_data(
     #                                  #
     ####################################
 
-    cond_1_str_dms_strain["fr_population"] = NormalizeData(cond_1_str_dms_strain["fr_population"])
-    cond_2_str_dms_strain["fr_population"] = NormalizeData(cond_2_str_dms_strain["fr_population"])
-    cond_3_str_dms_strain["fr_population"] = NormalizeData(cond_3_str_dms_strain["fr_population"])
-    cond_4_str_dms_strain["fr_population"] = NormalizeData(cond_4_str_dms_strain["fr_population"])
-
     neural_data_str_dms_strain = pad_sequence([
         torch.from_numpy(cond_1_str_dms_strain["fr_population"]), 
         torch.from_numpy(cond_2_str_dms_strain["fr_population"]), 
         torch.from_numpy(cond_3_str_dms_strain["fr_population"]),
         torch.from_numpy(cond_4_str_dms_strain["fr_population"])
     ], batch_first=True)
+
+    neural_data_str_dms_strain = NormalizeData(neural_data_str_dms_strain)
 
     # Combine all sessions
     neural_data_combined = torch.cat([
@@ -309,13 +302,20 @@ def get_data(
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
 
-    if pca:
+    if nmf:
         
         # Find PCs if pca is specified
-        neural_pca = PCA(n_components=n_components)
+        neural_nmf = NMF(n_components=n_components, max_iter=10000)
         neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
-        neural_data_stacked = neural_pca.fit_transform(neural_data_stacked)
+        neural_data_stacked = neural_nmf.fit_transform(neural_data_stacked)
         neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
+        neural_data_combined = torch.tensor(neural_data_combined, dtype=torch.float32)
+
+        plt.plot(neural_data_combined.numpy()[0], c="red")
+        plt.plot(neural_data_combined.numpy()[1], c="blue")
+        plt.plot(neural_data_combined.numpy()[2], c="orange")
+        plt.plot(neural_data_combined.numpy()[3], c="purple")
+        plt.show()
 
     plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
     plt.show()
@@ -519,8 +519,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, sti
 
     # Select mask based on region being silenced
     if region == "alm":
-        #mask = -stim_strength * (rnn.alm_ramp_mask)
-        mask = torch.zeros_like(rnn.alm_ramp_mask)
+        mask = -stim_strength * (rnn.alm_ramp_mask)
+        #mask = torch.zeros_like(rnn.alm_ramp_mask)
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":

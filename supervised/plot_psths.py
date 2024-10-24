@@ -21,12 +21,12 @@ plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
-OUT_DIM = 1451
+OUT_DIM = 5
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_inhibout_256n_noise.1_10000iters.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_nmf_256n_noise.1_10000iters.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -36,8 +36,9 @@ END_SILENCE = 220                      # timepoint from start of trial to end si
 EXTRA_STEPS_SILENCE = 100
 EXTRA_STEPS_CONTROL = 0
 SILENCED_REGION = "alm"
-STIM_STRENGTH = 10
-PCA = False
+STIM_STRENGTH = 100
+NMF = True
+N_COMPONENTS = 5
 TRIAL_EPOCH = "full"
 INP_TYPE = "simulated"
 
@@ -138,7 +139,7 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     # Get ramping activity
-    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, pca=PCA)
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, nmf=NMF, n_components=N_COMPONENTS)
     neural_act = neural_act.cuda()
 
     iti_inp, cue_inp, len_seq = gather_inp_data(DT, HID_DIM, INP_PATH, TRIAL_EPOCH, peak_times, inp_type=INP_TYPE)

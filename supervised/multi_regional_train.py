@@ -13,12 +13,12 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
-OUT_DIM = 1451                                                                         # Output dim (not used)
+OUT_DIM = 5                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
 EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
 DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-4                                                                 # Weight decay parameter
+WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
 START_SILENCE = 160
@@ -27,12 +27,12 @@ CONDS = 4
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-PCA = False
-N_COMPONENTS = 10
+NMF = True
+N_COMPONENTS = 5
 INP_TYPE = "simulated"
 TRIAL_EPOCH = "full"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_inhibout_256n_noise.1_10000iters.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_nmf_256n_noise.1_10000iters.pth"                   # Save path
 
 '''
 
@@ -96,7 +96,7 @@ def main():
     thresh_criterion = nn.BCELoss()
 
     # Get ramping activity
-    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, pca=PCA, n_components=N_COMPONENTS)
+    neural_act, peak_times = get_data(DT, TRIAL_EPOCH, nmf=NMF, n_components=N_COMPONENTS)
     neural_act = neural_act.cuda()
 
     # Get input and output data

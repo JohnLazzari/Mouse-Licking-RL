@@ -86,14 +86,14 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(hid_dim * 5,)),
                                     ]).cuda()
 
-        self.tonic_inp_str = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_str = 0.01 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = 0.4 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_alm_exc = 0.1 * torch.ones(size=(self.alm_exc_size,), device="cuda")
-        self.tonic_inp_alm_inhib = 0.1 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
-        self.tonic_inp_fsi = 0.1 * torch.ones(size=(self.fsi_size,), device="cuda")
+        self.tonic_inp_thal = 0.01 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_alm_exc = 0.01 * torch.ones(size=(self.alm_exc_size,), device="cuda")
+        self.tonic_inp_alm_inhib = 0.01 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
+        self.tonic_inp_fsi = 0.01 * torch.ones(size=(self.fsi_size,), device="cuda")
 
         self.tonic_inp = torch.cat([
             self.tonic_inp_str,
@@ -258,8 +258,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim + self.fsi_size, inp_dim)))
         nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
 
-        self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, hid_dim)))
-        nn.init.uniform_(self.out_weight_alm, 0, 1e-2)
+        self.out_weight_alm = torch.empty(size=(out_dim, hid_dim)).uniform_(0, 1e-2).cuda()
 
         self.cue_weight = nn.Parameter(torch.ones(size=(self.total_num_units,)))
 
