@@ -26,7 +26,7 @@ INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_256n_noise.1_itinoise.1_10000iters.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_inhibout_256n_noise.1_10000iters.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -36,7 +36,7 @@ END_SILENCE = 220                      # timepoint from start of trial to end si
 EXTRA_STEPS_SILENCE = 100
 EXTRA_STEPS_CONTROL = 0
 SILENCED_REGION = "alm"
-STIM_STRENGTH = 5
+STIM_STRENGTH = 10
 PCA = False
 TRIAL_EPOCH = "full"
 INP_TYPE = "simulated"
@@ -84,16 +84,14 @@ def plot_psths(
             MODEL_TYPE
         )
 
-    '''
-        plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6], linewidth=6)
-        plt.show()
-    '''
-    
+    #plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size - int(HID_DIM * 0.3)], linewidth=6)
+    #plt.show()
 
     #plt.plot(act_conds[0, :, :HID_DIM], linewidth=6)
     #plt.show()
 
     fig, axs = plt.subplots(2, 5)
+    x = np.linspace(-0.5, 2.5, 300)
 
     axs[0, 0].plot(np.mean(act_conds[:, 50:, :int(HID_DIM/2)], axis=-1).T, linewidth=6)
     axs[0, 0].set_title("D1 PSTH")
@@ -116,10 +114,10 @@ def plot_psths(
     axs[1, 1].plot(np.mean(act_conds[:, 50:, HID_DIM * 4 + fsi_size:HID_DIM * 5 + fsi_size], axis=-1).T, linewidth=6)
     axs[1, 1].set_title("Thal PSTH")
 
-    axs[1, 2].plot(np.mean(act_conds[:, 50:, HID_DIM * 5 + fsi_size:HID_DIM * 6], axis=-1).T, linewidth=6)
+    axs[1, 2].plot(np.mean(act_conds[:, 50:, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size - int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
     axs[1, 2].set_title("ALM Excitatory PSTH")
 
-    axs[1, 3].plot(np.mean(act_conds[:, 50:, HID_DIM * 6:HID_DIM * 6 + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
+    axs[1, 3].plot(np.mean(act_conds[:, 50:, HID_DIM * 6 + fsi_size - int(HID_DIM * 0.3):HID_DIM * 6 + fsi_size + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
     axs[1, 3].set_title("ALM Inhibitory PSTH")
 
     plt.show()

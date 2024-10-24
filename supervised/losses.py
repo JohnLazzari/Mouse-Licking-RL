@@ -52,20 +52,20 @@ def simple_dynamics_d1d2(act, rnn, hid_dim):
     fsi_size = int(hid_dim * 0.3)
 
     # Get full weights for training
-    str2str = (rnn.str2str_sparse_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 1e-10, 1)) @ rnn.str2str_D
-    alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 1e-10, 1) @ rnn.alm2alm_D
-    alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 1e-10, 1)
-    thal2alm = F.hardtanh(rnn.thal2alm_weight_l0_hh, 1e-10, 1)
-    thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 1e-10, 1)
-    str2snr = (rnn.str2snr_mask * F.hardtanh(rnn.str2snr_weight_l0_hh, 1e-10, 1)) @ rnn.str2snr_D
-    str2gpe = (rnn.str2gpe_mask * F.hardtanh(rnn.str2gpe_weight_l0_hh, 1e-10, 1)) @ rnn.str2gpe_D
-    gpe2stn = F.hardtanh(rnn.gpe2stn_weight_l0_hh, 1e-10, 1) @ rnn.gpe2stn_D
-    stn2snr = F.hardtanh(rnn.stn2snr_weight_l0_hh, 1e-10, 1)
-    snr2thal = F.hardtanh(rnn.snr2thal_weight_l0_hh, 1e-10, 1) @ rnn.snr2thal_D
-    fsi2str = F.hardtanh(rnn.fsi2str_weight, 1e-10, 1) @ rnn.fsi2str_D
-    thal2fsi = F.hardtanh(rnn.thal2fsi_weight, 1e-10, 1)
-    alm2fsi = rnn.alm2fsi_mask * F.hardtanh(rnn.alm2fsi_weight, 1e-10, 1)
-    fsi2fsi = F.hardtanh(rnn.fsi2fsi_weight, 1e-10, 1) @ rnn.fsi2fsi_D
+    str2str = (rnn.str2str_sparse_mask * F.hardtanh(rnn.str2str_weight_l0_hh, 0, 1)) @ rnn.str2str_D
+    alm2alm = F.hardtanh(rnn.alm2alm_weight_l0_hh, 0, 1) @ rnn.alm2alm_D
+    alm2str = rnn.alm2str_mask * F.hardtanh(rnn.alm2str_weight_l0_hh, 0, 1)
+    thal2alm = F.hardtanh(rnn.thal2alm_weight_l0_hh, 0, 1)
+    thal2str = F.hardtanh(rnn.thal2str_weight_l0_hh, 0, 1)
+    str2snr = (rnn.str2snr_mask * F.hardtanh(rnn.str2snr_weight_l0_hh, 0, 1)) @ rnn.str2snr_D
+    str2gpe = (rnn.str2gpe_mask * F.hardtanh(rnn.str2gpe_weight_l0_hh, 0, 1)) @ rnn.str2gpe_D
+    gpe2stn = F.hardtanh(rnn.gpe2stn_weight_l0_hh, 0, 1) @ rnn.gpe2stn_D
+    stn2snr = F.hardtanh(rnn.stn2snr_weight_l0_hh, 0, 1)
+    snr2thal = F.hardtanh(rnn.snr2thal_weight_l0_hh, 0, 1) @ rnn.snr2thal_D
+    fsi2str = F.hardtanh(rnn.fsi2str_weight, 0, 1) @ rnn.fsi2str_D
+    thal2fsi = F.hardtanh(rnn.thal2fsi_weight, 0, 1)
+    alm2fsi = rnn.alm2fsi_mask * F.hardtanh(rnn.alm2fsi_weight, 0, 1)
+    fsi2fsi = F.hardtanh(rnn.fsi2fsi_weight, 0, 1) @ rnn.fsi2fsi_D
 
     # Concatenate into single weight matrix
 

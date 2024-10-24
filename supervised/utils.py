@@ -180,24 +180,6 @@ def gather_inp_data(
     # Gather all conditions for cue input
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
-    '''
-    x = np.linspace(-1, 2, 300)
-    plt.plot(x, np.mean(total_cue_inp.numpy(), axis=-1).T, c="black", linewidth=10)
-    plt.tick_params(
-        axis='x',          # changes apply to the x-axis
-        which='both',      # both major and minor ticks are affected
-        bottom=False,      # ticks along the bottom edge are off
-        top=False,         # ticks along the top edge are off
-        labelbottom=False) # labels along the bottom edge are off
-    plt.tick_params(
-        axis='y',          # changes apply to the x-axis
-        which='both',      # both major and minor ticks are affected
-        bottom=False,      # ticks along the bottom edge are off
-        top=False,         # ticks along the top edge are off
-        labelbottom=False) # labels along the bottom edge are off
-    plt.show()
-    '''
-
     return total_iti_inp, total_cue_inp, len_seq
 
 
@@ -258,7 +240,7 @@ def get_data(
         torch.from_numpy(cond_3_alm_strain["fr_population"]),
         torch.from_numpy(cond_4_alm_strain["fr_population"])
     ], batch_first=True)
-    
+
     
     ####################################
     #                                  #
@@ -537,7 +519,8 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, sti
 
     # Select mask based on region being silenced
     if region == "alm":
-        mask = -stim_strength * (rnn.alm_ramp_mask)
+        #mask = -stim_strength * (rnn.alm_ramp_mask)
+        mask = torch.zeros_like(rnn.alm_ramp_mask)
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":
@@ -638,7 +621,7 @@ def get_region_borders(
         if region == "str":
 
             start = 0
-            end = hid_dim + int(hid_dim * 0.3)
+            end = hid_dim + fsi_size
 
         elif region == "d1":
 

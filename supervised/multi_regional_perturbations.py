@@ -17,16 +17,16 @@ plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
 font = {'size' : 26}
 plt.rcParams['figure.figsize'] = [10, 8]
-plt.rcParams['axes.linewidth'] = 4 # set the value globally
+plt.rcParams['axes.linewidth'] = 2 # set the value globally
 plt.rc('font', **font)
 
 HID_DIM = 256
-OUT_DIM = 1
+OUT_DIM = 1451
 INP_DIM = int(HID_DIM*0.1)
 DT = 1e-2
 CONDS = 4
 MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_datadriven_itiinp_full_data_256n_nonoise_15000iters_newloss.pth"
+CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_256n_noise.1_10000iters.pth"
 SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
 CONSTRAINED = True
@@ -34,7 +34,7 @@ ITI_STEPS = 100
 TRIAL_EPOCH = "full"
 START_SILENCE = 160                    # timepoint from start of trial to silence at
 END_SILENCE = 220                      # timepoint from start of trial to end silencing
-INP_TYPE = "data"
+INP_TYPE = "simulated"
 PCA = False
 
 def plot_silencing(len_seq, 
@@ -130,20 +130,17 @@ def plot_silencing(len_seq,
         plt.xlabel("Time (s)")
         plt.ylabel("Ramp Mode Projection")
         plt.legend(loc="lower right")
-    else:
-        plt.xticks([])
         
-    plt.tick_params(left=False, bottom=False) 
     plt.savefig(f"{save_name_control}.png")
     plt.close()
 
     plt.axvline(x=0.0, linestyle='--', color='black', label="Cue")
+    plt.axvline(x=0.6, linestyle='--', color='black', label="Cue")
+    plt.axvline(x=1.2, linestyle='--', color='black', label="Cue")
 
     for cond in range(conds):
         plt.plot(xs_p[cond], ramp_silenced[cond][50:], linewidth=10)
 
-    #plt.xticks([])
-    plt.tick_params(left=False, bottom=False) 
     plt.savefig(f"{save_name_silencing}.png")
     plt.close()
 
@@ -180,9 +177,9 @@ def main():
         silenced_region="alm", 
         evaluated_region="alm_exc", 
         dt=DT, 
-        stim_strength=5,
+        stim_strength=.75,
         peaks=peak_times, 
-        use_label=True
+        use_label=False
     )
 
     plot_silencing(
@@ -196,9 +193,9 @@ def main():
         silenced_region="str", 
         evaluated_region="alm_exc", 
         dt=DT, 
-        stim_strength=-.5, 
+        stim_strength=-.25, 
         peaks=peak_times, 
-        use_label=True
+        use_label=False
     )
 
     plot_silencing(
@@ -212,9 +209,9 @@ def main():
         silenced_region="alm", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=5,
+        stim_strength=.75,
         peaks=peak_times, 
-        use_label=True
+        use_label=False
     )
 
     plot_silencing(
@@ -228,9 +225,9 @@ def main():
         silenced_region="str", 
         evaluated_region="str", 
         dt=DT, 
-        stim_strength=-.5, 
+        stim_strength=-.25, 
         peaks=peak_times, 
-        use_label=True
+        use_label=False
     )
     
 if __name__ == "__main__":
