@@ -74,8 +74,8 @@ def plot_psths(
             DT 
         )
         
-    plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], linewidth=6)
-    plt.show()
+    #plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], linewidth=6)
+    #plt.show()
         
     fig, axs = plt.subplots(2, 5)
 

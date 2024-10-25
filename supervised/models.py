@@ -113,15 +113,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
 
-        self.tonic_inp_d1 = torch.zeros(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_d2 = torch.zeros(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,),         device="cuda")
-        self.tonic_inp_gpe = torch.ones(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_stn = torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_d1 = 0.01 * torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_d2 = 0.01 * torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_fsi = 0.01 * torch.ones(size=(self.fsi_size,),         device="cuda")
+        self.tonic_inp_gpe = 0.8 * torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_stn = 0.6 * torch.ones(size=(hid_dim,),                device="cuda")
         self.tonic_inp_snr = 0.8 * torch.ones(size=(hid_dim,),          device="cuda")
-        self.tonic_inp_thal_int = torch.ones(size=(int(hid_dim/2),),    device="cuda")
-        self.tonic_inp_thal_alm = torch.ones(size=(int(hid_dim/2),),    device="cuda")
-        self.tonic_inp_alm = torch.zeros(size=(hid_dim,),               device="cuda")
+        self.tonic_inp_thal_int = 0.01 * torch.ones(size=(int(hid_dim/2),),    device="cuda")
+        self.tonic_inp_thal_alm = 0.01 * torch.ones(size=(int(hid_dim/2),),    device="cuda")
+        self.tonic_inp_alm = 0.01 * torch.ones(size=(hid_dim,),               device="cuda")
         self.tonic_inp_iti = torch.zeros(size=(inp_dim,),               device="cuda")
 
         self.tonic_inp = torch.cat([
@@ -242,8 +242,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Implement Necessary Masks
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.d12d1_weight_l0_hh)
-            nn.init.sparse_(sparse_matrix, 0.7)
-            self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
+            nn.init.sparse_(sparse_matrix, 0.9)
+            self.str2str_sparse_mask = nn.Parameter(torch.where(sparse_matrix != 0, 1, 0), requires_grad=False).cuda()
             self.str2str_D = -1 * torch.eye(hid_dim).cuda()
 
             self.alm2alm_D = torch.eye(hid_dim).cuda()
@@ -588,8 +588,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + iti_input
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
-                            + (cue_inp[:, t, :] * self.str_mask)
-                            + (perturb_hid[:, t, :] * (self.alm_ramp_mask + self.alm_inhib_mask))
+                            + (cue_inp[:, t, :] * self.thal_mask)
+                            + (perturb_hid[:, t, :])
                         ))
 
                 hn_next = F.relu(xn_next)
