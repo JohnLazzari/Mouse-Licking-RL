@@ -86,14 +86,14 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     torch.zeros(size=(hid_dim * 5,)),
                                     ]).cuda()
 
-        self.tonic_inp_str = 0.01 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_str = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_gpe = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_stn = 0.4 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_snr = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_thal = 0.01 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_alm_exc = 0.01 * torch.ones(size=(self.alm_exc_size,), device="cuda")
-        self.tonic_inp_alm_inhib = 0.01 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
-        self.tonic_inp_fsi = 0.01 * torch.ones(size=(self.fsi_size,), device="cuda")
+        self.tonic_inp_thal = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_alm_exc = 0.1 * torch.ones(size=(self.alm_exc_size,), device="cuda")
+        self.tonic_inp_alm_inhib = 0.1 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
+        self.tonic_inp_fsi = 0.1 * torch.ones(size=(self.fsi_size,), device="cuda")
 
         self.tonic_inp = torch.cat([
             self.tonic_inp_str,
@@ -160,7 +160,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Striatum recurrent weights
             sparse_matrix = torch.empty_like(self.str2str_weight_l0_hh)
             nn.init.sparse_(sparse_matrix, 0.9)
-            self.str2str_sparse_mask = torch.where(sparse_matrix != 0, 1, 0).cuda()
+            self.str2str_sparse_mask = nn.Parameter(torch.where(sparse_matrix != 0, 1, 0), requires_grad=False).cuda()
             self.str2str_D = -1 * torch.eye(hid_dim).cuda()
 
             self.alm2alm_D = torch.eye(hid_dim).cuda()
@@ -258,7 +258,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.inp_weight_str = nn.Parameter(torch.empty(size=(hid_dim + self.fsi_size, inp_dim)))
         nn.init.uniform_(self.inp_weight_str, 0, 1e-2)
 
-        self.out_weight_alm = torch.empty(size=(out_dim, hid_dim)).uniform_(0, 1e-2).cuda()
+        self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.alm_exc_size)))
+        nn.init.uniform_(self.out_weight_alm, 0, 1e-2)
+        #self.out_weight_alm = torch.empty(size=(out_dim, self.alm_exc_size)).uniform_(0, 1e-2).cuda()
 
         self.cue_weight = nn.Parameter(torch.ones(size=(self.total_num_units,)))
 
@@ -325,7 +327,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 0, 1)
             fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 0, 1) @ self.fsi2fsi_D
             inp_weight_str = F.hardtanh(self.inp_weight_str, 0, 1)
-            out_weight_alm = F.hardtanh(self.out_weight_alm, 0, 1) @ self.alm2alm_D
+            out_weight_alm = F.hardtanh(self.out_weight_alm, 0, 1)
             cue_weight = F.hardtanh(self.cue_weight, 0, 2)
 
             # Concatenate into single weight matrix
@@ -372,6 +374,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             full_inp = torch.cat([iti_projected, non_iti_mask], dim=-1)
 
             # Get the activity of the next hidden state
+            # Retrain without giving perturbations to the thal cue
             if self.constrained:
 
                 xn_next = (xn_next 
@@ -381,13 +384,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + full_inp
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
-                            + (cue_weight * cue_inp[:, t, :] * self.thal_mask)
+                            + (cue_inp[:, t, :] * self.thal_mask)
                             + perturb_hid
                         ))
                 
                 hn_next = F.relu(xn_next)
 
-                alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6 + self.fsi_size]
+                alm_exc_act = hn_next[:, self.hid_dim * 5 + self.fsi_size:self.hid_dim * 6 + self.fsi_size - self.alm_inhib_size]
                 out = (out_weight_alm @ alm_exc_act.T).T
 
             else:

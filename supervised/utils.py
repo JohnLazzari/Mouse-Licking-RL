@@ -26,7 +26,7 @@ def NormalizeData(
         data:       1D array of responses
     '''
 
-    return (data) / (np.percentile(data, 99) - np.percentile(data, 1) + 5)
+    return (data) / (np.percentile(data, 98) - np.percentile(data, 2) + 5)
 
 
 def gather_inp_data(
@@ -279,6 +279,15 @@ def get_data(
         neural_data_str_dms_strain
     ], axis=-1).type(torch.float32)
 
+    if nmf:
+        
+        # Find PCs if pca is specified
+        neural_nmf = NMF(n_components=n_components, max_iter=10000)
+        neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
+        neural_data_stacked = neural_nmf.fit_transform(neural_data_stacked)
+        neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
+        neural_data_combined = torch.tensor(neural_data_combined, dtype=torch.float32)
+
     neural_data_for_peaks = np.mean(np.array(neural_data_combined), axis=-1)
     cond_1_peaks = find_peaks(neural_data_for_peaks[0])
     cond_2_peaks = find_peaks(neural_data_for_peaks[1])
@@ -301,21 +310,6 @@ def get_data(
             neural_data_peak_cond_3,
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
-
-    if nmf:
-        
-        # Find PCs if pca is specified
-        neural_nmf = NMF(n_components=n_components, max_iter=10000)
-        neural_data_stacked = np.reshape(neural_data_combined, [-1, neural_data_combined.shape[-1]])
-        neural_data_stacked = neural_nmf.fit_transform(neural_data_stacked)
-        neural_data_combined = np.reshape(neural_data_stacked, [neural_data_combined.shape[0], neural_data_combined.shape[1], n_components])
-        neural_data_combined = torch.tensor(neural_data_combined, dtype=torch.float32)
-
-        plt.plot(neural_data_combined.numpy()[0], c="red")
-        plt.plot(neural_data_combined.numpy()[1], c="blue")
-        plt.plot(neural_data_combined.numpy()[2], c="orange")
-        plt.plot(neural_data_combined.numpy()[3], c="purple")
-        plt.show()
 
     plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
     plt.show()

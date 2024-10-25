@@ -13,7 +13,7 @@ from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
 from tqdm import tqdm
 
 HID_DIM = 256                                                                       # Hid dim of each region
-OUT_DIM = 5                                                                         # Output dim (not used)
+OUT_DIM = 1451                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM*0.1)                                                          # Input dimension
 EPOCHS = 10000                                                                       # Training iterations
 LR = 1e-4                                                                           # Learning rate
@@ -27,12 +27,12 @@ CONDS = 4
 STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
-NMF = True
+NMF = False
 N_COMPONENTS = 5
 INP_TYPE = "simulated"
-TRIAL_EPOCH = "full"                                                                                                           # delay or full
+TRIAL_EPOCH = "delay"                                                                                                           # delay or full
 INP_PATH = "data/firing_rates/ITIProj_trialPlotAll1.mat"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_simulated_nmf_256n_noise.1_10000iters.pth"                   # Save path
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_delay_simulated_256n_noise.1_inpnoise.1_10000iters.pth"                   # Save path
 
 '''
 
@@ -86,7 +86,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.1, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "stralm":
 
