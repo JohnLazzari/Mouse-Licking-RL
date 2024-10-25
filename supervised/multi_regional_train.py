@@ -83,7 +83,7 @@ def main():
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.0, constrained=CONSTRAINED).cuda()
+        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
     elif MODEL_TYPE == "d1":
 

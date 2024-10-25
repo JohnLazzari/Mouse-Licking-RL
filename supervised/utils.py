@@ -37,28 +37,24 @@ def gather_inp_data(dt, hid_dim, ramp):
     inp[0] = torch.cat([
         0.04 * torch.ones(size=(100, int(hid_dim * 0.1))),
         0.4 * torch.ones(size=(110, int(hid_dim * 0.1))),
-        torch.zeros(size=(290, int(hid_dim * 0.1)))
     ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
         0.03 * torch.ones(size=(100, int(hid_dim * 0.1))),
         0.3 * torch.ones(size=(140, int(hid_dim * 0.1))),
-        torch.zeros(size=(260, int(hid_dim * 0.1)))
     ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
         0.02 * torch.ones(size=(100, int(hid_dim * 0.1))),
         0.2 * torch.ones(size=(170, int(hid_dim * 0.1))),
-        torch.zeros(size=(230, int(hid_dim * 0.1)))
     ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
         0.01 * torch.ones(size=(100, int(hid_dim * 0.1))),
         0.1 * torch.ones(size=(200, int(hid_dim * 0.1))),
-        torch.zeros(size=(200, int(hid_dim * 0.1)))
     ])
 
     # Combine all inputs
@@ -69,19 +65,19 @@ def gather_inp_data(dt, hid_dim, ramp):
 
     # Cue Input
     cue_inp_dict = {}
-    cue_inp_pre_cue = torch.zeros(size=(100, 1))
+    cue_inp_pre_cue = torch.ones(size=(100, 1))
 
     for cond in range(4):
 
         cue_inp_dict[cond] = torch.cat([
             cue_inp_pre_cue,
-            torch.ones(size=(400, 1)),
+            torch.ones(size=(int((1.1 + 0.3 * cond) / dt), 1)),
         ])
 
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [int(5 / dt), int(5 / dt), int(5 / dt), int(5 / dt)]
+    len_seq = [210, 240, 270, 300]
 
     total_inp = [total_iti_inp, total_cue_inp]
 
@@ -98,11 +94,11 @@ def get_ramp(dt):
     ramps = {}
 
     means = [1.1, 1.4, 1.7, 2.0]
-    std = [0.5, 0.55, 0.6, 0.65]
+    std = [0.4, 0.5, 0.6, 0.7]
 
     for cond in range(4):
 
-        timepoints = torch.linspace(-1, 4, steps=500).unsqueeze(-1)
+        timepoints = torch.linspace(-1, means[cond], steps=100 + int((means[cond]) / dt)).unsqueeze(-1)
         ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
 
     total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
@@ -242,6 +238,7 @@ def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, ext
         mask_inhib_units = -stim_strength * (rnn.alm_ramp_mask)
         mask_iti_units = -1 * rnn.iti_mask
         mask = mask_inhib_units + mask_iti_units
+        #mask = mask_iti_units
     elif region == "str":
         mask = stim_strength * rnn.str_d1_mask
     elif region == "str_d2":
