@@ -65,7 +65,7 @@ def gather_inp_data(dt, hid_dim, ramp):
 
     # Cue Input
     cue_inp_dict = {}
-    cue_inp_pre_cue = torch.ones(size=(100, 1))
+    cue_inp_pre_cue = torch.zeros(size=(100, 1))
 
     for cond in range(4):
 

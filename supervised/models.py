@@ -116,9 +116,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.tonic_inp_d1 = torch.zeros(size=(hid_dim,),                device="cuda")
         self.tonic_inp_d2 = torch.zeros(size=(hid_dim,),                device="cuda")
         self.tonic_inp_fsi = torch.zeros(size=(self.fsi_size,),         device="cuda")
-        self.tonic_inp_gpe = torch.ones(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_stn = torch.ones(size=(hid_dim,),                device="cuda")
-        self.tonic_inp_snr = 0.7 * torch.ones(size=(hid_dim,),          device="cuda")
+        self.tonic_inp_gpe = 0.8 * torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_stn = 0.5 * torch.ones(size=(hid_dim,),                device="cuda")
+        self.tonic_inp_snr = 0.8 * torch.ones(size=(hid_dim,),          device="cuda")
         self.tonic_inp_thal_int = torch.zeros(size=(int(hid_dim/2),),    device="cuda")
         self.tonic_inp_thal_alm = torch.zeros(size=(int(hid_dim/2),),    device="cuda")
         self.tonic_inp_alm = torch.zeros(size=(hid_dim,),               device="cuda")
@@ -475,29 +475,29 @@ class RNN_MultiRegional_D1D2(nn.Module):
         if self.constrained:
 
             # Get full weights for training
-            d12d1 = (self.str2str_sparse_mask * F.hardtanh(self.d12d1_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
-            d22d2 = (self.str2str_sparse_mask * F.hardtanh(self.d22d2_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
-            d12d2 = (self.str2str_sparse_mask * F.hardtanh(self.d12d2_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
-            d22d1 = (self.str2str_sparse_mask * F.hardtanh(self.d22d1_weight_l0_hh, 1e-10, 1)) @ self.str2str_D
-            alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 1e-10, 1) @ self.alm2alm_D
-            alm2d1 = self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 1e-10, 1)
-            alm2d2 = self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 1e-10, 1)
-            thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 1e-10, 1)
-            thal2d1 = F.hardtanh(self.thal2d1_weight_l0_hh, 1e-10, 1)
-            thal2d2 = F.hardtanh(self.thal2d2_weight_l0_hh, 1e-10, 1)
-            d12snr = F.hardtanh(self.d12snr_weight_l0_hh, 1e-10, 1) @ self.d12snr_D
-            d22gpe = F.hardtanh(self.d22gpe_weight_l0_hh, 1e-10, 1) @ self.d22gpe_D
-            gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 1e-10, 1) @ self.gpe2stn_D
-            stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 1e-10, 1)
-            snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 1e-10, 1) @ self.snr2thal_D
-            fsi2d1 = F.hardtanh(self.fsi2d1_weight, 1e-10, 1) @ self.fsi2str_D
-            fsi2d2 = F.hardtanh(self.fsi2d2_weight, 1e-10, 1) @ self.fsi2str_D
-            thal2fsi = F.hardtanh(self.thal2fsi_weight, 1e-10, 1)
-            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 1e-10, 1)
-            iti2fsi = F.hardtanh(self.iti2fsi_weight, 1e-10, 1)
-            fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 1e-10, 1) @ self.fsi2fsi_D
-            inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 1e-10, 1)
-            inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 1e-10, 1)
+            d12d1 = (self.str2str_sparse_mask * F.hardtanh(self.d12d1_weight_l0_hh, 0, 1)) @ self.str2str_D
+            d22d2 = (self.str2str_sparse_mask * F.hardtanh(self.d22d2_weight_l0_hh, 0, 1)) @ self.str2str_D
+            d12d2 = (self.str2str_sparse_mask * F.hardtanh(self.d12d2_weight_l0_hh, 0, 1)) @ self.str2str_D
+            d22d1 = (self.str2str_sparse_mask * F.hardtanh(self.d22d1_weight_l0_hh, 0, 1)) @ self.str2str_D
+            alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 0, 1) @ self.alm2alm_D
+            alm2d1 = self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 0, 1)
+            alm2d2 = self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 0, 1)
+            thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 0, 1)
+            thal2d1 = F.hardtanh(self.thal2d1_weight_l0_hh, 0, 1)
+            thal2d2 = F.hardtanh(self.thal2d2_weight_l0_hh, 0, 1)
+            d12snr = F.hardtanh(self.d12snr_weight_l0_hh, 0, 1) @ self.d12snr_D
+            d22gpe = F.hardtanh(self.d22gpe_weight_l0_hh, 0, 1) @ self.d22gpe_D
+            gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 0, 1) @ self.gpe2stn_D
+            stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 0, 1)
+            snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 0, 1) @ self.snr2thal_D
+            fsi2d1 = F.hardtanh(self.fsi2d1_weight, 0, 1) @ self.fsi2str_D
+            fsi2d2 = F.hardtanh(self.fsi2d2_weight, 0, 1) @ self.fsi2str_D
+            thal2fsi = F.hardtanh(self.thal2fsi_weight, 0, 1)
+            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 0, 1)
+            iti2fsi = F.hardtanh(self.iti2fsi_weight, 0, 1)
+            fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 0, 1) @ self.fsi2fsi_D
+            inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 0, 1)
+            inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 0, 1)
 
             # Concatenate into single weight matrix
 
@@ -589,7 +589,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.thal_mask)
-                            + (perturb_hid[:, t, :])
+                            + (perturb_hid[:, t, :] * self.alm_ramp_mask)
                         ))
 
                 hn_next = F.relu(xn_next)
