@@ -87,9 +87,9 @@ class RNN_MultiRegional_D1D2(nn.Module):
                                     ]).cuda()
 
         self.tonic_inp_str = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_gpe = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_stn = 0.4 * torch.ones(size=(hid_dim,), device="cuda")
-        self.tonic_inp_snr = 0.6 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_gpe = 0.8 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_stn = 0.5 * torch.ones(size=(hid_dim,), device="cuda")
+        self.tonic_inp_snr = 0.8 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_thal = 0.1 * torch.ones(size=(hid_dim,), device="cuda")
         self.tonic_inp_alm_exc = 0.1 * torch.ones(size=(self.alm_exc_size,), device="cuda")
         self.tonic_inp_alm_inhib = 0.1 * torch.ones(size=(self.alm_inhib_size,), device="cuda")
@@ -333,8 +333,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # Concatenate into single weight matrix
 
                                 # STR       GPE         STN         SNR       Thal      ALM    
-            W_str = torch.cat([str2str, fsi2str, self.zeros, self.zeros, self.zeros, thal2str, alm2str],                                dim=1) # STR
-            W_fsi = torch.cat([self.zeros_to_fsi, fsi2fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, thal2fsi, alm2fsi], dim=1) # FSI
+            W_str = torch.cat([str2str, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2str, alm2str],                                dim=1) # STR
+            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_fsi_rec, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi], dim=1) # FSI
             W_gpe = torch.cat([str2gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros],               dim=1) # GPE
             W_stn = torch.cat([self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros],               dim=1) # STN
             W_snr = torch.cat([str2snr, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros],                  dim=1) # SNR
