@@ -31,18 +31,20 @@ SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_almnoise.01_10000iters_newloss.
 
 '''
 Default Model(s):
-    HID_DIM = 100
+    HID_DIM = 256
     OUT_DIM = 1
     INP_DIM = int(HID_DIM*0.1)
-    EPOCHS = 2000
+    EPOCHS = 5000
     LR = 1E-4
     DT = 1E-2
-    WEIGHT_DECAY = 1E-4
+    WEIGHT_DECAY = 1E-3
     MODEL_TYPE = any (d1d2, stralm, d1)
     CONSTRAINED = True
     TYPE_LOSS = alm (Only trained to ramp in alm)
     SAVE_PATH = checkpoints/d1d2_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth
 '''
+
+# Model with gaussian ramps looks best with 0.8, .5, .8 tonic levels, cue input to thal, and no fsi (new baseline model for simple ramping task)
 
 def test(rnn, len_seq, str_start, str_end, best_steady_state):
     
@@ -76,10 +78,6 @@ def main():
     #        Training Params           #
     ####################################
 
-    # TODO 
-    # try regularization again or anything that can get it to integrate better (still mess with hyperparameters)
-    # think about a better initial condition as well
-
     # Create RNN and specifcy objectives
     if MODEL_TYPE == "d1d2":
 
@@ -101,7 +99,7 @@ def main():
     neural_act = neural_act.cuda()
 
     # Get input and output data
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM, ramp=neural_act)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     iti_inp, cue_inp = x_data
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 

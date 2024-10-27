@@ -22,7 +22,7 @@ def NormalizeData(data, min, max):
 def gaussian_density(x, mean, std):
     return torch.exp(-(x - mean)**2/(2*std**2))
 
-def gather_inp_data(dt, hid_dim, ramp):
+def gather_inp_data(dt, hid_dim):
 
     '''
         Gather the input data, output target, and length of sequence for the task
@@ -60,8 +60,8 @@ def gather_inp_data(dt, hid_dim, ramp):
     # Combine all inputs
     total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
 
-    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    plt.show()
+    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    #plt.show()
 
     # Cue Input
     cue_inp_dict = {}
@@ -97,6 +97,13 @@ def get_ramp(dt):
     std = [0.4, 0.5, 0.6, 0.7]
 
     for cond in range(4):
+
+        '''
+        ramps[cond] = torch.cat([
+            torch.zeros(size=(100, 1)),
+            torch.linspace(0, 1, steps=int((means[cond]) / dt)).unsqueeze(-1),
+        ])
+        '''
 
         timepoints = torch.linspace(-1, means[cond], steps=100 + int((means[cond]) / dt)).unsqueeze(-1)
         ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
@@ -258,7 +265,6 @@ def get_input_silence(dt, hid_dim, start_silence, end_silence, region):
     x_data, _ = gather_inp_data(
                         dt, 
                         hid_dim, 
-                        None
                     )
     
     total_iti_inp, total_cue_inp = x_data
@@ -285,36 +291,111 @@ def get_input_silence(dt, hid_dim, start_silence, end_silence, region):
 
     return total_iti_inp, total_cue_inp
 
-def get_region_borders(model_type, region, hid_dim, inp_dim):
+def get_region_borders(
+    model_type, 
+    region, 
+    hid_dim, 
+    inp_dim
+):
+
+    '''
+        Keeps track of where all of the regions are located within the hidden activity vector, returns borders 
+        
+        Params:
+            model_type:             whether model is d1d2, d1, or stralm
+            region:                 the region in question to be returned
+            hid_dim:                number of neurons in a single region
+            inp_dim:                number of inputs
+    '''
+
+
+    ###########################################
+    #                                         #
+    #        D1 and D2 Model Borders          #
+    #                                         #
+    ###########################################
+
+    fsi_size = int(hid_dim * 0.3)
+
+    if model_type == "d1d2":
+
+        if region == "str":
+
+            start = 0
+            end = hid_dim * 2 + fsi_size
+
+        elif region == "d1":
+
+            start = 0
+            end = hid_dim
+
+        elif region == "d2":
+
+            start = hid_dim
+            end = hid_dim * 2
+
+        elif region == "fsi":
+
+            start = hid_dim * 2
+            end = hid_dim * 2 + fsi_size
+
+        elif region == "gpe":
+
+            start = hid_dim * 2 + fsi_size
+            end = hid_dim * 3 + fsi_size
+
+        elif region == "stn":
+
+            start = hid_dim * 3 + fsi_size
+            end = hid_dim * 4 + fsi_size
+
+        elif region == "snr":
+
+            start = hid_dim * 4 + fsi_size
+            end = hid_dim * 5 + fsi_size
+            
+        elif region == "thal":
+
+            start = hid_dim * 5 + fsi_size
+            end = hid_dim * 6 + fsi_size
+
+        elif region == "alm_exc":
+
+            start = hid_dim * 6 + fsi_size
+            end = hid_dim * 7
+
+        elif region == "alm_inhib":
+
+            start = hid_dim * 7
+            end = hid_dim * 7 + fsi_size
+
+        elif region == "alm_full":
+
+            start = hid_dim * 6 + fsi_size
+            end = hid_dim * 7 + fsi_size
+
+        elif region == "str2thal":
+
+            start = 0
+            end = hid_dim * 6 + fsi_size
+
+
+    ###########################################
+    #                                         #
+    #          STR-ALM Model Borders          #
+    #                                         #
+    ###########################################
+
+    if model_type == "stralm":
     
-    if model_type == "d1d2" and region == "alm":
+        if region == "alm":
 
-        start = hid_dim*5 + int(hid_dim * 0.3)
-        end = hid_dim*6
+            start = hid_dim
+            end = hid_dim*2 + inp_dim
 
-    elif model_type == "d1d2" and region == "str":
+        elif region == "str":
 
-        start = 0
-        end = hid_dim + int(hid_dim * 0.3)
+            start = 0
+            end = hid_dim
 
-    elif model_type == "stralm" and region == "alm":
-
-        start = hid_dim
-        end = hid_dim*2 + inp_dim
-
-    elif model_type == "stralm" and region == "str":
-
-        start = 0
-        end = hid_dim
-
-    elif model_type == "d1" and region == "alm":
-
-        start = hid_dim*3
-        end = hid_dim*4 + inp_dim
-
-    elif model_type == "d1" and region == "str":
-
-        start = 0
-        end = hid_dim
-    
-    return start, end
+    return start, end 

@@ -131,15 +131,12 @@ def main():
     rnn.load_state_dict(checkpoint)
 
     # Get ramping activity
-    neural_act = get_ramp(dt=DT)
-    neural_act = neural_act.cuda()
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM, ramp=neural_act)
+    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     
     plot_psths(
         len_seq, 
         rnn, 
         x_data,
-         
     )
 
     plot_psths(
