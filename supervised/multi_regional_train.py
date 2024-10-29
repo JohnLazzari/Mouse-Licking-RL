@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_D1, RNN_MultiRegional_STRALM
+from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_ramp, get_masks, get_acts_manipulation
@@ -28,21 +28,6 @@ STIM_STRENGTH = 10
 EXTRA_STEPS_SILENCE = 100
 SILENCED_REGION = "alm"
 SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_almnoise.01_10000iters_newloss.pth"                   # Save path
-
-'''
-Default Model(s):
-    HID_DIM = 256
-    OUT_DIM = 1
-    INP_DIM = int(HID_DIM*0.1)
-    EPOCHS = 5000
-    LR = 1E-4
-    DT = 1E-2
-    WEIGHT_DECAY = 1E-3
-    MODEL_TYPE = any (d1d2, stralm, d1)
-    CONSTRAINED = True
-    TYPE_LOSS = alm (Only trained to ramp in alm)
-    SAVE_PATH = checkpoints/d1d2_tonicsnr_fsi2str_100n_almnoise.1_itinoise.05_2000iters_newloss.pth
-'''
 
 # Model with gaussian ramps looks best with 0.8, .5, .8 tonic levels, cue input to thal, and no fsi (new baseline model for simple ramping task)
 
@@ -83,24 +68,18 @@ def main():
 
         rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
 
-    elif MODEL_TYPE == "d1":
-
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
-
     elif MODEL_TYPE == "stralm":
         
         rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
         
-    constraint_criterion = nn.MSELoss()
-    thresh_criterion = nn.BCELoss()
+    criterion = nn.MSELoss()
 
     # Get ramping activity
     neural_act = get_ramp(dt=DT)
     neural_act = neural_act.cuda()
 
     # Get input and output data
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
-    iti_inp, cue_inp = x_data
+    iti_inp, cue_inp, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Specify Optimizer
@@ -108,41 +87,20 @@ def main():
 
     if MODEL_TYPE == "d1d2":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3))).cuda()
-
-        str_units_start = 0
-        thal_units_start = HID_DIM * 5 + int(HID_DIM * 0.3)
-        alm_units_start = HID_DIM * 6 + int(HID_DIM * 0.3)
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
         loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=7)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
 
     elif MODEL_TYPE == "stralm":
 
-        hn = torch.zeros(size=(1, 4, HID_DIM * 2 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 2 + INP_DIM)).cuda()
-
-        str_units_start = 0
-        str_units_end = int(HID_DIM/2)
-        alm_units_start = HID_DIM
+        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
         loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=2)
         inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 2 + INP_DIM), device="cuda")
 
-    elif MODEL_TYPE == "d1":
-
-        hn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
-        xn = torch.zeros(size=(1, 4, HID_DIM * 4 + INP_DIM)).cuda()
-
-        str_units_start = 0
-        str_units_end = int(HID_DIM/2)
-        thal_units_start = HID_DIM * 2
-        alm_units_start = HID_DIM * 3
-
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=4)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 4 + INP_DIM), device="cuda")
-    
     best_steady_state = np.inf
     prev_steady_state = np.inf
     
@@ -153,52 +111,28 @@ def main():
     for epoch in range(EPOCHS):
         
         # Pass through RNN
-        _, _, act = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
+        _, out = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
 
         # Get masks
-        act = act * loss_mask_act
+        out = out * loss_mask_act
 
         # Get loss
         if MODEL_TYPE == "d1d2":
 
             loss = loss_d1d2(
-                constraint_criterion, 
-                thresh_criterion,
-                act, 
+                criterion, 
+                out, 
                 neural_act, 
-                HID_DIM, 
-                alm_units_start, 
-                str_units_start, 
-                thal_units_start, 
-                type=TYPE_LOSS
             )
 
         elif MODEL_TYPE == "stralm":
 
             loss = loss_stralm(
-                constraint_criterion, 
-                thresh_criterion,
-                act, 
+                criterion, 
+                out, 
                 neural_act, 
-                alm_units_start, 
-                str_units_start, 
-                type=TYPE_LOSS
             )
 
-        elif MODEL_TYPE == "d1":
-
-            loss = loss_d1d2(
-                constraint_criterion, 
-                thresh_criterion,
-                act, 
-                neural_act, 
-                HID_DIM, 
-                alm_units_start, 
-                str_units_start, 
-                thal_units_start, 
-                type=TYPE_LOSS
-            )
-            
         # Save model
         if epoch > 500:
             torch.save(rnn.state_dict(), SAVE_PATH)
@@ -206,8 +140,6 @@ def main():
 
         if epoch % 10 == 0:
             print("Training loss at epoch {}:{}".format(epoch, loss.item()))
-            print("Best steady state at epoch {}:{}".format(epoch, best_steady_state))
-            print("Prev steady state at epoch {}:{}".format(epoch, prev_steady_state))
             print("")
 
         #simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)

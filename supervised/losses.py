@@ -8,45 +8,23 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
-def loss_d1d2(constraint_criterion, 
-                thresh_criterion,
-                act, 
-                neural_act, 
-                hid_dim, 
-                alm_start, 
-                str_start, 
-                thal_start,
-                type="alm"):
+def loss_d1d2(
+    criterion, 
+    out, 
+    neural_act, 
+):
 
-    loss = (
-            constraint_criterion(torch.mean(act[:, 50:, alm_start:alm_start + (hid_dim - int(0.3 * hid_dim))], dim=-1, keepdim=True), neural_act[:, 50:, :])
-            )
+    return criterion(out[:, 50:, :], neural_act[:, 50:, :])
+
     
-    return loss
+def loss_stralm(
+    criterion, 
+    out, 
+    neural_act, 
+):
 
-def loss_stralm(constraint_criterion, 
-                act, 
-                neural_act, 
-                alm_start, 
-                str_start,
-                type="alm"):
+    return criterion(out[:, 50:, :], neural_act[:, 50:, :])
 
-    if type == "alm":
-
-        loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                )
-    
-    else:
-
-        loss = (
-                constraint_criterion(torch.mean(act[:, 500:, alm_start:], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                + 1e-4 * torch.mean(torch.pow(act[:, 500:, :], 2), dim=(1, 2, 0))  
-                + constraint_criterion(torch.mean(act[:, 500:, str_start:alm_start], dim=-1, keepdim=True), neural_act[:, 500:, :])
-                )
-    
-    return loss
 
 def simple_dynamics_d1d2(act, rnn, hid_dim):
 

@@ -7,9 +7,53 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-class RNN_MultiRegional_D1D2(nn.Module):
-    def __init__(self, inp_dim, hid_dim, action_dim, noise_level_act=0.01, noise_level_inp=0.01, constrained=True):
-        super(RNN_MultiRegional_D1D2, self).__init__()
+class Region(nn.Module):
+    def __init__(
+        self,
+        name,
+        device
+    ):
+        super(Region, self).__init__()
+        
+        self.name = name
+        self.device = device
+        self.connections = {}
+    
+    def add_connection(
+        self,
+        name,
+        fan_in,
+        fan_out,
+        weight_mask=None,
+        fixed_connections=None,
+        sign_matrix=None,
+    ):
+
+        connection_properties = {}
+
+        # implement connections
+        parameter = nn.Parameter(torch.empty(size=(fan_in, fan_out)))
+        parameter = (weight_mask * F.relu(parameter) + fixed_connections) @ sign_matrix
+
+        connection_properties["Parameter"] = parameter.to(self.device)
+        connection_properties["fan_in"] = fan_in
+        connection_properties["fan_out"] = fan_out
+
+        self.connections[name] = connection_properties
+
+class mRNN(nn.Module):
+    def __init__(
+        self, 
+        num_regions,
+        inp_dim, 
+        hid_dim, 
+        out_dim, 
+        noise_level_act=0.01, 
+        noise_level_inp=0.01, 
+        constrained=True, 
+        out_type="simple"):
+
+        super(mRNN, self).__init__()
         
         '''
             Multi-Regional RNN model, implements interaction between striatum and ALM
@@ -20,19 +64,17 @@ class RNN_MultiRegional_D1D2(nn.Module):
                 action_dim: output dimension, should be one for lick or no lick
         '''
 
-        # TODO be able to choose the hidden size of any individual region, replicate the cosyne results after this
-
         self.inp_dim = inp_dim
         self.hid_dim = hid_dim
-        self.action_dim = action_dim
+        self.out_dim = out_dim
         self.constrained = constrained
-        self.fsi_size = int(hid_dim * 0.3)
-        self.total_num_units = hid_dim * 7 + self.fsi_size + inp_dim
+        self.alm_inhib_size = int(hid_dim * 0.3)
+        self.alm_exc_size = hid_dim - int(hid_dim * 0.3)
+        self.total_num_units = hid_dim * 7 + inp_dim
 
         self.alm_ramp_mask = torch.cat([
             torch.zeros(size=(hid_dim,)), 
             torch.zeros(size=(hid_dim,)),
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 4,)),
             torch.ones(size=(hid_dim - int(hid_dim * 0.3),)),
             torch.zeros(size=(int(hid_dim * 0.3),)),
@@ -42,7 +84,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.alm_inhib_mask = torch.cat([
             torch.zeros(size=(hid_dim,)), 
             torch.zeros(size=(hid_dim,)), 
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 4,)),
             torch.zeros(size=(hid_dim - int(hid_dim * 0.3),)),
             torch.ones(size=(int(hid_dim * 0.3),)),
@@ -52,7 +93,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.full_alm_mask = torch.cat([
             torch.zeros(size=(hid_dim,)), 
             torch.zeros(size=(hid_dim,)), 
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 4,)),
             torch.ones(size=(hid_dim,)),
             torch.ones(size=(inp_dim,)),
@@ -61,7 +101,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.iti_mask = torch.cat([
             torch.zeros(size=(hid_dim,)), 
             torch.zeros(size=(hid_dim,)), 
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 5,)),
             torch.ones(size=(inp_dim,)),
         ]).cuda()
@@ -69,7 +108,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.str_mask = torch.cat([
             torch.ones(size=(hid_dim,)), 
             torch.ones(size=(hid_dim,)), 
-            torch.ones(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 5,)),
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
@@ -77,31 +115,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.str_d1_mask = torch.cat([
             torch.ones(size=(hid_dim,)), 
             torch.zeros(size=(hid_dim,)),
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 5,)),
-            torch.zeros(size=(inp_dim,)),
-        ]).cuda()
-
-        self.integrator_mask = torch.cat([
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(hid_dim/2),)), 
-            torch.ones(size=(int(self.fsi_size/2),)),
-            torch.ones(size=(int(self.fsi_size/2),)),
-            torch.zeros(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(int(hid_dim/2),)), 
-            torch.zeros(size=(hid_dim * 2,)),
-            torch.zeros(size=(hid_dim,)),
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
 
         self.str_d2_mask = torch.cat([
             torch.zeros(size=(hid_dim,)), 
             torch.ones(size=(hid_dim,)),
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 5,)),
             torch.zeros(size=(inp_dim,)),
         ]).cuda()
@@ -109,7 +129,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.thal_mask = torch.cat([
             torch.zeros(size=(hid_dim,)),
             torch.zeros(size=(hid_dim,)),
-            torch.zeros(size=(self.fsi_size,)),
             torch.zeros(size=(hid_dim * 3,)),
             torch.ones(size=(hid_dim,)),
             torch.zeros(size=(hid_dim,)),
@@ -283,12 +302,6 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # GPE to STN D
             self.gpe2stn_D = -1 * torch.eye(hid_dim).cuda()
 
-            # FSI to STR D
-            self.fsi2str_D = -1 * torch.eye(self.fsi_size).cuda()
-
-            # FSI to FSI D
-            self.fsi2fsi_D = -1 * torch.eye(self.fsi_size).cuda()
-            
         else:
 
             # Initialize all weights randomly
@@ -310,18 +323,22 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
         self.inp_weight_d2 = nn.Parameter(torch.empty(size=(hid_dim, inp_dim)))
         nn.init.uniform_(self.inp_weight_d2, 0, 1e-2)
+
+        # Output weights
+        if out_type == "simple":
+
+            self.out_weight_alm = (1 / hid_dim) * torch.ones(size=(out_dim, self.alm_exc_size))
+
+        elif out_type == "data":
+
+            self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.alm_exc_size)))
+            nn.init.uniform_(self.out_weight_alm, 0, 1)
         
         # Zeros for no weights
         self.zeros = torch.zeros(size=(hid_dim, hid_dim), device="cuda")
         self.zeros_to_iti = torch.zeros(size=(inp_dim, hid_dim), device="cuda")
         self.zeros_from_iti = torch.zeros(size=(hid_dim, inp_dim), device="cuda")
         self.zeros_rec_iti = torch.zeros(size=(inp_dim, inp_dim), device="cuda")
-
-        self.zeros_to_fsi = torch.zeros(size=(self.fsi_size, hid_dim), device="cuda")
-        self.zeros_to_fsi_iti = torch.zeros(size=(self.fsi_size, inp_dim), device="cuda")
-        self.zeros_rec_fsi = torch.zeros(size=(self.fsi_size, self.fsi_size), device="cuda")
-        self.zeros_from_fsi = torch.zeros(size=(hid_dim, self.fsi_size), device="cuda")
-        self.zeros_from_fsi2iti = torch.zeros(size=(inp_dim, self.fsi_size), device="cuda")
 
         # Time constants for networks
         self.t_const = 0.1
@@ -330,7 +347,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
         self.sigma_recur = noise_level_act
         self.sigma_input = noise_level_inp
 
-    def forward(self, inp, cue_inp, hn, xn, inhib_stim, noise=True):
+    def forward(
+        self, 
+        inp, 
+        cue_inp, 
+        hn, 
+        xn, 
+        inhib_stim, 
+        noise=True
+    ):
 
         '''
             Forward pass through the model
@@ -347,6 +372,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
         size = inp.shape[1]
         new_hs = []
         new_xs = []
+        outs = []
 
         if self.constrained:
 
@@ -366,27 +392,21 @@ class RNN_MultiRegional_D1D2(nn.Module):
             gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 0, 1) @ self.gpe2stn_D
             stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 0, 1)
             snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 0, 1) @ self.snr2thal_D
-            fsi2d1 = F.hardtanh(self.fsi2d1_weight, 0, 1) @ self.fsi2str_D
-            fsi2d2 = F.hardtanh(self.fsi2d2_weight, 0, 1) @ self.fsi2str_D
-            thal2fsi = F.hardtanh(self.thal2fsi_weight, 0, 1)
-            alm2fsi = self.alm2fsi_mask * F.hardtanh(self.alm2fsi_weight, 0, 1)
-            iti2fsi = F.hardtanh(self.iti2fsi_weight, 0, 1)
-            fsi2fsi = F.hardtanh(self.fsi2fsi_weight, 0, 1) @ self.fsi2fsi_D
             inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 0, 1)
             inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 0, 1)
+            out_weight_alm = F.hardtanh(self.out_weight_alm, 0, 1)
 
             # Concatenate into single weight matrix
 
-                            #  D1      D2     FSI         GPE        STN         SNR       Thal    ALM         ALM ITI
-            W_d1 = torch.cat([d12d1, d22d1, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
-            W_d2 = torch.cat([d12d2, d22d2, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
-            W_fsi = torch.cat([self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_rec_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi, self.zeros_to_fsi_iti],                                                     dim=1)      # FSI
-            W_gpe = torch.cat([self.zeros, d22gpe, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                               dim=1)      # GPE
-            W_stn = torch.cat([self.zeros, self.zeros, self.zeros_from_fsi, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                              dim=1)      # STN
-            W_snr = torch.cat([d12snr, self.zeros, self.zeros_from_fsi, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                                  dim=1)      # SNR
-            W_thal = torch.cat([self.zeros, self.zeros, self.zeros_from_fsi, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_from_iti],                                                            dim=1)      # Thal
-            W_alm = torch.cat([self.zeros, self.zeros, self.zeros_from_fsi, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_from_iti],                                                                dim=1)      # ALM
-            W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_to_iti, self.zeros_from_fsi2iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_rec_iti],   dim=1)      # ITI
+                            #  D1      D2     GPE        STN         SNR       Thal    ALM         ALM ITI
+            W_d1 = torch.cat([d12d1, d22d1, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
+            W_d2 = torch.cat([d12d2, d22d2, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
+            W_gpe = torch.cat([self.zeros, d22gpe, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                               dim=1)      # GPE
+            W_stn = torch.cat([self.zeros, self.zeros, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                              dim=1)      # STN
+            W_snr = torch.cat([d12snr, self.zeros, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                                  dim=1)      # SNR
+            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_from_iti],                                                            dim=1)      # Thal
+            W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_from_iti],                                                                dim=1)      # ALM
+            W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_rec_iti],   dim=1)      # ITI
 
         else:
 
@@ -402,7 +422,7 @@ class RNN_MultiRegional_D1D2(nn.Module):
             W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_rec], dim=1)       # ALM ITI
 
         # Putting all weights together
-        W_rec = torch.cat([W_d1, W_d2, W_fsi, W_gpe, W_stn, W_snr, W_thal, W_alm, W_alm_iti], dim=0)
+        W_rec = torch.cat([W_d1, W_d2, W_gpe, W_stn, W_snr, W_thal, W_alm, W_alm_iti], dim=0)
 
         #plt.imshow(W_rec.detach().cpu().numpy())
         #plt.show()
@@ -451,14 +471,15 @@ class RNN_MultiRegional_D1D2(nn.Module):
 
             # Get the ITI mode input to the network
             iti_act = inp[:, t, :] + perturb_inp[:, t, :]
-            non_iti_mask = torch.zeros(size=(iti_act.shape[0], self.hid_dim * 7 + self.fsi_size), device="cuda")
+            non_iti_mask = torch.zeros(size=(iti_act.shape[0], self.hid_dim * 7), device="cuda")
             iti_input = torch.cat([non_iti_mask, iti_act], dim=-1)
 
             # Get the activity of the next hidden state
             if self.constrained:
 
                 xn_next = (xn_next 
-                            + self.t_const * (
+                            + self.t_const 
+                            * (
                             -xn_next
                             + (W_rec @ hn_next.T).T
                             + iti_input
@@ -469,6 +490,8 @@ class RNN_MultiRegional_D1D2(nn.Module):
                         ))
 
                 hn_next = F.relu(xn_next)
+
+                out = (out_weight_alm @ hn_next.T).T
             
             else:
 
@@ -486,14 +509,13 @@ class RNN_MultiRegional_D1D2(nn.Module):
             # append activity to list
             new_xs.append(xn_next)
             new_hs.append(hn_next)
+            outs.append(out)
         
         # Collect hidden states
         rnn_out = torch.stack(new_hs, dim=1)
-        pre_out = torch.stack(new_xs, dim=1)
-        hn_last = rnn_out[:, -1, :].unsqueeze(0)
-        xn_last = new_xs[-1].unsqueeze(0)
+        alm_out = torch.stack(outs, dim=1)
 
-        return hn_last, xn_last, rnn_out
+        return rnn_out, alm_out
 
 
 class RNN_MultiRegional_STRALM(nn.Module):
