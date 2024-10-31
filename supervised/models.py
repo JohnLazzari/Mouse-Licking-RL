@@ -46,7 +46,7 @@ class Region(nn.Module):
         nn.init.uniform_(parameter, lower_bound, upper_bound)
 
         # Trainable values
-        connection_properties["Parameter"] = parameter.to(self.device)
+        connection_properties["parameter"] = parameter.to(self.device)
 
         # Masks applied on weights
         if weight_mask == None:
@@ -93,6 +93,19 @@ class Region(nn.Module):
                     cur_masks.append(torch.zeros(size=(int(self.num_units * self.cell_type_info[prev_key]))))
 
             self.masks[key] = torch.cat(cur_masks)
+    
+    def has_connection_to(
+        self,
+        region
+    ):
+        
+        for key in self.connections:
+            
+            if key == region.name:
+                
+                return True 
+        
+        return False
 
 class mRNN(nn.Module):
     def __init__(
@@ -340,8 +353,78 @@ class mRNN(nn.Module):
         
         self.W_rec, self.W_rec_mask, self.W_rec_fixed, self.W_rec_sign_matrix = self.gen_w_rec()
         
+        if self.constrained:
+            
+            self.apply_dales_law()
+
+    def gen_w_rec(
+        self
+    ):
         
+        region_connection_columns = []
+        region_weight_mask_columns = []
+        region_fixed_weights_columns = []
+        region_sign_matrix_columns = []
+
+        for region in self.region_list:
+
+            self._get_full_connectivity(region)
+
+            connections_from_region = []
+            weight_mask_from_region = []
+            fixed_weights_from_region = []
+            sign_matrix_from_region = []
+
+            for connection in region.connections:
+
+                connections_from_region.append(connection["parameter"])
+                weight_mask_from_region.append(connection["weight_mask"])
+                fixed_weights_from_region.append(connection["fixed_weights"])
+                sign_matrix_from_region.append(connection["sign_matrix"])
+            
+            full_connections = torch.cat(connections_from_region, dim=0)
+            full_weight_mask = torch.cat(weight_mask_from_region, dim=0)
+            full_fixed_weights = torch.cat(fixed_weights_from_region, dim=0)
+            full_sign_matrix = torch.cat(sign_matrix_from_region, dim=0)
+
+            region_connection_columns.append(full_connections)
+            region_weight_mask_columns.append(full_weight_mask)
+            region_fixed_weights_columns.append(full_fixed_weights)
+            region_sign_matrix_columns.append(full_sign_matrix)
         
+        W_rec = torch.cat(region_connection_columns, dim=1)
+        W_rec_mask = torch.cat(region_weight_mask_columns, dim=1)
+        W_rec_fixed = torch.cat(region_fixed_weights_columns, dim=1)
+        W_rec_sign = torch.cat(region_sign_matrix_columns, dim=1)
+
+        return W_rec, W_rec_mask, W_rec_fixed, W_rec_sign
+            
+            
+    def _get_full_connectivity(
+        self,
+        region,
+        region_list
+    ):
+
+        for other_region in region_list:
+            
+            if region.has_connection_to(other_region):
+
+                continue
+
+            weight_mask = torch.zeros(size=(other_region.num_units, region.num_units))
+
+            region.add_connection(
+                other_region.name,
+                other_region.num_units,
+                weight_mask=weight_mask
+            )
+    
+    def apply_dales_law(
+        self
+    ):
+        
+        self.W_rec = (self.W_rec_mask * F.relu(self.W_rec) + self.W_rec_fixed) @ self.W_rec_sign_matrix
 
     def forward(
         self, 
