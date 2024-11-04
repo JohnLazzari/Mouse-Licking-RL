@@ -5,7 +5,7 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM
+from models import mRNN
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_ramp, get_masks, get_acts_manipulation
@@ -64,13 +64,7 @@ def main():
     ####################################
 
     # Create RNN and specifcy objectives
-    if MODEL_TYPE == "d1d2":
-
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
-
-    elif MODEL_TYPE == "stralm":
-        
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.01, noise_level_inp=0.01, constrained=CONSTRAINED).cuda()
+    rnn = mRNN(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
         
     criterion = nn.MSELoss()
 
@@ -85,21 +79,11 @@ def main():
     # Specify Optimizer
     rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
-    if MODEL_TYPE == "d1d2":
+    hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
-        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
-        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
-
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=7)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
-
-    elif MODEL_TYPE == "stralm":
-
-        hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
-        xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
-
-        loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=2)
-        inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 2 + INP_DIM), device="cuda")
+    loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=7)
+    inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
 
     best_steady_state = np.inf
     prev_steady_state = np.inf
@@ -117,21 +101,11 @@ def main():
         out = out * loss_mask_act
 
         # Get loss
-        if MODEL_TYPE == "d1d2":
-
-            loss = loss_d1d2(
-                criterion, 
-                out, 
-                neural_act, 
-            )
-
-        elif MODEL_TYPE == "stralm":
-
-            loss = loss_stralm(
-                criterion, 
-                out, 
-                neural_act, 
-            )
+        loss = loss_d1d2(
+            criterion, 
+            out, 
+            neural_act, 
+        )
 
         # Save model
         if epoch > 500:

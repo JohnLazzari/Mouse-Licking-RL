@@ -17,15 +17,6 @@ def loss_d1d2(
     return criterion(out[:, 50:, :], neural_act[:, 50:, :])
 
     
-def loss_stralm(
-    criterion, 
-    out, 
-    neural_act, 
-):
-
-    return criterion(out[:, 50:, :], neural_act[:, 50:, :])
-
-
 def simple_dynamics_d1d2(act, rnn, hid_dim):
 
     fsi_size = int(hid_dim * 0.3)

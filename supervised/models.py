@@ -131,7 +131,7 @@ class mRNN(nn.Module):
         self.inp_dim = inp_dim
         self.out_dim = out_dim
         self.constrained = constrained
-        self.region_list = []
+        self.region_list = {}
 
         str_cell_types = {
             "d1": 0.5,
@@ -152,16 +152,12 @@ class mRNN(nn.Module):
             str_cell_types
         )
 
-        self.region_list.append(striatum)
-
         gpe = Region(
             "gpe", 
             256, 
             .8, 
             "cuda"
         )
-
-        self.region_list.append(gpe)
 
         stn = Region(
             "stn", 
@@ -170,8 +166,6 @@ class mRNN(nn.Module):
             "cuda"
         )
 
-        self.region_list.append(stn)
-
         snr = Region(
             "snr", 
             256, 
@@ -179,16 +173,12 @@ class mRNN(nn.Module):
             "cuda"
         )
 
-        self.region_list.append(snr)
-
         thal = Region(
             "thal", 
             256, 
             .8, 
             "cuda"
         )
-
-        self.region_list.append(thal)
 
         alm = Region(
             "alm", 
@@ -198,8 +188,6 @@ class mRNN(nn.Module):
             alm_cell_types
         )
 
-        self.region_list.append(alm)
-
         iti = Region(
             "iti", 
             int(256 * 0.3), 
@@ -207,7 +195,13 @@ class mRNN(nn.Module):
             "cuda"
         )
 
-        self.region_list.append(iti)
+        self.region_list["striatum"] = striatum
+        self.region_list["gpe"] = gpe
+        self.region_list["stn"] = stn
+        self.region_list["snr"] = snr
+        self.region_list["thal"] = thal
+        self.region_list["alm"] = alm
+        self.region_list["iti"] = iti
 
         ############################
         #   Striatal Connections   #
@@ -352,10 +346,34 @@ class mRNN(nn.Module):
         self.sigma_input = noise_level_inp
         
         self.W_rec, self.W_rec_mask, self.W_rec_fixed, self.W_rec_sign_matrix = self.gen_w_rec()
+
+        self.total_num_units = self._get_total_num_units()
+        self.tonic_inp = self._get_tonic_inp()
+
+        self.out_weight_alm = nn.Parameter(size=(inp_dim, int(alm.num_units * alm.cell_type_info["exc"])))
+
+        self.alm_start_idx, self.alm_end_idx = self.get_region_indices()
+
+
+    def _get_total_num_units(
+        self
+    ):
         
-        if self.constrained:
-            
-            self.apply_dales_law()
+        units = 0
+        for region in self.region_list:
+            units = units + self.region_list[region].num_units
+        return units
+
+    
+    def _get_tonic_inp(
+        self
+    ):
+        
+        tonic_inp = []
+        for region in self.region_list.values():
+            tonic_inp.append(region.base_firing)
+        return torch.cat(tonic_inp)
+
 
     def gen_w_rec(
         self
@@ -366,7 +384,7 @@ class mRNN(nn.Module):
         region_fixed_weights_columns = []
         region_sign_matrix_columns = []
 
-        for region in self.region_list:
+        for region in self.region_list.values():
 
             self._get_full_connectivity(region)
 
@@ -406,7 +424,7 @@ class mRNN(nn.Module):
         region_list
     ):
 
-        for other_region in region_list:
+        for other_region in region_list.values():
             
             if region.has_connection_to(other_region):
 
@@ -420,11 +438,29 @@ class mRNN(nn.Module):
                 weight_mask=weight_mask
             )
     
+
     def apply_dales_law(
         self
     ):
         
-        self.W_rec = (self.W_rec_mask * F.relu(self.W_rec) + self.W_rec_fixed) @ self.W_rec_sign_matrix
+        W_rec = (self.W_rec_mask * F.relu(self.W_rec) + self.W_rec_fixed) @ self.W_rec_sign_matrix
+        return W_rec
+    
+
+    def get_region_indices(
+        self,
+        region
+    ):
+        
+        start_idx = 0
+        end_idx = 0
+        for cur_reg in self.region_list:
+            if cur_reg == region:
+                end_idx = start_idx + self.region_list[cur_reg].num_units
+                break
+            start_idx = start_idx + self.region_list[cur_reg].num_units
+        return start_idx, end_idx
+
 
     def forward(
         self, 
@@ -455,56 +491,8 @@ class mRNN(nn.Module):
 
         if self.constrained:
 
-            # Get full weights for training
-            d12d1 = (self.str2str_sparse_mask * F.hardtanh(self.d12d1_weight_l0_hh, 0, 1)) @ self.str2str_D
-            d22d2 = (self.str2str_sparse_mask * F.hardtanh(self.d22d2_weight_l0_hh, 0, 1)) @ self.str2str_D
-            d12d2 = (self.str2str_sparse_mask * F.hardtanh(self.d12d2_weight_l0_hh, 0, 1)) @ self.str2str_D
-            d22d1 = (self.str2str_sparse_mask * F.hardtanh(self.d22d1_weight_l0_hh, 0, 1)) @ self.str2str_D
-            alm2alm = F.hardtanh(self.alm2alm_weight_l0_hh, 0, 1) @ self.alm2alm_D
-            alm2d1 = self.alm2str_mask * F.hardtanh(self.alm2d1_weight_l0_hh, 0, 1)
-            alm2d2 = self.alm2str_mask * F.hardtanh(self.alm2d2_weight_l0_hh, 0, 1)
-            thal2alm = F.hardtanh(self.thal2alm_weight_l0_hh, 0, 1)
-            thal2d1 = F.hardtanh(self.thal2d1_weight_l0_hh, 0, 1)
-            thal2d2 = F.hardtanh(self.thal2d2_weight_l0_hh, 0, 1)
-            d12snr = F.hardtanh(self.d12snr_weight_l0_hh, 0, 1) @ self.d12snr_D
-            d22gpe = F.hardtanh(self.d22gpe_weight_l0_hh, 0, 1) @ self.d22gpe_D
-            gpe2stn = F.hardtanh(self.gpe2stn_weight_l0_hh, 0, 1) @ self.gpe2stn_D
-            stn2snr = F.hardtanh(self.stn2snr_weight_l0_hh, 0, 1)
-            snr2thal = F.hardtanh(self.snr2thal_weight_l0_hh, 0, 1) @ self.snr2thal_D
-            inp_weight_d1 = F.hardtanh(self.inp_weight_d1, 0, 1)
-            inp_weight_d2 = F.hardtanh(self.inp_weight_d2, 0, 1)
-            out_weight_alm = F.hardtanh(self.out_weight_alm, 0, 1)
-
-            # Concatenate into single weight matrix
-
-                            #  D1      D2     GPE        STN         SNR       Thal    ALM         ALM ITI
-            W_d1 = torch.cat([d12d1, d22d1, self.zeros, self.zeros, self.zeros, thal2d1, alm2d1, inp_weight_d1],                                                                                                dim=1)      # D1
-            W_d2 = torch.cat([d12d2, d22d2, self.zeros, self.zeros, self.zeros, thal2d2, alm2d2, inp_weight_d2],                                                                                                dim=1)      # D2
-            W_gpe = torch.cat([self.zeros, d22gpe, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                               dim=1)      # GPE
-            W_stn = torch.cat([self.zeros, self.zeros, gpe2stn, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                              dim=1)      # STN
-            W_snr = torch.cat([d12snr, self.zeros, self.zeros, stn2snr, self.zeros, self.zeros, self.zeros, self.zeros_from_iti],                                                                  dim=1)      # SNR
-            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, snr2thal, self.zeros, self.zeros, self.zeros_from_iti],                                                            dim=1)      # Thal
-            W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, thal2alm, alm2alm, self.zeros_from_iti],                                                                dim=1)      # ALM
-            W_alm_iti = torch.cat([self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_to_iti, self.zeros_rec_iti],   dim=1)      # ITI
-
-        else:
-
-            # Concatenate into single weight matrix
-
-                                # STR       GPE         STN         SNR       Thal      ALM
-            W_str = torch.cat([self.str2str_weight_l0_hh, self.zeros, self.zeros, self.zeros, self.thal2str_weight_l0_hh, self.alm2str_weight_l0_hh, self.inp_weight], dim=1)            # STR
-            W_gpe = torch.cat([self.str2gpe_weight_l0_hh, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)                                           # GPE
-            W_stn = torch.cat([self.zeros, self.gpe2stn_weight_l0_hh, self.zeros, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)                                           # STN
-            W_snr = torch.cat([self.str2snr_weight_l0_hh, self.zeros, self.stn2snr_weight_l0_hh, self.zeros, self.zeros, self.zeros, self.zeros_inp_from], dim=1)                            # SNR
-            W_thal = torch.cat([self.zeros, self.zeros, self.zeros, self.snr2thal_weight_l0_hh, self.zeros, self.alm2thal_weight_l0_hh, self.zeros_inp_from], dim=1)                                         # Thal
-            W_alm = torch.cat([self.zeros, self.zeros, self.zeros, self.zeros, self.thal2alm_weight_l0_hh, self.alm2alm_weight_l0_hh, self.zeros_inp_from], dim=1)                           # ALM
-            W_alm_iti = torch.cat([self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_to, self.zeros_inp_rec], dim=1)       # ALM ITI
-
-        # Putting all weights together
-        W_rec = torch.cat([W_d1, W_d2, W_gpe, W_stn, W_snr, W_thal, W_alm, W_alm_iti], dim=0)
-
-        #plt.imshow(W_rec.detach().cpu().numpy())
-        #plt.show()
+            W_rec = self.apply_dales_law
+            out_weight_alm = F.relu(self.out_weight_alm)
 
         # Add noise to the system if specified
         if noise:
@@ -570,7 +558,9 @@ class mRNN(nn.Module):
 
                 hn_next = F.relu(xn_next)
 
-                out = (out_weight_alm @ hn_next.T).T
+                alm_hn = hn_next[:, self.alm_start_idx:self.alm_end_idx]
+
+                out = (out_weight_alm @ (alm_hn * self.alm.masks["exc"]).T).T
             
             else:
 
