@@ -17,6 +17,17 @@ class Region(nn.Module):
         cell_types=None
     ):
         super(Region, self).__init__()
+        '''
+            Region class that represents connections from one region to others among other properties
+            
+            Params:
+                name:               name of region                   
+                num_units:          number of neurons in region
+                base_firing:        baseline level of firing for region
+                device:             cuda or cpu
+                cell_types:         dictionary specifying each cell type within the region and the percentage of neurons each type occupies
+
+        '''
         
         self.name = name
         self.num_units = num_units
@@ -26,7 +37,7 @@ class Region(nn.Module):
         self.cell_type_info = cell_types
         self.masks = {}
 
-        self.generate_masks()
+        self._generate_masks()
     
     def add_connection(
         self,
@@ -42,8 +53,7 @@ class Region(nn.Module):
         connection_properties = {}
 
         # implement connections
-        parameter = nn.Parameter(torch.empty(size=(fan_out, self.num_units)))
-        nn.init.uniform_(parameter, lower_bound, upper_bound)
+        parameter = torch.empty(size=(fan_out, self.num_units)).uniform_(lower_bound, upper_bound)
 
         # Trainable values
         connection_properties["parameter"] = parameter.to(self.device)
@@ -51,19 +61,19 @@ class Region(nn.Module):
         # Masks applied on weights
         if weight_mask == None:
             
-            weight_mask = torch.ones_like(parameter)
+            weight_mask = torch.ones_like(parameter).to(self.device)
         
         if fixed_weights == None:
             
-            fixed_weights = torch.zeros_like(parameter)
+            fixed_weights = torch.zeros_like(parameter).to(self.device)
 
         if sign_matrix == None:
             
-            sign_matrix = torch.eye(self.num_units)
+            sign_matrix = torch.ones(size=(fan_out, self.num_units)).to(self.device)
 
-        connection_properties["weight_mask"] = weight_mask
-        connection_properties["fixed_weights"] = fixed_weights
-        connection_properties["sign_matrix"] = sign_matrix
+        connection_properties["weight_mask"] = weight_mask.to(self.device)
+        connection_properties["fixed_weights"] = fixed_weights.to(self.device)
+        connection_properties["sign_matrix"] = sign_matrix.to(self.device)
 
         # Output size of weight
         connection_properties["fan_out"] = fan_out
@@ -74,25 +84,29 @@ class Region(nn.Module):
         self
     ):
 
-        full_mask = torch.ones(size=(self.num_units))
-        zeros_mask = torch.zeros(size=(self.num_units))
+        full_mask = torch.ones(size=(self.num_units,))
+        zero_mask = torch.zeros(size=(self.num_units,))
+
         self.masks["full"] = full_mask
-        self.masks["zeros"] = zeros_mask
+        self.masks["zero"] = zero_mask
 
-        for key in self.cell_type_info:
-            
-            cur_masks = []
-            for prev_key in self.cell_type_info:
-                
-                if prev_key == key:
-                    
-                    cur_masks.append(torch.ones(size=(int(self.num_units * self.cell_type_info[prev_key]))))
-                
-                else:
-                    
-                    cur_masks.append(torch.zeros(size=(int(self.num_units * self.cell_type_info[prev_key]))))
+        if self.cell_type_info is not None:
 
-            self.masks[key] = torch.cat(cur_masks)
+            for key in self.cell_type_info:
+                
+                cur_masks = []
+
+                for prev_key in self.cell_type_info:
+                    
+                    if prev_key == key:
+                        
+                        cur_masks.append(torch.ones(size=(int(self.num_units * self.cell_type_info[prev_key]),)))
+                    
+                    else:
+                        
+                        cur_masks.append(torch.zeros(size=(int(self.num_units * self.cell_type_info[prev_key]),)))
+
+                self.masks[key] = torch.cat(cur_masks).to(self.device)
     
     def has_connection_to(
         self,
@@ -107,6 +121,7 @@ class Region(nn.Module):
         
         return False
 
+
 class mRNN(nn.Module):
     def __init__(
         self, 
@@ -115,7 +130,8 @@ class mRNN(nn.Module):
         noise_level_act=0.01, 
         noise_level_inp=0.01, 
         constrained=True, 
-        out_type="simple"):
+        device="cuda",
+        out_type="ramp"):
 
         super(mRNN, self).__init__()
         
@@ -128,10 +144,13 @@ class mRNN(nn.Module):
                 action_dim: output dimension, should be one for lick or no lick
         '''
 
+        self.ordering = ['striatum', 'gpe', 'stn', 'snr', 'thal', 'alm', 'iti']
         self.inp_dim = inp_dim
         self.out_dim = out_dim
         self.constrained = constrained
+        self.device = device
         self.region_list = {}
+        self.region_masks = {}
 
         str_cell_types = {
             "d1": 0.5,
@@ -146,7 +165,7 @@ class mRNN(nn.Module):
         # Generate regions
         striatum = Region(
             "striatum", 
-            256, 
+            100, 
             0, 
             "cuda",
             str_cell_types
@@ -154,35 +173,35 @@ class mRNN(nn.Module):
 
         gpe = Region(
             "gpe", 
-            256, 
+            100, 
             .8, 
             "cuda"
         )
 
         stn = Region(
             "stn", 
-            256, 
+            100, 
             .5, 
             "cuda"
         )
 
         snr = Region(
             "snr", 
-            256, 
+            100, 
             .8, 
             "cuda"
         )
 
         thal = Region(
             "thal", 
-            256, 
+            100, 
             .8, 
             "cuda"
         )
 
         alm = Region(
             "alm", 
-            256, 
+            100, 
             0, 
             "cuda",
             alm_cell_types
@@ -190,7 +209,7 @@ class mRNN(nn.Module):
 
         iti = Region(
             "iti", 
-            int(256 * 0.3), 
+            inp_dim, 
             0, 
             "cuda"
         )
@@ -211,21 +230,21 @@ class mRNN(nn.Module):
         nn.init.sparse_(sparse_matrix, 0.9)
 
         str2str_sparse_mask = nn.Parameter(torch.where(sparse_matrix != 0, 1, 0), requires_grad=False).cuda()
-        str2str_D = -1 * torch.eye(striatum.num_units).cuda()
+        str2str_D = -1 * torch.ones(size=(striatum.num_units, striatum.num_units)).cuda()
 
         str2snr_mask = torch.cat([
             torch.ones(size=(snr.num_units, int(striatum.num_units * 0.5))),
             torch.zeros(size=(snr.num_units, int(striatum.num_units * 0.5)))
         ], dim=1)
 
-        str2snr_D = -1 * torch.eye(striatum.num_units)
+        str2snr_D = -1 * torch.ones(size=(striatum.num_units, striatum.num_units))
 
         str2gpe_mask = torch.cat([
             torch.zeros(size=(gpe.num_units, int(striatum.num_units * 0.5))),
             torch.ones(size=(gpe.num_units, int(striatum.num_units * 0.5)))
         ], dim=1)
 
-        str2gpe_D = -1 * torch.eye(striatum.num_units)
+        str2gpe_D = -1 * torch.ones(size=(striatum.num_units, striatum.num_units))
 
         # Inhibitory Connections
         striatum.add_connection(
@@ -267,7 +286,7 @@ class mRNN(nn.Module):
         #     ALM Projections      #
         ############################
 
-        alm2alm_D = torch.eye(alm.num_units).cuda()
+        alm2alm_D = torch.ones(size=(alm.num_units, alm.num_units)).cuda()
         alm2alm_D[:, alm.num_units-int(0.3*alm.num_units):] *= -1
 
         alm.add_connection(
@@ -294,7 +313,7 @@ class mRNN(nn.Module):
         #       D2 Pathway         #
         ############################
 
-        gpe2stn_D = -1 * torch.eye(gpe.num_units).cuda()
+        gpe2stn_D = -1 * torch.ones(size=(gpe.num_units, gpe.num_units)).cuda()
 
         gpe.add_connection(
             "stn",
@@ -311,7 +330,7 @@ class mRNN(nn.Module):
         #     SNr Projections      #
         ############################
 
-        snr2thal_D = -1 * torch.eye(snr.num_units).cuda()
+        snr2thal_D = -1 * torch.ones(size=(snr.num_units, snr.num_units)).cuda()
 
         snr.add_connection(
             "thal",
@@ -329,13 +348,13 @@ class mRNN(nn.Module):
         )
 
         # Output weights
-        if out_type == "simple":
+        if out_type == "ramp":
 
-            self.out_weight_alm = (1 / alm.num_units) * torch.ones(size=(out_dim, self.alm_exc_size))
+            self.out_weight_alm = (1 / alm.num_units) * torch.ones(size=(out_dim, alm.num_units)).to(self.device)
 
         elif out_type == "data":
 
-            self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.alm_exc_size)))
+            self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, alm.num_units))).to(self.device)
             nn.init.uniform_(self.out_weight_alm, 0, 1)
         
         # Time constants for networks
@@ -350,9 +369,9 @@ class mRNN(nn.Module):
         self.total_num_units = self._get_total_num_units()
         self.tonic_inp = self._get_tonic_inp()
 
-        self.out_weight_alm = nn.Parameter(size=(inp_dim, int(alm.num_units * alm.cell_type_info["exc"])))
+        self.alm_start_idx, self.alm_end_idx = self.get_region_indices("alm")
 
-        self.alm_start_idx, self.alm_end_idx = self.get_region_indices()
+        self.thal_mask = self._gen_region_mask("thal")
 
 
     def _get_total_num_units(
@@ -372,7 +391,7 @@ class mRNN(nn.Module):
         tonic_inp = []
         for region in self.region_list.values():
             tonic_inp.append(region.base_firing)
-        return torch.cat(tonic_inp)
+        return torch.cat(tonic_inp).to(self.device)
 
 
     def gen_w_rec(
@@ -384,21 +403,21 @@ class mRNN(nn.Module):
         region_fixed_weights_columns = []
         region_sign_matrix_columns = []
 
-        for region in self.region_list.values():
+        for cur_region in self.region_list:
 
-            self._get_full_connectivity(region)
+            self._get_full_connectivity(self.region_list[cur_region])
 
             connections_from_region = []
             weight_mask_from_region = []
             fixed_weights_from_region = []
             sign_matrix_from_region = []
 
-            for connection in region.connections:
+            for connection in self.ordering:
 
-                connections_from_region.append(connection["parameter"])
-                weight_mask_from_region.append(connection["weight_mask"])
-                fixed_weights_from_region.append(connection["fixed_weights"])
-                sign_matrix_from_region.append(connection["sign_matrix"])
+                connections_from_region.append(self.region_list[cur_region].connections[connection]["parameter"])
+                weight_mask_from_region.append(self.region_list[cur_region].connections[connection]["weight_mask"])
+                fixed_weights_from_region.append(self.region_list[cur_region].connections[connection]["fixed_weights"])
+                sign_matrix_from_region.append(self.region_list[cur_region].connections[connection]["sign_matrix"])
             
             full_connections = torch.cat(connections_from_region, dim=0)
             full_weight_mask = torch.cat(weight_mask_from_region, dim=0)
@@ -410,32 +429,62 @@ class mRNN(nn.Module):
             region_fixed_weights_columns.append(full_fixed_weights)
             region_sign_matrix_columns.append(full_sign_matrix)
         
-        W_rec = torch.cat(region_connection_columns, dim=1)
+        W_rec = nn.Parameter(torch.cat(region_connection_columns, dim=1))
         W_rec_mask = torch.cat(region_weight_mask_columns, dim=1)
         W_rec_fixed = torch.cat(region_fixed_weights_columns, dim=1)
         W_rec_sign = torch.cat(region_sign_matrix_columns, dim=1)
 
         return W_rec, W_rec_mask, W_rec_fixed, W_rec_sign
+    
+    
+    def _gen_region_mask(
+        self,
+        region,
+        cell_type=None
+    ):
+
+        if cell_type is None:
+            mask_type = "full"
+        else:
+            mask_type = cell_type
+        
+        mask = []
+        for next_region in self.region_list:
+
+            if region == next_region:
+
+                mask.append(self.region_list[region].masks[mask_type])
+            
+            else:
+
+                mask.append(self.region_list[next_region].masks["zero"])
+        
+        mask = torch.cat(mask).to(self.device)
+
+        return mask
             
             
     def _get_full_connectivity(
         self,
         region,
-        region_list
     ):
 
-        for other_region in region_list.values():
+        for other_region in self.region_list.values():
             
             if region.has_connection_to(other_region):
 
                 continue
 
             weight_mask = torch.zeros(size=(other_region.num_units, region.num_units))
+            fixed_weights = torch.zeros(size=(other_region.num_units, region.num_units))
+            sign_matrix = torch.zeros(size=(other_region.num_units, region.num_units))
 
             region.add_connection(
                 other_region.name,
                 other_region.num_units,
-                weight_mask=weight_mask
+                weight_mask=weight_mask,
+                fixed_weights=fixed_weights,
+                sign_matrix=sign_matrix
             )
     
 
@@ -443,7 +492,7 @@ class mRNN(nn.Module):
         self
     ):
         
-        W_rec = (self.W_rec_mask * F.relu(self.W_rec) + self.W_rec_fixed) @ self.W_rec_sign_matrix
+        W_rec = (self.W_rec_mask * F.relu(self.W_rec) + self.W_rec_fixed) * self.W_rec_sign_matrix
         return W_rec
     
 
@@ -491,7 +540,7 @@ class mRNN(nn.Module):
 
         if self.constrained:
 
-            W_rec = self.apply_dales_law
+            W_rec = self.apply_dales_law()
             out_weight_alm = F.relu(self.out_weight_alm)
 
         # Add noise to the system if specified
@@ -538,7 +587,7 @@ class mRNN(nn.Module):
 
             # Get the ITI mode input to the network
             iti_act = inp[:, t, :] + perturb_inp[:, t, :]
-            non_iti_mask = torch.zeros(size=(iti_act.shape[0], self.hid_dim * 7), device="cuda")
+            non_iti_mask = torch.zeros(size=(iti_act.shape[0], self.total_num_units - self.region_list["iti"].num_units), device="cuda")
             iti_input = torch.cat([non_iti_mask, iti_act], dim=-1)
 
             # Get the activity of the next hidden state
@@ -553,14 +602,14 @@ class mRNN(nn.Module):
                             + self.tonic_inp
                             + inhib_stim[:, t, :]
                             + (cue_inp[:, t, :] * self.thal_mask)
-                            + (perturb_hid[:, t, :] * self.alm_ramp_mask)
+                            + (perturb_hid[:, t, :])
                         ))
 
                 hn_next = F.relu(xn_next)
 
                 alm_hn = hn_next[:, self.alm_start_idx:self.alm_end_idx]
 
-                out = (out_weight_alm @ (alm_hn * self.alm.masks["exc"]).T).T
+                out = (out_weight_alm @ (alm_hn * self.region_list["alm"].masks["exc"]).T).T
             
             else:
 

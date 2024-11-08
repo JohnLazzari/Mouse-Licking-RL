@@ -8,7 +8,7 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
-def loss_d1d2(
+def loss(
     criterion, 
     out, 
     neural_act, 

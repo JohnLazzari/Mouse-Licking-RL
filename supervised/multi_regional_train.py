@@ -8,11 +8,11 @@ import numpy as np
 from models import mRNN
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_ramp, get_masks, get_acts_manipulation
-from losses import loss_d1d2, loss_stralm, simple_dynamics_d1d2
+from utils import gather_inp_data, get_ramp, get_masks, get_data
+from losses import loss
 from tqdm import tqdm
 
-HID_DIM = 256                                                                       # Hid dim of each region
+HID_DIM = 100                                                                       # Hid dim of each region
 OUT_DIM = 1                                                                         # Output dim (not used)
 INP_DIM = int(HID_DIM * 0.1)                                                          # Input dimension
 EPOCHS = 10000                                                                       # Training iterations
@@ -21,41 +21,13 @@ DT = 1e-2                                                                       
 WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
 MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
 CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
-TYPE_LOSS = "alm"                                                                   # alm, threshold, none (none trains all regions to ramp, alm is just alm. alm is currently base model)
-START_SILENCE = 160
-END_SILENCE = 220
-STIM_STRENGTH = 10
-EXTRA_STEPS_SILENCE = 100
-SILENCED_REGION = "alm"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_almnoise.01_10000iters_newloss.pth"                   # Save path
+TRIAL_EPOCH = "delay"
+NMF = False
+N_COMPONENTS = 5
+OUT_TYPE = "ramp"
+SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_100n_almnoise.01_10000iters_newloss.pth"                   # Save path
 
 # Model with gaussian ramps looks best with 0.8, .5, .8 tonic levels, cue input to thal, and no fsi (new baseline model for simple ramping task)
-
-def test(rnn, len_seq, str_start, str_end, best_steady_state):
-    
-    acts_manipulation = get_acts_manipulation(
-        len_seq, 
-        rnn, 
-        HID_DIM, 
-        INP_DIM,
-        MODEL_TYPE, 
-        START_SILENCE,
-        END_SILENCE,
-        STIM_STRENGTH, 
-        EXTRA_STEPS_SILENCE, 
-        SILENCED_REGION,
-        DT 
-    )
-
-    acts_manipulation_mean = np.mean(acts_manipulation[:, :, str_start:str_end], axis=-1)
-    vels = np.abs(acts_manipulation_mean[:, START_SILENCE+10:END_SILENCE] - acts_manipulation_mean[:, START_SILENCE+9:END_SILENCE-1])
-    mean_vels = np.mean(vels, axis=(1, 0))
-
-    if mean_vels < best_steady_state:
-        torch.save(rnn.state_dict(), SAVE_PATH)
-        best_steady_state = mean_vels
-    
-    return best_steady_state, mean_vels
 
 def main():
 
@@ -64,16 +36,29 @@ def main():
     ####################################
 
     # Create RNN and specifcy objectives
-    rnn = mRNN(INP_DIM, HID_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+    rnn = mRNN(INP_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
         
     criterion = nn.MSELoss()
 
     # Get ramping activity
-    neural_act = get_ramp(dt=DT)
-    neural_act = neural_act.cuda()
+    if OUT_TYPE == "ramp":
+
+        neural_act, peak_times = get_ramp(dt=DT)
+        neural_act = neural_act.cuda()
+
+    elif OUT_TYPE == "data":
+
+        neural_act, peak_times = get_data(
+            DT,
+            TRIAL_EPOCH,
+            NMF,
+            N_COMPONENTS
+        )
+
+        neural_act = neural_act.cuda()
 
     # Get input and output data
-    iti_inp, cue_inp, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
+    iti_inp, cue_inp, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM, peaks=peak_times)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Specify Optimizer
@@ -82,8 +67,8 @@ def main():
     hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
     xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
-    loss_mask_act = get_masks(HID_DIM, INP_DIM, len_seq, regions=7)
-    inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], HID_DIM * 7 + INP_DIM + int(HID_DIM * 0.3)), device="cuda")
+    loss_mask_act = get_masks(OUT_DIM, len_seq)
+    inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
 
     best_steady_state = np.inf
     prev_steady_state = np.inf
@@ -101,7 +86,7 @@ def main():
         out = out * loss_mask_act
 
         # Get loss
-        loss = loss_d1d2(
+        loss_val = loss(
             criterion, 
             out, 
             neural_act, 
@@ -110,10 +95,9 @@ def main():
         # Save model
         if epoch > 500:
             torch.save(rnn.state_dict(), SAVE_PATH)
-            #best_steady_state, prev_steady_state = test(rnn, len_seq, str_units_start, str_units_end, best_steady_state)
 
         if epoch % 10 == 0:
-            print("Training loss at epoch {}:{}".format(epoch, loss.item()))
+            print("Training loss at epoch {}:{}".format(epoch, loss_val.item()))
             print("")
 
         #simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)
@@ -121,7 +105,7 @@ def main():
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
-        loss.backward()
+        loss_val.backward()
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
