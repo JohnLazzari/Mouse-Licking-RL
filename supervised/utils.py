@@ -31,8 +31,7 @@ def gaussian_density(
     return torch.exp(-(x - mean)**2/(2*std**2))
 
 def gather_inp_data(
-    dt, 
-    hid_dim,
+    inp_dim,
     peaks,
 ):
 
@@ -47,26 +46,26 @@ def gather_inp_data(
 
     # Condition 1: 1.1s
     inp[0] = torch.cat([
-        0.04 * torch.ones(size=(100, int(hid_dim * 0.1))),
-        0.4 * torch.ones(size=(peaks[0], int(hid_dim * 0.1))),
+        0.04 * torch.ones(size=(100, inp_dim)),
+        0.4 * torch.ones(size=(peaks[0], inp_dim)),
     ])
 
     # Condition 2: 1.4s
     inp[1] = torch.cat([
-        0.03 * torch.ones(size=(100, int(hid_dim * 0.1))),
-        0.3 * torch.ones(size=(peaks[1], int(hid_dim * 0.1))),
+        0.03 * torch.ones(size=(100, inp_dim)),
+        0.3 * torch.ones(size=(peaks[1], inp_dim)),
     ])
 
     # Condition 3: 1.7s
     inp[2] = torch.cat([
-        0.02 * torch.ones(size=(100, int(hid_dim * 0.1))),
-        0.2 * torch.ones(size=(peaks[2], int(hid_dim * 0.1))),
+        0.02 * torch.ones(size=(100, inp_dim)),
+        0.2 * torch.ones(size=(peaks[2], inp_dim)),
     ])
 
     # Condition 4: 2s
     inp[3] = torch.cat([
-        0.01 * torch.ones(size=(100, int(hid_dim * 0.1))),
-        0.1 * torch.ones(size=(peaks[3], int(hid_dim * 0.1))),
+        0.01 * torch.ones(size=(100, inp_dim)),
+        0.1 * torch.ones(size=(peaks[3], inp_dim)),
     ])
 
     # Combine all inputs

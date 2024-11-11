@@ -1,0 +1,14 @@
+inp_dim = 26
+out_dim = 1
+epochs = 5000
+lr = 1e-4
+dt = 1e-2
+weight_decay = 1e-3
+constrained = True
+trial_epoch = "delay"
+nmf = False
+n_components = 5
+out_type = "ramp"
+save_path = "checkpoints/"
+specifications_path = "checkpoints/model_specifications/"
+mrnn_config_file = "supervised/configurations/mRNN_ramp.json"

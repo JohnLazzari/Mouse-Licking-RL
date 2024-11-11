@@ -21,28 +21,38 @@
       {
         "name": "gpe",
         "num_units": 256,
-        "base_firing": 0.8
+        "base_firing": 0.8,
+        "cell_types": {}
       },
       {
         "name": "stn",
         "num_units": 256,
-        "base_firing": 0.5
+        "base_firing": 0.5,
+        "cell_types": {}
       },
       {
         "name": "snr",
         "num_units": 256,
-        "base_firing": 0.8
+        "base_firing": 0.8,
+        "cell_types": {}
       },
       {
         "name": "thal",
         "num_units": 256,
-        "base_firing": 0
+        "base_firing": 0,
+        "cell_types": {}
       },
       {
         "name": "alm",
         "num_units": 256,
         "base_firing": 0,
         "cell_types": {"exc": 0.7, "inhib": 0.3}
+      },
+      {
+        "name": "iti",
+        "num_units": 26,
+        "base_firing": 0,
+        "cell_types": {}
       }
     ],
 
@@ -61,85 +71,85 @@
       {
         "src_region": "striatum",
         "dst_region": "striatum",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "striatum",
         "dst_region": "gpe",
         "src_region_cell_type": "d2",
-        "dst_region_cell_type": "None",
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "striatum",
         "dst_region": "snr",
         "src_region_cell_type": "d1",
-        "dst_region_cell_type": "None",
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "gpe",
         "dst_region": "stn",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "stn",
         "dst_region": "snr",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "exc"
       },
       {
         "src_region": "snr",
         "dst_region": "thal",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "thal",
         "dst_region": "striatum",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "exc"
       },
       {
         "src_region": "thal",
         "dst_region": "alm",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "exc"
       },
       {
         "src_region": "alm",
         "dst_region": "alm",
         "src_region_cell_type": "exc",
-        "dst_region_cell_type": "None",
+        "dst_region_cell_type": null,
         "sign": "exc"
       },
       {
         "src_region": "alm",
         "dst_region": "alm",
         "src_region_cell_type": "inhib",
-        "dst_region_cell_type": "None",
+        "dst_region_cell_type": null,
         "sign": "inhib"
       },
       {
         "src_region": "alm",
         "dst_region": "striatum",
         "src_region_cell_type": "exc",
-        "dst_region_cell_type": "None",
+        "dst_region_cell_type": null,
         "sign": "exc"
       },
       {
         "src_region": "iti",
         "dst_region": "striatum",
-        "src_region_cell_type": "None",
-        "dst_region_cell_type": "None",
+        "src_region_cell_type": null,
+        "dst_region_cell_type": null,
         "sign": "exc"
       }
     ]

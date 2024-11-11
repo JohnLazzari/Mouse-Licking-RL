@@ -5,79 +5,86 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
-from models import mRNN
+from models import CBGTCL
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from utils import gather_inp_data, get_ramp, get_masks, get_data
 from losses import loss
 from tqdm import tqdm
-
-HID_DIM = 100                                                                       # Hid dim of each region
-OUT_DIM = 1                                                                         # Output dim (not used)
-INP_DIM = int(HID_DIM * 0.1)                                                          # Input dimension
-EPOCHS = 10000                                                                       # Training iterations
-LR = 1e-4                                                                           # Learning rate
-DT = 1e-2                                                                           # DT to control number of timesteps
-WEIGHT_DECAY = 1e-3                                                                 # Weight decay parameter
-MODEL_TYPE = "d1d2"                                                                 # d1d2, d1, stralm, d1d2_simple
-CONSTRAINED = True                                                                  # Whether or not the model uses plausible circuit
-TRIAL_EPOCH = "delay"
-NMF = False
-N_COMPONENTS = 5
-OUT_TYPE = "ramp"
-SAVE_PATH = f"checkpoints/{MODEL_TYPE}_full_100n_almnoise.01_10000iters_newloss.pth"                   # Save path
+import config
+from datetime import datetime
 
 # Model with gaussian ramps looks best with 0.8, .5, .8 tonic levels, cue input to thal, and no fsi (new baseline model for simple ramping task)
 
 def main():
+
+    ### PARAMETERS ###
+    parser = config.config_parser()
+    args = parser.parse_args()
+
+    # datetime object containing current date and time
+    now = datetime.now()
+
+    # dd_mm_YY_H_M_S for saving model
+    dt_string = now.strftime("%d_%m_%Y_%H_%M_%S")
 
     ####################################
     #        Training Params           #
     ####################################
 
     # Create RNN and specifcy objectives
-    rnn = mRNN(INP_DIM, OUT_DIM, noise_level_act=0.1, noise_level_inp=0.05, constrained=CONSTRAINED).cuda()
+    rnn = CBGTCL(
+        args.config_file, 
+        args.inp_dim, 
+        args.out_dim, 
+        args.out_type, 
+        noise_level_act=0.1, 
+        noise_level_inp=0.05, 
+        constrained=args.constrained
+    ).cuda()
         
     criterion = nn.MSELoss()
 
     # Get ramping activity
-    if OUT_TYPE == "ramp":
+    if args.out_type == "ramp":
 
-        neural_act, peak_times = get_ramp(dt=DT)
+        neural_act, peak_times = get_ramp(dt=args.dt)
         neural_act = neural_act.cuda()
 
-    elif OUT_TYPE == "data":
+    elif args.out_type == "data":
 
         neural_act, peak_times = get_data(
-            DT,
-            TRIAL_EPOCH,
-            NMF,
-            N_COMPONENTS
+            args.dt,
+            args.trial_epoch,
+            args.nmf,
+            args.n_components
         )
 
         neural_act = neural_act.cuda()
 
     # Get input and output data
-    iti_inp, cue_inp, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM, peaks=peak_times)
+    iti_inp, cue_inp, len_seq = gather_inp_data(inp_dim=args.inp_dim, peaks=peak_times)
     iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
 
     # Specify Optimizer
-    rnn_optim = optim.AdamW(rnn.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+    rnn_optim = optim.AdamW(rnn.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
     xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
-    loss_mask_act = get_masks(OUT_DIM, len_seq)
+    loss_mask_act = get_masks(args.out_dim, len_seq)
     inhib_stim = torch.zeros(size=(1, iti_inp.shape[1], rnn.total_num_units), device="cuda")
 
-    best_steady_state = np.inf
-    prev_steady_state = np.inf
+    best_val_loss = np.inf
+
+    cur_loss = 0
+    mean_training_loss = []
     
     ###########################
     #    Begin Training       # 
     ###########################
     
-    for epoch in range(EPOCHS):
+    for epoch in range(args.epochs):
         
         # Pass through RNN
         _, out = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=True)
@@ -86,26 +93,27 @@ def main():
         out = out * loss_mask_act
 
         # Get loss
-        loss_val = loss(
+        loss_ = loss(
             criterion, 
             out, 
             neural_act, 
         )
 
+        cur_loss += loss_.item()
+
         # Save model
         if epoch > 500:
-            torch.save(rnn.state_dict(), SAVE_PATH)
+            torch.save(rnn.state_dict(), args.save_path + dt_string)
 
         if epoch % 10 == 0:
-            print("Training loss at epoch {}:{}".format(epoch, loss_val.item()))
+            mean_loss = cur_loss / 10
+            cur_loss = 0
+            print("Mean training loss at epoch {}:{}".format(epoch, mean_loss))
             print("")
-
-        #simple_loss = simple_dynamics_d1d2(act, rnn, HID_DIM)
-        #loss += simple_loss
 
         # Zero out and compute gradients of above losses
         rnn_optim.zero_grad()
-        loss_val.backward()
+        loss_.backward()
 
         # Take gradient step
         torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
