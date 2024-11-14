@@ -44,7 +44,7 @@ class Region(nn.Module):
         self.connections = {}
         self.masks = {}
 
-        self._generate_masks()
+        self.__generate_masks()
 
     def add_connection(
         self, 
@@ -85,8 +85,8 @@ class Region(nn.Module):
         connection_tensor = torch.ones_like(parameter).to(self.device) if not zero_connection else torch.zeros_like(parameter).to(self.device)
 
         # Create weight masks based on cell types, if specified
-        weight_mask_src, sign_matrix_src = self._get_weight_and_sign_matrices(src_region_cell_type, connection_tensor)
-        weight_mask_dst, sign_matrix_dst = proj_region._get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor)
+        weight_mask_src, sign_matrix_src = self.__get_weight_and_sign_matrices(src_region_cell_type, connection_tensor)
+        weight_mask_dst, sign_matrix_dst = proj_region.__get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor)
 
         # Combine masks
         weight_mask = weight_mask_src * weight_mask_dst
@@ -109,7 +109,7 @@ class Region(nn.Module):
         else:
             self.connections[proj_region_name] = connection_properties
 
-    def _generate_masks(self):
+    def __generate_masks(self):
         """
         Generates masks for the region, including full and zero masks, and specific cell-type masks.
         """
@@ -120,10 +120,10 @@ class Region(nn.Module):
         self.masks["zero"] = zero_mask
 
         for key in self.cell_type_info:
-            mask = self._generate_cell_type_mask(key)
+            mask = self.__generate_cell_type_mask(key)
             self.masks[key] = mask.to(self.device)
 
-    def _generate_cell_type_mask(self, key):
+    def __generate_cell_type_mask(self, key):
         """
         Generates a mask for a specific cell type based on its proportion in the region.
 
@@ -142,7 +142,7 @@ class Region(nn.Module):
         mask = torch.cat(cur_masks)
         return mask
 
-    def _get_weight_and_sign_matrices(self, cell_type, connection_tensor):
+    def __get_weight_and_sign_matrices(self, cell_type, connection_tensor):
         """
         Retrieves the weight mask and sign matrix for a specified cell type.
 
@@ -209,9 +209,14 @@ class mRNN(nn.Module):
         device="cuda",
     ):
         super(mRNN, self).__init__()
+
+        # TODO change how input is given to network
+        # One possibility is a list of tuples specifying the input and region it will go to
+        # Network will automatically apply input to correct regions
         
         # Initialize network parameters
         self.region_dict = {}
+        self.region_mask_dict = {}
         self.inp_dim = inp_dim
         self.constrained = constrained
         self.device = device
@@ -233,8 +238,15 @@ class mRNN(nn.Module):
         self.tonic_inp = self.__get_tonic_inp()
 
         # Get indices for specific regions
-        self.alm_start_idx, self.alm_end_idx = self.get_region_indices("alm")
-        self.thal_mask = self.__gen_region_mask("thal")
+        for region in self.region_dict:
+            # Get the mask for the whole region, regardless of cell type
+            self.region_mask_dict[region] = {}
+            self.region_mask_dict[region]["full"] = self.__gen_region_mask(region)
+            # Loop through the cell type of each region if not empty
+            for cell_type in self.region_dict[region].cell_type_info:
+                # Generate a mask for the cell type in region_mask_dict
+                self.region_mask_dict[region][cell_type] = self.__gen_region_mask(region, cell_type=cell_type)
+
 
     def gen_w_rec(self):
         """

@@ -45,50 +45,44 @@ def gather_inp_data(
     inp = {}
 
     # Condition 1: 1.1s
-    inp[0] = torch.cat([
-        0.04 * torch.ones(size=(100, inp_dim)),
-        0.4 * torch.ones(size=(peaks[0], inp_dim)),
-    ])
+    inp[0] = 0.5 * torch.ones(size=(peaks[0], inp_dim))
+    inp[0][:100, :] *= 0.1
+
+    # Condition 1: 1.1s
+    inp[1] = 0.4 * torch.ones(size=(peaks[1], inp_dim))
+    inp[1][:100, :] *= 0.1
 
     # Condition 2: 1.4s
-    inp[1] = torch.cat([
-        0.03 * torch.ones(size=(100, inp_dim)),
-        0.3 * torch.ones(size=(peaks[1], inp_dim)),
-    ])
+    inp[2] = 0.3 * torch.ones(size=(peaks[2], inp_dim))
+    inp[2][:100, :] *= 0.1
 
     # Condition 3: 1.7s
-    inp[2] = torch.cat([
-        0.02 * torch.ones(size=(100, inp_dim)),
-        0.2 * torch.ones(size=(peaks[2], inp_dim)),
-    ])
+    inp[3] = 0.2 * torch.ones(size=(peaks[3], inp_dim))
+    inp[3][:100, :] *= 0.1
 
     # Condition 4: 2s
-    inp[3] = torch.cat([
-        0.01 * torch.ones(size=(100, inp_dim)),
-        0.1 * torch.ones(size=(peaks[3], inp_dim)),
-    ])
+    inp[4] = 0.1 * torch.ones(size=(peaks[4], inp_dim))
+    inp[4][:100, :] *= 0.1
 
     # Combine all inputs
-    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3]], batch_first=True)
+    total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3], inp[4]], batch_first=True)
 
-    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    #plt.show()
+    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    plt.show()
 
     # Cue Input
     cue_inp_dict = {}
-    cue_inp_pre_cue = torch.zeros(size=(100, 1))
 
-    for cond in range(4):
+    for cond in range(5):
 
-        cue_inp_dict[cond] = torch.cat([
-            cue_inp_pre_cue,
-            torch.ones(size=(peaks[cond], 1)),
-        ])
+        cue_inp_dict[cond] = torch.ones(size=(peaks[cond], 1)),
+        cue_inp_dict[cond][100:, :] *= 0
 
-    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3]], batch_first=True)
+    total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3], cue_inp_dict[4]], batch_first=True)
 
     # Combine all sequence lengths
-    len_seq = [210, 240, 270, 300]
+    # Currently only makes sense if using delay only, which I will go with for now
+    len_seq = [peaks[0], peaks[1], peaks[2], peaks[3], peaks[4]]
 
     return total_iti_inp, total_cue_inp, len_seq
 
@@ -104,19 +98,19 @@ def get_ramp(
     
     ramps = {}
 
-    means = [1.1, 1.4, 1.7, 2.0]
-    std = [0.4, 0.5, 0.6, 0.7]
+    means = [0.8, 1.1, 1.4, 1.7, 2.0]
+    std = [0.3, 0.4, 0.5, 0.6, 0.7]
 
-    for cond in range(4):
+    for cond in range(len(means)):
 
         timepoints = torch.linspace(-1, means[cond], steps=100 + int((means[cond]) / dt)).unsqueeze(-1)
         ramps[cond] = gaussian_density(timepoints, means[cond], std[cond])
 
-    total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3]], batch_first=True)
+    total_ramp = pad_sequence([ramps[0], ramps[1], ramps[2], ramps[3], ramps[4]], batch_first=True)
     
     peak_times = []
-    for i in range(4):
-        peak_times.append(int(means[i] / dt))
+    for i in range(5):
+        peak_times.append(100 + int(means[i] / dt))
 
     plt.plot(total_ramp.squeeze().numpy().T)
     plt.show()
@@ -254,7 +248,7 @@ def get_data(
     return neural_data_combined, peak_times
 
 
-def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
+def get_acts_control(len_seq, rnn, data, data_split="all"):
 
     '''
         Get the activities of the desired region for a single condition (silencing or activation)
@@ -275,29 +269,19 @@ def get_acts_control(len_seq, rnn, hid_dim, inp_dim, x_data, model_type):
             total_num_units:    total number of units (hid_dim * num_regions)
     '''
 
-    if model_type == "d1d2":
+    hn = torch.zeros(size=(1, data[data_split]["y_train"].shape[0], rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, data[data_split]["y_train"].shape[0], rnn.total_num_units)).cuda()
 
-        hn = torch.zeros(size=(1, 4, hid_dim * 7 + inp_dim + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 7 + inp_dim + int(hid_dim * 0.3))).cuda()
-
-    elif model_type == "stralm":
-
-        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
-
-    inhib_stim = torch.zeros(size=(4, max(len_seq), hn.shape[-1]), device="cuda")
-
-    iti_inp, cue_inp = x_data 
-    iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
+    inhib_stim = torch.zeros(size=(4, data[data_split]["y_train"].shape[0], rnn.total_num_units), device="cuda")
 
     with torch.no_grad():        
 
-        _, _, acts = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
+        acts, _ = rnn(data[data_split]["iti_inp"], data[data_split]["cue_inp"], hn, xn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_silence, end_silence, stim_strength, extra_steps, region, dt):
+def get_acts_manipulation(len_seq, rnn, start_silence, end_silence, stim_strength, extra_steps, regions_cell_types, dt):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -318,25 +302,19 @@ def get_acts_manipulation(len_seq, rnn, hid_dim, inp_dim, model_type, start_sile
             total_num_units:        total number of units (hid_dim * num_regions)
     '''
 
-    if model_type == "d1d2":
-
-        hn = torch.zeros(size=(1, 4, hid_dim * 7 + inp_dim + int(hid_dim * 0.3))).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 7 + inp_dim + int(hid_dim * 0.3))).cuda()
-
-    elif model_type == "stralm":
-
-        hn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
-        xn = torch.zeros(size=(1, 4, hid_dim * 2 + inp_dim)).cuda()
+    hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
 
     inhib_stim = get_inhib_stim_silence(
         rnn, 
-        region, 
+        regions_cell_types, 
         start_silence, 
         end_silence, 
         len_seq, 
         extra_steps, 
         stim_strength, 
-        hn.shape[-1]
+        rnn.total_num_units,
+        batch_size
     )
 
     iti_inp_silence, cue_inp_silence = get_input_silence(
@@ -377,41 +355,44 @@ def project_ramp_mode(samples, ramp_mode):
     projected = samples @ ramp_mode
     return projected
 
-def get_inhib_stim_silence(rnn, region, start_silence, end_silence, len_seq, extra_steps, stim_strength, total_num_units):
+def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, len_seq, extra_steps, stim_strength, batch_size):
+
+    """
+    Get inhibitory or excitatory stimulus for optogenetic replication
+    Function will gather the mask for the specified region and cell type then make a stimulus targeting these regions
+
+    Returns:
+        rnn:                        mRNN to silence
+        regions_cell_types:         List of tuples specifying the region and corresponding cell type to get a mask for
+        start_silence:              inteer index of when to start perturbations in the sequence
+        end_silence:                integer index of when to stop perturbations in the sequence
+        len_seq:                    list of sequence lengths
+        extra_steps:                Number of extra steps to add to the sequence if necessary
+        stim_strength:              Floating point value that specifies how strong the perturbation is (- or +)
+        batch_size:                 Number of conditions to be included in the sequence
+    """
 
     # Select mask based on region being silenced
-    if region == "alm":
-
-        mask_inhib_units = -stim_strength * (rnn.alm_ramp_mask)
-        mask_iti_units = -1 * rnn.iti_mask
-        mask = mask_inhib_units + mask_iti_units
-        #mask = mask_iti_units
-
-    elif region == "str":
-
-        mask = stim_strength * rnn.str_d1_mask
-
-    elif region == "str_d2":
-
-        mask = stim_strength * rnn.str_d2_mask
+    mask = torch.zeros(size=(rnn.total_num_units))
+    for region, cell_type in regions_cell_types:
+        if cell_type is not None:
+            cur_mask = stim_strength * (rnn.region_mask_dict[region][cell_type])
+        else:
+            cur_mask = stim_strength * (rnn.region_mask_dict[region]["full"])
+        mask = mask + cur_mask
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
     # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
-    inhib_stim_pre = torch.zeros(size=(4, start_silence, total_num_units), device="cuda")
-    inhib_stim_silence = torch.ones(size=(4, end_silence - start_silence, total_num_units), device="cuda") * mask
-    inhib_stim_post = torch.zeros(size=(4, (max(len_seq) - end_silence) + extra_steps, total_num_units), device="cuda")
+    inhib_stim_pre = torch.zeros(size=(batch_size, start_silence, rnn.total_num_units), device="cuda")
+    inhib_stim_silence = torch.ones(size=(batch_size, end_silence - start_silence, rnn.total_num_units), device="cuda") * mask
+    inhib_stim_post = torch.zeros(size=(batch_size, (max(len_seq) - end_silence) + extra_steps, rnn.total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
 
-def get_input_silence(dt, hid_dim, start_silence, end_silence, region):
+def get_input_silence(start_silence, end_silence, region, data, data_split):
 
-    x_data, _ = gather_inp_data(
-                        dt, 
-                        hid_dim, 
-                    )
-    
-    total_iti_inp, total_cue_inp = x_data
+    total_iti_inp, total_cue_inp = data[data_split]["iti_inp"], data[data_split]["cue_inp"]
 
     if region == "alm":
 
@@ -429,9 +410,6 @@ def get_input_silence(dt, hid_dim, start_silence, end_silence, region):
             total_cue_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
             total_cue_inp[:, start_silence:, :]
         ], dim=1)
-
-    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    #plt.show()
 
     return total_iti_inp, total_cue_inp
 
