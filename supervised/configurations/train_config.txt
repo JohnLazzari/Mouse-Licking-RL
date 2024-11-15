@@ -10,5 +10,5 @@ nmf = False
 n_components = 5
 out_type = "ramp"
 save_path = "checkpoints/"
-specifications_path = "checkpoints/model_specifications/"
+model_specifications_path = "checkpoints/model_specifications/"
 mrnn_config_file = "supervised/configurations/mRNN_ramp.json"

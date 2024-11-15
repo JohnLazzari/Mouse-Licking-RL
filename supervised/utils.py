@@ -75,7 +75,7 @@ def gather_inp_data(
 
     for cond in range(5):
 
-        cue_inp_dict[cond] = torch.ones(size=(peaks[cond], 1)),
+        cue_inp_dict[cond] = torch.ones(size=(peaks[cond], 1))
         cue_inp_dict[cond][100:, :] *= 0
 
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3], cue_inp_dict[4]], batch_first=True)
@@ -248,7 +248,7 @@ def get_data(
     return neural_data_combined, peak_times
 
 
-def get_acts_control(len_seq, rnn, data, data_split="all"):
+def get_acts_control(rnn, data, data_split="all"):
 
     '''
         Get the activities of the desired region for a single condition (silencing or activation)
@@ -269,19 +269,20 @@ def get_acts_control(len_seq, rnn, data, data_split="all"):
             total_num_units:    total number of units (hid_dim * num_regions)
     '''
 
-    hn = torch.zeros(size=(1, data[data_split]["y_train"].shape[0], rnn.total_num_units)).cuda()
-    xn = torch.zeros(size=(1, data[data_split]["y_train"].shape[0], rnn.total_num_units)).cuda()
+    batch_size = data[data_split]["y_train"].shape[0]
 
-    inhib_stim = torch.zeros(size=(4, data[data_split]["y_train"].shape[0], rnn.total_num_units), device="cuda")
+    hn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
+
+    inhib_stim = torch.zeros(size=(4, batch_size, rnn.total_num_units), device="cuda")
 
     with torch.no_grad():        
 
         acts, _ = rnn(data[data_split]["iti_inp"], data[data_split]["cue_inp"], hn, xn, inhib_stim, noise=False)
-        acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_acts_manipulation(len_seq, rnn, start_silence, end_silence, stim_strength, extra_steps, regions_cell_types, dt):
+def get_acts_manipulation(rnn, start_silence, end_silence, stim_strength, extra_steps, regions_cell_types, data, data_split="all"):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -302,34 +303,27 @@ def get_acts_manipulation(len_seq, rnn, start_silence, end_silence, stim_strengt
             total_num_units:        total number of units (hid_dim * num_regions)
     '''
 
-    hn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
-    xn = torch.zeros(size=(1, 4, rnn.total_num_units)).cuda()
+    batch_size = data[data_split]["y_target"].shape[0]
+    max_seq_len = data[data_split]["y_target"].shape[1]
+
+    hn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
+    xn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
 
     inhib_stim = get_inhib_stim_silence(
         rnn, 
         regions_cell_types, 
         start_silence, 
         end_silence, 
-        len_seq, 
+        max_seq_len, 
         extra_steps, 
         stim_strength, 
         rnn.total_num_units,
         batch_size
     )
 
-    iti_inp_silence, cue_inp_silence = get_input_silence(
-        dt, 
-        hid_dim,
-        start_silence,
-        end_silence, 
-        region
-    )
-
-    iti_inp_silence, cue_inp_silence = iti_inp_silence.cuda(), cue_inp_silence.cuda()
-        
     with torch.no_grad():        
 
-        _, _, acts = rnn(iti_inp_silence, cue_inp_silence, hn, xn, inhib_stim, noise=False)
+        _, _, acts = rnn(data[data_split]["iti_inp"], data[data_split]["cue_inp"], hn, xn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -355,7 +349,7 @@ def project_ramp_mode(samples, ramp_mode):
     projected = samples @ ramp_mode
     return projected
 
-def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, len_seq, extra_steps, stim_strength, batch_size):
+def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, max_seq_len, extra_steps, stim_strength, batch_size):
 
     """
     Get inhibitory or excitatory stimulus for optogenetic replication
@@ -366,7 +360,7 @@ def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, 
         regions_cell_types:         List of tuples specifying the region and corresponding cell type to get a mask for
         start_silence:              inteer index of when to start perturbations in the sequence
         end_silence:                integer index of when to stop perturbations in the sequence
-        len_seq:                    list of sequence lengths
+        max_seq_len:                    max sequence length
         extra_steps:                Number of extra steps to add to the sequence if necessary
         stim_strength:              Floating point value that specifies how strong the perturbation is (- or +)
         batch_size:                 Number of conditions to be included in the sequence
@@ -382,140 +376,10 @@ def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, 
         mask = mask + cur_mask
     
     # Inhibitory/excitatory stimulus to network, designed as an input current
-    # Does this for a single condition, len_seq should be a single number for the chosen condition, and x_data should be [1, len_seq, :]
+    # It applies the inhibitory stimulus to all of the conditions specified in data (or max_seq_len) equally
     inhib_stim_pre = torch.zeros(size=(batch_size, start_silence, rnn.total_num_units), device="cuda")
     inhib_stim_silence = torch.ones(size=(batch_size, end_silence - start_silence, rnn.total_num_units), device="cuda") * mask
-    inhib_stim_post = torch.zeros(size=(batch_size, (max(len_seq) - end_silence) + extra_steps, rnn.total_num_units), device="cuda")
+    inhib_stim_post = torch.zeros(size=(batch_size, (max_seq_len - end_silence) + extra_steps, rnn.total_num_units), device="cuda")
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
-
-def get_input_silence(start_silence, end_silence, region, data, data_split):
-
-    total_iti_inp, total_cue_inp = data[data_split]["iti_inp"], data[data_split]["cue_inp"]
-
-    if region == "alm":
-
-        # Silence the input only during ALM silencing since it is technically ALM activity
-        total_iti_inp = torch.cat([
-            total_iti_inp[:, :start_silence, :],
-            torch.zeros(size=(total_iti_inp.shape[0], end_silence - start_silence, total_iti_inp.shape[-1])),
-            total_iti_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
-            total_iti_inp[:, start_silence:, :]
-        ], dim=1)
-
-        total_cue_inp = torch.cat([
-            total_cue_inp[:, :start_silence, :],
-            torch.ones(size=(total_cue_inp.shape[0], end_silence - start_silence, total_cue_inp.shape[-1])),
-            total_cue_inp[:, start_silence:start_silence+1, :].repeat(1, 20, 1),
-            total_cue_inp[:, start_silence:, :]
-        ], dim=1)
-
-    return total_iti_inp, total_cue_inp
-
-def get_region_borders(
-    model_type, 
-    region, 
-    hid_dim, 
-    inp_dim
-):
-
-    '''
-        Keeps track of where all of the regions are located within the hidden activity vector, returns borders 
-        
-        Params:
-            model_type:             whether model is d1d2, d1, or stralm
-            region:                 the region in question to be returned
-            hid_dim:                number of neurons in a single region
-            inp_dim:                number of inputs
-    '''
-
-
-    ###########################################
-    #                                         #
-    #        D1 and D2 Model Borders          #
-    #                                         #
-    ###########################################
-
-    if model_type == "d1d2":
-
-        if region == "str":
-
-            start = 0
-            end = hid_dim * 2
-
-        elif region == "d1":
-
-            start = 0
-            end = hid_dim
-
-        elif region == "d2":
-
-            start = hid_dim
-            end = hid_dim * 2
-
-        elif region == "fsi":
-
-            start = hid_dim * 2
-            end = hid_dim * 2
-
-        elif region == "gpe":
-
-            start = hid_dim * 2
-            end = hid_dim * 3
-
-        elif region == "stn":
-
-            start = hid_dim * 3
-            end = hid_dim * 4
-
-        elif region == "snr":
-
-            start = hid_dim * 4
-            end = hid_dim * 5
-            
-        elif region == "thal":
-
-            start = hid_dim * 5
-            end = hid_dim * 6
-
-        elif region == "alm_exc":
-
-            start = hid_dim * 6
-            end = hid_dim * 7
-
-        elif region == "alm_inhib":
-
-            start = hid_dim * 7
-            end = hid_dim * 7
-
-        elif region == "alm_full":
-
-            start = hid_dim * 6
-            end = hid_dim * 7
-
-        elif region == "str2thal":
-
-            start = 0
-            end = hid_dim * 6
-
-
-    ###########################################
-    #                                         #
-    #          STR-ALM Model Borders          #
-    #                                         #
-    ###########################################
-
-    if model_type == "stralm":
-    
-        if region == "alm":
-
-            start = hid_dim
-            end = hid_dim*2 + inp_dim
-
-        elif region == "str":
-
-            start = 0
-            end = hid_dim
-
-    return start, end 

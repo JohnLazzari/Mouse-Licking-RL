@@ -313,8 +313,12 @@ class mRNN(nn.Module):
         Returns:
             torch.Tensor: Network output sequence
         """
+
+        # Get rid of uneccessary dimensions
         hn_next = hn.squeeze(0)
         xn_next = xn.squeeze(0)
+
+        # Create lists for xs and hns
         size = inp.shape[1]
         new_hs = []
         new_xs = []
@@ -347,7 +351,7 @@ class mRNN(nn.Module):
                          + iti_input
                          + self.tonic_inp
                          + inhib_stim[:, t, :]
-                         + (cue_inp[:, t, :] * self.thal_mask)
+                         + (cue_inp[:, t, :] * self.region_mask_dict["thal"]["full"])
                          + perturb_hid))
 
             hn_next = F.relu(xn_next)

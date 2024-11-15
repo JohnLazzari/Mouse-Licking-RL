@@ -36,14 +36,14 @@ def config_parser():
                         default=1e-3, 
                         help='weight decay value (default: 1e-3)')
 
-    parser.add_argument('--constrained', action=configargparse.BooleanOptionalAction)
+    parser.add_argument('--constrained', action=argparse.BooleanOptionalAction)
 
     parser.add_argument('--trial_epoch', 
                         type=str, 
                         default="delay", 
                         help='delay or full trial epoch (default: delay)')
 
-    parser.add_argument('--nmf', action=configargparse.BooleanOptionalAction)
+    parser.add_argument('--nmf', action=argparse.BooleanOptionalAction)
 
     parser.add_argument('--n_components', 
                         type=int, 
