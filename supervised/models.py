@@ -53,6 +53,7 @@ class Region(nn.Module):
         src_region_cell_type, 
         dst_region_cell_type, 
         sign, 
+        sparsity,
         zero_connection=False, 
         lower_bound=0, 
         upper_bound=1e-2
@@ -61,36 +62,52 @@ class Region(nn.Module):
         Adds a connection from the current region to a specified projection region.
         
         Args:
-            proj_region_name (str): Name of the region that the current region connects to.
-            proj_region (Region): The target region to which the connection is made.
-            src_region_cell_type (str, optional): The source region's cell type.
-            dst_region_cell_type (str, optional): The destination region's cell type.
-            sign (str, optional): Specifies if the connection is excitatory or inhibitory ('inhib' for inhibitory).
-            zero_connection (bool, optional): If True, no connections are created (default is False).
-            lower_bound (float, optional): Lower bound for uniform weight initialization.
-            upper_bound (float, optional): Upper bound for uniform weight initialization.
+            proj_region_name (str):                 Name of the region that the current region connects to.
+            proj_region (Region):                   The target region to which the connection is made.
+            src_region_cell_type (str):             The source region's cell type.
+            dst_region_cell_type (str):             The destination region's cell type.
+            sign (str):                             Specifies if the connection is excitatory or inhibitory ('inhib' for inhibitory).
+            sparsity (float):                       Specifies how sparse the connections are (defualts to none otherwise)
+            zero_connection (bool, optional):       If True, no connections are created (default is False).
+            lower_bound (float, optional):          Lower bound for uniform weight initialization.
+            upper_bound (float, optional):          Upper bound for uniform weight initialization.
         """
         connection_properties = {}
 
         # Initialize connection parameters
         if not zero_connection:
-            parameter = torch.empty(size=(proj_region.num_units, self.num_units)).uniform_(lower_bound, upper_bound)
+            parameter = torch.empty(size=(proj_region.num_units, self.num_units), device=self.device)
+            nn.init.uniform_(parameter, lower_bound, upper_bound)
         else:
-            parameter = torch.zeros(size=(proj_region.num_units, self.num_units))
+            parameter = torch.zeros(size=(proj_region.num_units, self.num_units), device=self.device)
+        
+        # Initialize sparse mask if sparsity is given
+        if sparsity is not None:
+            sparse_tensor = torch.empty_like(parameter, device=self.device)
+            nn.init.sparse_(sparse_tensor, sparsity)
+            sparse_tensor[sparse_tensor != 0] = 1
+
+            sparse_tensor_src = sparse_tensor
+            sparse_tensor_dst = sparse_tensor.T
+        else:
+            sparse_tensor_src = torch.ones_like(parameter, device=self.device)
+            sparse_tensor_dst = torch.ones_like(parameter, device=self.device).T
 
         # Store trainable parameter
-        connection_properties["parameter"] = parameter.to(self.device)
+        connection_properties["parameter"] = parameter
 
         # Initialize connection tensors (1s for active connections, 0s for no connections)
-        connection_tensor = torch.ones_like(parameter).to(self.device) if not zero_connection else torch.zeros_like(parameter).to(self.device)
+        connection_tensor_src = torch.ones_like(parameter, device=self.device) if not zero_connection else torch.zeros_like(parameter, device=self.device)
+        connection_tensor_dst = torch.ones_like(parameter, device=self.device).T if not zero_connection else torch.zeros_like(parameter, device=self.device).T
 
         # Create weight masks based on cell types, if specified
-        weight_mask_src, sign_matrix_src = self.__get_weight_and_sign_matrices(src_region_cell_type, connection_tensor)
-        weight_mask_dst, sign_matrix_dst = proj_region.__get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor)
+        weight_mask_src, sign_matrix_src = self.__get_weight_and_sign_matrices(src_region_cell_type, connection_tensor_src, sparse_tensor_src)
+        weight_mask_dst, sign_matrix_dst = proj_region.__get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor_dst, sparse_tensor_dst)
 
         # Combine masks
-        weight_mask = weight_mask_src * weight_mask_dst
-        sign_matrix = sign_matrix_src * sign_matrix_dst
+        # Transpose the dst matrices since they should correspond to row operations
+        weight_mask = weight_mask_src * weight_mask_dst.T
+        sign_matrix = sign_matrix_src * sign_matrix_dst.T
 
         # Adjust the sign matrix for inhibitory connections
         if sign == "inhib":
@@ -142,7 +159,7 @@ class Region(nn.Module):
         mask = torch.cat(cur_masks)
         return mask
 
-    def __get_weight_and_sign_matrices(self, cell_type, connection_tensor):
+    def __get_weight_and_sign_matrices(self, cell_type, connection_tensor, sparse_tensor):
         """
         Retrieves the weight mask and sign matrix for a specified cell type.
 
@@ -154,11 +171,11 @@ class Region(nn.Module):
             tuple: weight mask and sign matrix.
         """
         if cell_type is not None:
-            weight_mask = connection_tensor * self.masks.get(cell_type, connection_tensor)
-            sign_matrix = connection_tensor * self.masks.get(cell_type, connection_tensor)
+            weight_mask = sparse_tensor * connection_tensor * self.masks.get(cell_type)
+            sign_matrix = sparse_tensor * connection_tensor * self.masks.get(cell_type)
         else:
-            weight_mask = connection_tensor
-            sign_matrix = connection_tensor
+            weight_mask = sparse_tensor * connection_tensor
+            sign_matrix = sparse_tensor * connection_tensor
 
         return weight_mask, sign_matrix
 
@@ -229,6 +246,7 @@ class mRNN(nn.Module):
             config = json.load(f)
         
         # Generate network structure
+        self.__create_def_values(config)
         self.__gen_regions(config["regions"])
         self.__gen_connections(config["connections"])
         
@@ -246,7 +264,10 @@ class mRNN(nn.Module):
             for cell_type in self.region_dict[region].cell_type_info:
                 # Generate a mask for the cell type in region_mask_dict
                 self.region_mask_dict[region][cell_type] = self.__gen_region_mask(region, cell_type=cell_type)
-
+        
+        # Manually creating input weights for now
+        self.inp_weights = nn.Parameter(torch.empty(size=(self.region_dict["striatum"].num_units, inp_dim)))
+        nn.init.uniform_(self.inp_weights, 0, 0.15)
 
     def gen_w_rec(self):
         """
@@ -283,8 +304,8 @@ class mRNN(nn.Module):
         
         # Create final matrices
         W_rec = nn.Parameter(torch.cat(region_connection_columns, dim=1))
-        W_rec_mask = torch.cat(region_weight_mask_columns, dim=1)
-        W_rec_sign = torch.cat(region_sign_matrix_columns, dim=1)
+        W_rec_mask = nn.Parameter(torch.cat(region_weight_mask_columns, dim=1), requires_grad=False)
+        W_rec_sign = nn.Parameter(torch.cat(region_sign_matrix_columns, dim=1), requires_grad=False)
 
         return W_rec, W_rec_mask, W_rec_sign
 
@@ -296,7 +317,7 @@ class mRNN(nn.Module):
         Returns:
             torch.Tensor: Constrained weight matrix
         """
-        return (self.W_rec_mask * F.relu(self.W_rec)) * self.W_rec_sign_matrix
+        return (self.W_rec_mask * F.hardtanh(self.W_rec, 0, 1)) * self.W_rec_sign_matrix
 
     def forward(self, inp, cue_inp, hn, xn, inhib_stim, noise=True):
         """
@@ -325,6 +346,11 @@ class mRNN(nn.Module):
 
         # Apply Dale's Law if constrained
         W_rec = self.apply_dales_law() if self.constrained else self.W_rec
+        inp_weights = F.hardtanh(self.inp_weights, 0, 1)
+
+        #plt.imshow(W_rec.detach().cpu().numpy())
+        #plt.colorbar()
+        #plt.show()
 
         # Calculate noise terms
         if noise:
@@ -335,13 +361,14 @@ class mRNN(nn.Module):
 
         # Process sequence
         for t in range(size):
+
             # Prepare ITI input
-            iti_act = inp[:, t, :] + perturb_inp
+            iti_act = (inp_weights @ (inp[:, t, :] + perturb_inp).T).T
             non_iti_mask = torch.zeros(
-                size=(iti_act.shape[0], self.total_num_units - self.region_dict["iti"].num_units),
+                size=(iti_act.shape[0], self.total_num_units - self.region_dict["striatum"].num_units),
                 device=self.device
             )
-            iti_input = torch.cat([non_iti_mask, iti_act], dim=-1)
+            iti_input = torch.cat([iti_act, non_iti_mask], dim=-1)
 
             # Update hidden state
             xn_next = (xn_next 
@@ -352,7 +379,8 @@ class mRNN(nn.Module):
                          + self.tonic_inp
                          + inhib_stim[:, t, :]
                          + (cue_inp[:, t, :] * self.region_mask_dict["thal"]["full"])
-                         + perturb_hid))
+                         + perturb_hid)
+                      )
 
             hn_next = F.relu(xn_next)
             new_xs.append(xn_next)
@@ -360,7 +388,7 @@ class mRNN(nn.Module):
         
         return torch.stack(new_hs, dim=1)
 
-    def get_region_indices(self, region):
+    def get_region_indices(self, region, cell_type=None):
         """
         Gets the start and end indices for a specific region in the hidden state vector.
 
@@ -370,12 +398,52 @@ class mRNN(nn.Module):
         Returns:
             tuple: (start_idx, end_idx)
         """
+        
+        # Get the region indices
         start_idx = 0
+        end_idx = 0
         for cur_reg in self.region_dict:
             if cur_reg == region:
-                return start_idx, start_idx + self.region_dict[cur_reg].num_units
-            start_idx += self.region_dict[cur_reg].num_units
-        return start_idx, start_idx
+                end_idx = start_idx + self.region_dict[cur_reg].num_units
+                break
+            else:
+                start_idx += self.region_dict[cur_reg].num_units
+        
+        # If cell type is specified, get the cell type indices
+        if cell_type is not None:
+            for cell in self.region_dict[region].cell_type_info:
+                if cell == cell_type:
+                    end_idx = start_idx + int(round(self.region_dict[region].cell_type_info[cell] * self.region_dict[region].num_units))
+                    break
+                else:
+                    start_idx += int(round(self.region_dict[region].cell_type_info[cell] * self.region_dict[region].num_units))
+            
+        return start_idx, end_idx
+
+    def get_region_activity(self, region, hn, cell_type=None):
+        """
+        Takes in hn and the specified region and returns the activity hn for the corresponding region
+
+        Args:
+            region (str): Name of the region
+            hn (Torch.Tensor): tensor containing model hidden activity. Activations must be in last dimension (-1)
+
+        Returns:
+            region_hn: tensor containing hidden activity only for specified region
+        """
+        # Get start and end positions of region
+        start_idx, end_idx = self.get_region_indices(region, cell_type=cell_type)
+        # Gather specified regional activity
+        region_hn = hn[:, :, start_idx:end_idx]
+        return region_hn
+    
+    def __create_def_values(self, config):
+        
+        # TODO fix this for the rest of the variables in the configuration 
+        # Think about what default values should be and what should happen if user specifies wrong type or None
+        for connection in config["connections"]:
+            if "sparsity" not in connection:
+                connection["sparsity"] = None
 
     def __gen_regions(self, regions):
         """
@@ -405,7 +473,10 @@ class mRNN(nn.Module):
                 proj_region=self.region_dict[connection["dst_region"]],
                 src_region_cell_type=connection["src_region_cell_type"],
                 dst_region_cell_type=connection["dst_region_cell_type"],
-                sign=connection["sign"]
+                sign=connection["sign"],
+                sparsity=connection["sparsity"],
+                lower_bound=connection["lower_bound"],
+                upper_bound=connection["upper_bound"]
             )
 
     def __gen_region_mask(self, region, cell_type=None):
@@ -446,6 +517,7 @@ class mRNN(nn.Module):
                     src_region_cell_type=None,
                     dst_region_cell_type=None,
                     sign=None,
+                    sparsity=None,
                     zero_connection=True
                 )
 
@@ -466,6 +538,7 @@ class mRNN(nn.Module):
             torch.Tensor: Vector of baseline firing rates
         """
         return torch.cat([region.base_firing for region in self.region_dict.values()]).to(self.device) 
+
 
 class CBGTCL(nn.Module):
     def __init__(
@@ -496,16 +569,12 @@ class CBGTCL(nn.Module):
         )
 
         self.total_num_units = self.mrnn.total_num_units
+        self.alm_exc_units = int(round(self.mrnn.region_dict["alm"].cell_type_info["exc"] * self.mrnn.region_dict["alm"].num_units))
 
-        # Output weights
-        if out_type == "ramp":
+        if out_type == "data":
 
-            self.out_weight_alm = (1 / self.mrnn.region_dict["alm"].num_units) * torch.ones(size=(out_dim, self.mrnn.region_dict["alm"].num_units)).to(self.device)
-
-        elif out_type == "data":
-
-            self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.mrnn.region_dict["alm"].num_units))).to(self.device)
-            nn.init.uniform_(self.out_weight_alm, 0, 1)
+            self.out_weight_alm = nn.Parameter(torch.empty(size=(out_dim, self.alm_exc_units))).to(self.device)
+            nn.init.uniform_(self.out_weight_alm, 0, 1e-2)
     
     def forward(
         self,
@@ -528,12 +597,14 @@ class CBGTCL(nn.Module):
             noise
         )
 
-        alm_start, alm_end = self.mrnn.get_region_indices("alm")
+        alm_act = self.mrnn.get_region_activity("alm", hn, cell_type="exc")
 
-        for t in range(hn.shape[1]):
-            outs.append((self.out_weight_alm @ hn[:, t, alm_start:alm_end].T).T)
-        
-        out = torch.stack(outs, dim=1)
+        if self.out_type == "data":
+            for t in range(hn.shape[1]):
+                outs.append((self.out_weight_alm @ alm_act[:, t, :].T).T)
+            out = torch.stack(outs, dim=1)
+        else:
+            out = torch.mean(alm_act, dim=-1, keepdim=True)
 
         return hn, out
         

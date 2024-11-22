@@ -1,9 +1,9 @@
-inp_dim = 26
+inp_dim = 25
 out_dim = 1
 epochs = 5000
 lr = 1e-4
 dt = 1e-2
-weight_decay = 1e-3
+weight_decay = 0
 constrained = True
 trial_epoch = "delay"
 nmf = False

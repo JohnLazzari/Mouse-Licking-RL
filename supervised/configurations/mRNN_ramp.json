@@ -14,26 +14,26 @@
     "regions": [
       {
         "name": "striatum",
-        "num_units": 256,
+        "num_units": 512,
         "base_firing": 0,
         "cell_types": {"d1": 0.5, "d2": 0.5}
       },
       {
         "name": "gpe",
         "num_units": 256,
-        "base_firing": 0.8,
+        "base_firing": 1,
         "cell_types": {}
       },
       {
         "name": "stn",
         "num_units": 256,
-        "base_firing": 0.5,
+        "base_firing": 0.6,
         "cell_types": {}
       },
       {
         "name": "snr",
         "num_units": 256,
-        "base_firing": 0.8,
+        "base_firing": 1,
         "cell_types": {}
       },
       {
@@ -47,12 +47,6 @@
         "num_units": 256,
         "base_firing": 0,
         "cell_types": {"exc": 0.7, "inhib": 0.3}
-      },
-      {
-        "name": "iti",
-        "num_units": 26,
-        "base_firing": 0,
-        "cell_types": {}
       }
     ],
 
@@ -64,6 +58,7 @@
         "src_region_cell_type: str",
         "dst_region_cell_type: str",
         "sign: str (exc or inhib)",
+        "sparsity: float (between 0 and 1)",
         "]"
     ],
 
@@ -73,84 +68,100 @@
         "dst_region": "striatum",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "sparsity": 0.9,
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "striatum",
         "dst_region": "gpe",
         "src_region_cell_type": "d2",
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "striatum",
         "dst_region": "snr",
         "src_region_cell_type": "d1",
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "gpe",
         "dst_region": "stn",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "stn",
         "dst_region": "snr",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "exc"
+        "sign": "exc",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "snr",
         "dst_region": "thal",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "thal",
         "dst_region": "striatum",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "exc"
+        "sign": "exc",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "thal",
         "dst_region": "alm",
         "src_region_cell_type": null,
         "dst_region_cell_type": null,
-        "sign": "exc"
+        "sign": "exc",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "alm",
         "dst_region": "alm",
         "src_region_cell_type": "exc",
         "dst_region_cell_type": null,
-        "sign": "exc"
+        "sign": "exc",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "alm",
         "dst_region": "alm",
         "src_region_cell_type": "inhib",
         "dst_region_cell_type": null,
-        "sign": "inhib"
+        "sign": "inhib",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       },
       {
         "src_region": "alm",
         "dst_region": "striatum",
         "src_region_cell_type": "exc",
         "dst_region_cell_type": null,
-        "sign": "exc"
-      },
-      {
-        "src_region": "iti",
-        "dst_region": "striatum",
-        "src_region_cell_type": null,
-        "dst_region_cell_type": null,
-        "sign": "exc"
+        "sign": "exc",
+        "lower_bound": 0,
+        "upper_bound": 1e-2
       }
     ]
 

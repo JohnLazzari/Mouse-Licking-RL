@@ -5,146 +5,161 @@ from torch.distributions import Normal
 import torch.optim as optim
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 import numpy as np
-from models import RNN_MultiRegional_D1D2, RNN_MultiRegional_STRALM, RNN_MultiRegional_D1
+from models import CBGTCL
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
-from utils import gather_inp_data, get_acts_control, get_acts_manipulation, get_ramp
+from utils import gather_inp_data, get_acts_control, get_acts_manipulation, load_variables_from_file, convert_value, get_ramp, get_data, get_masks, gather_train_val_test_split
 import tqdm
 import time
+import ast
+import json
+import math
+import os
 
 plt.rcParams['axes.spines.right'] = False
 plt.rcParams['axes.spines.top'] = False
 font = {'size' : 12}
-plt.rcParams['figure.figsize'] = [10, 8]
+plt.rcParams['figure.figsize'] = [16, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-HID_DIM = 256
-OUT_DIM = 1
-INP_DIM = int(HID_DIM * 0.1)                                                          
-DT = 1e-2
-CONDS = 4
-MODEL_TYPE = "d1d2" # d1d2, d1, stralm
-CHECK_PATH = f"checkpoints/{MODEL_TYPE}_full_256n_almnoise.01_10000iters_newloss.pth"
-SAVE_NAME_PATH = f"results/multi_regional_perturbations/{MODEL_TYPE}/"
-CONSTRAINED = True
-ITI_STEPS = 100
-START_SILENCE = 160                    # timepoint from start of trial to silence at
-END_SILENCE = 220                      # timepoint from start of trial to end silencing
-STIM_STRENGTH = 5
-EXTRA_STEPS_SILENCE = 100
-SILENCED_REGION = "alm"
+MODEL_NAMES = ["22_11_2024_17_51_17"]
+SPECIFICATIONS_PATH = "checkpoints/model_specifications/"
+CHECK_PATH = "checkpoints/"
+SAVE_NAME_PATH = "results/psths/"
+DATA_SPLIT = "training"
+START_SILENCE = 160
+END_SILENCE = 220
+STIM_STRENGTH = -5
+EXTRA_STEPS = 100
+REGIONS_CELL_TYPES = [("alm", "exc")]
 
-def plot_psths(
-            len_seq, 
+def gather_psths(
             rnn, 
-            x_data, 
+            data,
             type="control"
         ):
     
-    fsi_size = int(HID_DIM * 0.3)
-
     if type == "control":
 
         # activity without silencing
-        act_conds = get_acts_control(
-            len_seq, 
+        act = get_acts_control(
             rnn, 
-            HID_DIM, 
-            INP_DIM,
-            x_data, 
-            MODEL_TYPE
+            data,
         )
 
     elif type == "manipulation": 
 
         # activity with silencing
-        act_conds = get_acts_manipulation(
-            len_seq, 
+        act = get_acts_manipulation(
             rnn, 
-            HID_DIM, 
-            INP_DIM,
-            MODEL_TYPE, 
             START_SILENCE,
             END_SILENCE,
-            STIM_STRENGTH, 
-            EXTRA_STEPS_SILENCE, 
-            SILENCED_REGION,
-            DT 
+            STIM_STRENGTH,
+            EXTRA_STEPS,
+            REGIONS_CELL_TYPES,
+            data,
         )
         
-    #plt.plot(act_conds[0, :, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], linewidth=6)
-    #plt.show()
-        
-    fig, axs = plt.subplots(2, 5)
+    activity_list = []
+    for region in rnn.region_dict:
+        if len(rnn.region_dict[region].cell_type_info) > 0:
+            for cell_type in rnn.region_dict[region].cell_type_info:
+                mean_act = np.mean(rnn.get_region_activity(region, act, cell_type=cell_type), axis=-1)
+                activity_list.append(mean_act)
+        else:
+            mean_act = np.mean(rnn.get_region_activity(region, act), axis=-1)
+            activity_list.append(mean_act)
+    
+    return activity_list
 
-    axs[0, 0].plot(np.mean(act_conds[:, 50:, :HID_DIM], axis=-1).T, linewidth=6)
-    axs[0, 0].set_title("D1 PSTH")
+def plot_psths(psths, n_rows, n_cols, save_path):
 
-    axs[0, 1].plot(np.mean(act_conds[:, 50:, HID_DIM:HID_DIM*2], axis=-1).T, linewidth=6)
-    axs[0, 1].set_title("D2 PSTH")
+    fig, ax = plt.subplots(n_rows, n_cols)
 
-    axs[0, 2].plot(np.mean(act_conds[:, 50:, HID_DIM*2:HID_DIM*2 + fsi_size], axis=-1).T, linewidth=6)
-    axs[0, 2].set_title("FSI PSTH")
+    psth_idx = 0
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if psth_idx < len(psths):
+                ax[i, j].plot(psths[psth_idx].T, linewidth=5)
+            psth_idx += 1
 
-    axs[0, 3].plot(np.mean(act_conds[:, 50:, HID_DIM*2 + fsi_size:HID_DIM * 3 + fsi_size], axis=-1).T, linewidth=6)
-    axs[0, 3].set_title("GPe PSTH")
+    # Get the directory part of the save path
+    directory = os.path.dirname(save_path)
 
-    axs[0, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 3 + fsi_size:HID_DIM * 4 + fsi_size], axis=-1).T, linewidth=6)
-    axs[0, 4].set_title("STN PSTH")
+    # Check if the directory exists, and create it if it doesn't
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
-    axs[1, 0].plot(np.mean(act_conds[:, 50:, HID_DIM * 4 + fsi_size:HID_DIM * 5 + fsi_size], axis=-1).T, linewidth=6)
-    axs[1, 0].set_title("SNr PSTH")
-
-    axs[1, 1].plot(np.mean(act_conds[:, 50:, HID_DIM * 5 + fsi_size:HID_DIM * 6 + fsi_size], axis=-1).T, linewidth=6)
-    axs[1, 1].set_title("Thal PSTH")
-
-    axs[1, 2].plot(np.mean(act_conds[:, 50:, HID_DIM * 6 + fsi_size:HID_DIM * 7], axis=-1).T, linewidth=6)
-    axs[1, 2].set_title("ALM Excitatory PSTH")
-
-    axs[1, 3].plot(np.mean(act_conds[:, 50:, HID_DIM * 7:HID_DIM * 7 + int(HID_DIM * 0.3)], axis=-1).T, linewidth=6)
-    axs[1, 3].set_title("ALM Inhibitory PSTH")
-
-    axs[1, 4].plot(np.mean(act_conds[:, 50:, HID_DIM * 7 + int(HID_DIM * 0.3):HID_DIM * 7 + int(HID_DIM * 0.3) + INP_DIM], axis=-1).T, linewidth=6)
-    axs[1, 4].set_title("ITI PSTH")
-
-    plt.show()
+    plt.savefig(save_path)
 
 def main():
 
-    checkpoint = torch.load(CHECK_PATH)
-    
-    # Create RNN
-    if MODEL_TYPE == "d1d2":
+    # Loop through each model specified
+    for model in MODEL_NAMES:
 
-        rnn = RNN_MultiRegional_D1D2(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
+        # Open json for mRNN configuration file
+        config_name = SPECIFICATIONS_PATH + model + ".json"
+        
+        # Load in variables from the training specs txt file
+        train_specs = load_variables_from_file(SPECIFICATIONS_PATH + model + ".txt")
 
-    elif MODEL_TYPE == "stralm":
+        # Unload variables
+        inp_dim = train_specs["inp_dim"]
+        out_dim = train_specs["out_dim"]
+        epochs = train_specs["epochs"]
+        lr = train_specs["lr"]
+        dt = train_specs["dt"]
+        weight_decay = train_specs["weight_decay"]
+        constrained = train_specs["constrained"]
+        trial_epoch = train_specs["trial_epoch"]
+        nmf = train_specs["nmf"]
+        n_components = train_specs["n_components"]
+        out_type = train_specs["out_type"]
 
-        rnn = RNN_MultiRegional_STRALM(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
+        # Load saved model
+        checkpoint = torch.load(CHECK_PATH + model + ".pth")
+        rnn = CBGTCL(config_name, inp_dim, out_dim, out_type, constrained=constrained).cuda()
+        rnn.load_state_dict(checkpoint)
 
-    elif MODEL_TYPE == "d1":
+        # Get ramping activity
+        if out_type == "ramp":
 
-        rnn = RNN_MultiRegional_D1(INP_DIM, HID_DIM, OUT_DIM, constrained=CONSTRAINED).cuda()
+            neural_act, peak_times = get_ramp(dt=dt)
+            neural_act = neural_act.cuda()
 
-    rnn.load_state_dict(checkpoint)
+        elif out_type == "data":
 
-    # Get ramping activity
-    x_data, len_seq = gather_inp_data(dt=DT, hid_dim=HID_DIM)
-    
-    plot_psths(
-        len_seq, 
-        rnn, 
-        x_data,
-    )
+            neural_act, peak_times = get_data(
+                dt,
+                trial_epoch,
+                nmf,
+                n_components
+            )
 
-    plot_psths(
-        len_seq, 
-        rnn, 
-        x_data, 
-        type="manipulation"
-    )
+            neural_act = neural_act.cuda()
+
+        # Get input and output data
+        iti_inp, cue_inp, len_seq = gather_inp_data(inp_dim=inp_dim, peaks=peak_times)
+        iti_inp, cue_inp = iti_inp.cuda(), cue_inp.cuda()
+        loss_mask = get_masks(out_dim, len_seq)
+
+        data_dict = gather_train_val_test_split(neural_act, peak_times, iti_inp, cue_inp, loss_mask)
+
+        activity_list_control = gather_psths(
+            rnn.mrnn, 
+            data_dict[DATA_SPLIT],
+        )
+
+        activity_list_manipulation = gather_psths(
+            rnn.mrnn, 
+            data_dict[DATA_SPLIT],
+            type="manipulation"
+        )
+        
+        plot_psths(activity_list_control, 2, 5, SAVE_NAME_PATH + model + "/" + "control.png")
+        plot_psths(activity_list_manipulation, 2, 5, SAVE_NAME_PATH + model + "/" + "manipulation.png")
 
 if __name__ == "__main__":
     main()

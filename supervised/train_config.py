@@ -13,7 +13,7 @@ def config_parser():
 
     parser.add_argument('--inp_dim', 
                         type=int, 
-                        default=26, 
+                        default=25, 
                         help='dimension of input')
 
     parser.add_argument('--epochs', 

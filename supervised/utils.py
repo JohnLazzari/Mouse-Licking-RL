@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 from scipy.stats import rankdata, spearmanr
 from sklearn.decomposition import PCA, NMF
 from scipy.signal import find_peaks
+import ast
+
+torch.set_printoptions(threshold=torch.inf)
 
 def NormalizeData(
     data, 
@@ -67,8 +70,8 @@ def gather_inp_data(
     # Combine all inputs
     total_iti_inp = pad_sequence([inp[0], inp[1], inp[2], inp[3], inp[4]], batch_first=True)
 
-    plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
-    plt.show()
+    #plt.plot(np.mean(total_iti_inp.numpy(), axis=-1).T)
+    #plt.show()
 
     # Cue Input
     cue_inp_dict = {}
@@ -76,9 +79,12 @@ def gather_inp_data(
     for cond in range(5):
 
         cue_inp_dict[cond] = torch.ones(size=(peaks[cond], 1))
-        cue_inp_dict[cond][100:, :] *= 0
+        cue_inp_dict[cond][:100, :] *= 0
 
     total_cue_inp = pad_sequence([cue_inp_dict[0], cue_inp_dict[1], cue_inp_dict[2], cue_inp_dict[3], cue_inp_dict[4]], batch_first=True)
+
+    #plt.plot(np.mean(total_cue_inp.numpy(), axis=-1).T)
+    #plt.show()
 
     # Combine all sequence lengths
     # Currently only makes sense if using delay only, which I will go with for now
@@ -112,8 +118,8 @@ def get_ramp(
     for i in range(5):
         peak_times.append(100 + int(means[i] / dt))
 
-    plt.plot(total_ramp.squeeze().numpy().T)
-    plt.show()
+    #plt.plot(total_ramp.squeeze().numpy().T)
+    #plt.show()
 
     return total_ramp, peak_times
 
@@ -242,13 +248,13 @@ def get_data(
             neural_data_peak_cond_4
         ], batch_first=True).type(torch.float32)
 
-    plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
-    plt.show()
+    #plt.plot(np.mean(neural_data_combined.numpy(), axis=-1).T)
+    #plt.show()
 
     return neural_data_combined, peak_times
 
 
-def get_acts_control(rnn, data, data_split="all"):
+def get_acts_control(rnn, data):
 
     '''
         Get the activities of the desired region for a single condition (silencing or activation)
@@ -269,20 +275,21 @@ def get_acts_control(rnn, data, data_split="all"):
             total_num_units:    total number of units (hid_dim * num_regions)
     '''
 
-    batch_size = data[data_split]["y_train"].shape[0]
+    batch_size = data["y_target"].shape[0]
 
     hn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
     xn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
 
-    inhib_stim = torch.zeros(size=(4, batch_size, rnn.total_num_units), device="cuda")
+    inhib_stim = torch.zeros(size=(batch_size, data["y_target"].shape[1], rnn.total_num_units), device="cuda")
 
     with torch.no_grad():        
 
-        acts, _ = rnn(data[data_split]["iti_inp"], data[data_split]["cue_inp"], hn, xn, inhib_stim, noise=False)
+        acts = rnn(data["iti_inp"], data["cue_inp"], hn, xn, inhib_stim, noise=False)
+        acts = acts.squeeze().cpu().numpy()
     
     return acts
 
-def get_acts_manipulation(rnn, start_silence, end_silence, stim_strength, extra_steps, regions_cell_types, data, data_split="all"):
+def get_acts_manipulation(rnn, start_silence, end_silence, stim_strength, extra_steps, regions_cell_types, data):
 
     '''
         Get the activities of the desired region during manipulation for a single condition (silencing or activation)
@@ -303,11 +310,25 @@ def get_acts_manipulation(rnn, start_silence, end_silence, stim_strength, extra_
             total_num_units:        total number of units (hid_dim * num_regions)
     '''
 
-    batch_size = data[data_split]["y_target"].shape[0]
-    max_seq_len = data[data_split]["y_target"].shape[1]
+    batch_size = data["y_target"].shape[0]
+    max_seq_len = data["y_target"].shape[1]
 
     hn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
     xn = torch.zeros(size=(1, batch_size, rnn.total_num_units)).cuda()
+
+    # Extend input by extra steps
+    iti_inp = torch.cat([
+        data["iti_inp"][:, :start_silence, :],
+        torch.zeros(size=(data["iti_inp"].shape[0], end_silence-start_silence, data["iti_inp"].shape[-1]), device="cuda"),
+        data["iti_inp"][:, 101:102, :].repeat(1, extra_steps, 1),
+        data["iti_inp"][:, end_silence:, :]
+    ], dim=1)
+
+    cue_inp = torch.cat([
+        data["cue_inp"][:, :100, :],
+        data["cue_inp"][:, 101:102, :].repeat(1, extra_steps, 1),
+        data["cue_inp"][:, 100:, :]
+    ], dim=1)
 
     inhib_stim = get_inhib_stim_silence(
         rnn, 
@@ -317,13 +338,12 @@ def get_acts_manipulation(rnn, start_silence, end_silence, stim_strength, extra_
         max_seq_len, 
         extra_steps, 
         stim_strength, 
-        rnn.total_num_units,
         batch_size
     )
 
     with torch.no_grad():        
 
-        _, _, acts = rnn(data[data_split]["iti_inp"], data[data_split]["cue_inp"], hn, xn, inhib_stim, noise=False)
+        acts = rnn(iti_inp, cue_inp, hn, xn, inhib_stim, noise=False)
         acts = acts.squeeze().cpu().numpy()
     
     return acts
@@ -367,7 +387,7 @@ def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, 
     """
 
     # Select mask based on region being silenced
-    mask = torch.zeros(size=(rnn.total_num_units))
+    mask = torch.zeros(size=(rnn.total_num_units,), device="cuda")
     for region, cell_type in regions_cell_types:
         if cell_type is not None:
             cur_mask = stim_strength * (rnn.region_mask_dict[region][cell_type])
@@ -383,3 +403,99 @@ def get_inhib_stim_silence(rnn, regions_cell_types, start_silence, end_silence, 
     inhib_stim = torch.cat([inhib_stim_pre, inhib_stim_silence, inhib_stim_post], dim=1)
     
     return inhib_stim
+
+def gather_train_val_test_split(data, peak_times, iti_inp, cue_inp, loss_mask):
+    
+    # Conditions 1, 2, and 4 are used for training
+    # Condition 3 is used for validation
+    # Condition 5 is used for testing
+    data_dict = {"training": {}, "validation": {}, "test": {}, "all": {}}
+    
+    '''
+    data_dict["training"]["y_target"] = torch.stack([data[0], data[1], data[3]])
+    data_dict["training"]["peak_times"] = [peak_times[0], peak_times[1], peak_times[3]]
+    data_dict["training"]["iti_inp"] = torch.stack([iti_inp[0], iti_inp[1], iti_inp[3]])
+    data_dict["training"]["cue_inp"] = torch.stack([cue_inp[0], cue_inp[1], cue_inp[3]])
+    data_dict["training"]["loss_mask"] = torch.stack([loss_mask[0], loss_mask[1], loss_mask[3]])
+
+    data_dict["validation"]["y_target"] = torch.stack([data[2], data[4]])
+    data_dict["validation"]["peak_times"] = [peak_times[2], peak_times[4]]
+    data_dict["validation"]["iti_inp"] = torch.stack([iti_inp[2], iti_inp[4]])
+    data_dict["validation"]["cue_inp"] = torch.stack([cue_inp[2], cue_inp[4]])
+    data_dict["validation"]["loss_mask"] = torch.stack([loss_mask[2], loss_mask[4]])
+
+    data_dict["test"]["y_target"] = data[4].unsqueeze(0)
+    data_dict["test"]["peak_times"] = peak_times[4]
+    data_dict["test"]["iti_inp"] = iti_inp[4].unsqueeze(0)
+    data_dict["test"]["cue_inp"] = cue_inp[4].unsqueeze(0)
+    data_dict["test"]["loss_mask"] = loss_mask[4].unsqueeze(0)
+    '''
+
+    data_dict["training"]["y_target"] = torch.stack([data[1], data[2], data[3], data[4]])
+    data_dict["training"]["peak_times"] = [peak_times[1], peak_times[2], peak_times[3], peak_times[4]]
+    data_dict["training"]["iti_inp"] = torch.stack([iti_inp[1], iti_inp[2], iti_inp[3], iti_inp[4]])
+    data_dict["training"]["cue_inp"] = torch.stack([cue_inp[1], cue_inp[2], cue_inp[3], cue_inp[4]])
+    data_dict["training"]["loss_mask"] = torch.stack([loss_mask[1], loss_mask[2], loss_mask[3], loss_mask[4]])
+
+    data_dict["validation"]["y_target"] = torch.stack([data[1], data[2], data[3], data[4]])
+    data_dict["validation"]["peak_times"] = [peak_times[1], peak_times[2], peak_times[3], peak_times[4]]
+    data_dict["validation"]["iti_inp"] = torch.stack([iti_inp[1], iti_inp[2], iti_inp[3], iti_inp[4]])
+    data_dict["validation"]["cue_inp"] = torch.stack([cue_inp[1], cue_inp[2], cue_inp[3], cue_inp[4]])
+    data_dict["validation"]["loss_mask"] = torch.stack([loss_mask[1], loss_mask[2], loss_mask[3], loss_mask[4]])
+
+    data_dict["test"]["y_target"] = data[4].unsqueeze(0)
+    data_dict["test"]["peak_times"] = peak_times[4]
+    data_dict["test"]["iti_inp"] = iti_inp[4].unsqueeze(0)
+    data_dict["test"]["cue_inp"] = cue_inp[4].unsqueeze(0)
+    data_dict["test"]["loss_mask"] = loss_mask[4].unsqueeze(0)
+
+    data_dict["all"]["y_target"] = data
+    data_dict["all"]["peak_times"] = peak_times
+    data_dict["all"]["iti_inp"] = iti_inp
+    data_dict["all"]["cue_inp"] = cue_inp
+    data_dict["all"]["loss_mask"] = loss_mask
+
+    return data_dict
+
+def convert_value(value):
+    """
+    Convert the string value to the appropriate Python type (int, float, bool, str).
+    """
+    value = value.strip()  # Remove extra spaces
+    if value.lower() == 'true':
+        return True
+    elif value.lower() == 'false':
+        return False
+    elif value.isdigit():  # Check if it's an integer
+        return int(value)
+    try:
+        # Try converting to float
+        return float(value)
+    except ValueError:
+        # Return as string if it can't be converted to float or int
+        return value.strip('"')
+
+def load_variables_from_file(file_path):
+    variables = {}
+
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+        for line in lines:
+            # Skip empty lines or lines starting with a comment
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            # Split the line into variable name and value
+            try:
+                var_name, var_value = line.split('=', 1)
+                var_name = var_name.strip()
+                var_value = var_value.strip()
+
+                # Convert the value to the appropriate type and store it in the dictionary
+                variables[var_name] = convert_value(var_value)
+            except ValueError:
+                print(f"Skipping invalid line: {line}")
+
+    return variables

@@ -8,7 +8,7 @@ import numpy as np
 from models import CBGTCL
 import scipy.io as sio
 import matplotlib.pyplot as plt
-from utils import gather_inp_data, get_ramp, get_masks, get_data
+from utils import gather_inp_data, get_ramp, get_masks, get_data, gather_train_val_test_split
 from losses import loss
 from tqdm import tqdm
 import train_config
@@ -16,38 +16,6 @@ from datetime import datetime
 import json
 
 # Model with gaussian ramps looks best with 0.8, .5, .8 tonic levels, cue input to thal, and no fsi (new baseline model for simple ramping task)
-def gather_train_val_test_split(data, peak_times, iti_inp, cue_inp, loss_mask):
-    
-    # Conditions 1, 2, and 4 are used for training
-    # Condition 3 is used for validation
-    # Condition 5 is used for testing
-    data_dict = {"training": {}, "validation": {}, "test": {}, "all": {}}
-    
-    data_dict["training"]["y_target"] = torch.stack([data[0], data[1], data[3]])
-    data_dict["training"]["peak_times"] = [peak_times[0], peak_times[1], peak_times[3]]
-    data_dict["training"]["iti_inp"] = torch.stack([iti_inp[0], iti_inp[1], iti_inp[3]])
-    data_dict["training"]["cue_inp"] = torch.stack([cue_inp[0], cue_inp[1], cue_inp[3]])
-    data_dict["training"]["loss_mask"] = torch.stack([loss_mask[0], loss_mask[1], loss_mask[3]])
-
-    data_dict["validation"]["y_target"] = data[2].unsqueeze(0)
-    data_dict["validation"]["peak_times"] = peak_times[2]
-    data_dict["validation"]["iti_inp"] = iti_inp[2].unsqueeze(0)
-    data_dict["validation"]["cue_inp"] = cue_inp[2].unsqueeze(0)
-    data_dict["validation"]["loss_mask"] = loss_mask[2].unsqueeze(0)
-
-    data_dict["test"]["y_target"] = data[4].unsqueeze(0)
-    data_dict["test"]["peak_times"] = peak_times[4]
-    data_dict["test"]["iti_inp"] = iti_inp[4].unsqueeze(0)
-    data_dict["test"]["cue_inp"] = cue_inp[4].unsqueeze(0)
-    data_dict["test"]["loss_mask"] = loss_mask[4].unsqueeze(0)
-
-    data_dict["all"]["y_target"] = data
-    data_dict["all"]["peak_times"] = peak_times
-    data_dict["all"]["iti_inp"] = iti_inp
-    data_dict["all"]["cue_inp"] = cue_inp
-    data_dict["all"]["loss_mask"] = loss_mask
-
-    return data_dict
 
 def validation(rnn, val_target, val_iti_inp, val_cue_inp, mask, criterion):
 
@@ -56,11 +24,11 @@ def validation(rnn, val_target, val_iti_inp, val_cue_inp, mask, criterion):
     inhib_stim = torch.zeros(size=(val_target.shape[0], val_target.shape[1], rnn.total_num_units), device="cuda")
 
     with torch.no_grad():
-        _, out = rnn(val_iti_inp, val_cue_inp, hn, xn, inhib_stim)
+        _, out = rnn(val_iti_inp, val_cue_inp, hn, xn, inhib_stim, noise=False)
     
     out = out * mask
     
-    val_loss = criterion(out[:, 50:, :], val_target[:, 50:, :])
+    val_loss = criterion(out[:, 100:, :], val_target[:, 100:, :])
     val_loss = val_loss.item()
     
     return val_loss
@@ -87,7 +55,7 @@ def main():
         args.out_dim, 
         args.out_type, 
         noise_level_act=0.1, 
-        noise_level_inp=0.05, 
+        noise_level_inp=0.1, 
         constrained=args.constrained
     ).cuda()
         
@@ -128,20 +96,16 @@ def main():
     cur_loss = 0
     best_val_loss = np.inf
 
-    # Load and process configuration for saving
+    # Load and process mRNN configuration for specifications
     with open(args.mrnn_config_file, 'r') as f:
         mrnn_config = json.load(f)
-    mrnn_specs = json.dumps(mrnn_config, indent=4)
+    with open(args.model_specifications_path + dt_string + ".json", 'w') as destination_file:
+        json.dump(mrnn_config, destination_file, indent=4)  # `indent=4` for pretty-printing
 
+    # Load and process training configuration for specifications
     with open(args.config, "r") as file:
         training_specs = file.read()
-
     with open(args.model_specifications_path + dt_string + ".txt", "w") as text_file:
-        text_file.write("MRNN Configuration:\n")
-        text_file.write("="*50 + "\n")
-        text_file.write(mrnn_specs)
-        text_file.write("\n\nTraining Configuration:\n")
-        text_file.write("="*50 + "\n")
         text_file.write(training_specs)
     
     ###########################
@@ -165,6 +129,7 @@ def main():
 
         cur_loss += loss_.item()
 
+        torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
         if epoch % 10 == 0:
 
             val_loss = validation(
@@ -177,7 +142,7 @@ def main():
             )
 
             if val_loss < best_val_loss:
-                torch.save(rnn.state_dict(), args.save_path + dt_string)
+                #torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
                 best_val_loss = val_loss
 
             mean_loss = cur_loss / 10
@@ -191,7 +156,7 @@ def main():
         loss_.backward()
 
         # Take gradient step
-        torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1.)
+        torch.nn.utils.clip_grad_norm_(rnn.parameters(), 1)
         rnn_optim.step()
     
 if __name__ == "__main__":
