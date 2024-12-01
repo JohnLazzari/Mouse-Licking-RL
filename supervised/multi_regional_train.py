@@ -28,7 +28,7 @@ def validation(rnn, val_target, val_iti_inp, val_cue_inp, mask, criterion):
     
     out = out * mask
     
-    val_loss = criterion(out[:, 100:, :], val_target[:, 100:, :])
+    val_loss = criterion(out[:, 50:, :], val_target[:, 50:, :])
     val_loss = val_loss.item()
     
     return val_loss
@@ -58,7 +58,7 @@ def main():
         noise_level_inp=0.1, 
         constrained=args.constrained
     ).cuda()
-        
+
     criterion = nn.MSELoss()
 
     # Get ramping activity
@@ -130,7 +130,7 @@ def main():
         cur_loss += loss_.item()
 
         torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
-        if epoch % 10 == 0:
+        if epoch % 10 == 0 and epoch > 0:
 
             val_loss = validation(
                 rnn, 

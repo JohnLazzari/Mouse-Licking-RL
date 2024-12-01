@@ -48,8 +48,8 @@ class Region(nn.Module):
 
     def add_connection(
         self, 
-        proj_region_name, 
-        proj_region, 
+        dst_region_name, 
+        dst_region, 
         src_region_cell_type, 
         dst_region_cell_type, 
         sign, 
@@ -76,10 +76,10 @@ class Region(nn.Module):
 
         # Initialize connection parameters
         if not zero_connection:
-            parameter = torch.empty(size=(proj_region.num_units, self.num_units), device=self.device)
+            parameter = nn.Parameter(torch.empty(size=(dst_region.num_units, self.num_units), device=self.device))
             nn.init.uniform_(parameter, lower_bound, upper_bound)
         else:
-            parameter = torch.zeros(size=(proj_region.num_units, self.num_units), device=self.device)
+            parameter = torch.zeros(size=(dst_region.num_units, self.num_units), device=self.device)
         
         # Initialize sparse mask if sparsity is given
         if sparsity is not None:
@@ -102,7 +102,7 @@ class Region(nn.Module):
 
         # Create weight masks based on cell types, if specified
         weight_mask_src, sign_matrix_src = self.__get_weight_and_sign_matrices(src_region_cell_type, connection_tensor_src, sparse_tensor_src)
-        weight_mask_dst, sign_matrix_dst = proj_region.__get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor_dst, sparse_tensor_dst)
+        weight_mask_dst, sign_matrix_dst = dst_region.__get_weight_and_sign_matrices(dst_region_cell_type, connection_tensor_dst, sparse_tensor_dst)
 
         # Combine masks
         # Transpose the dst matrices since they should correspond to row operations
@@ -120,11 +120,15 @@ class Region(nn.Module):
         connection_properties["sign_matrix"] = sign_matrix.to(self.device)
 
         # Update connections dictionary
-        if proj_region_name in self.connections:
-            self.connections[proj_region_name]["weight_mask"] += connection_properties["weight_mask"]
-            self.connections[proj_region_name]["sign_matrix"] += connection_properties["sign_matrix"]
+        if dst_region_name in self.connections:
+            self.connections[dst_region_name]["weight_mask"] += connection_properties["weight_mask"]
+            self.connections[dst_region_name]["sign_matrix"] += connection_properties["sign_matrix"]
         else:
-            self.connections[proj_region_name] = connection_properties
+            self.connections[dst_region_name] = connection_properties
+
+            # Manually register parameters
+            if not zero_connection:
+                self.register_parameter(dst_region_name, self.connections[dst_region_name]["parameter"])
 
     def __generate_masks(self):
         """
@@ -249,11 +253,20 @@ class mRNN(nn.Module):
         self.__create_def_values(config)
         self.__gen_regions(config["regions"])
         self.__gen_connections(config["connections"])
+
+        # Fill rest of connections with zeros
+        for region in self.region_dict:
+            self.__get_full_connectivity(self.region_dict[region])
         
         # Generate weight matrices and masks
-        self.W_rec, self.W_rec_mask, self.W_rec_sign_matrix = self.gen_w_rec()
         self.total_num_units = self.__get_total_num_units()
         self.tonic_inp = self.__get_tonic_inp()
+
+        # Register all parameters 
+        # TODO try to add cell types to names just in case theres ever a duplication
+        for region in self.region_dict:
+            for name, param in self.region_dict[region].named_parameters():
+                self.register_parameter(f"{region}_{name}", param)
 
         # Get indices for specific regions
         for region in self.region_dict:
@@ -264,10 +277,10 @@ class mRNN(nn.Module):
             for cell_type in self.region_dict[region].cell_type_info:
                 # Generate a mask for the cell type in region_mask_dict
                 self.region_mask_dict[region][cell_type] = self.__gen_region_mask(region, cell_type=cell_type)
-        
+
         # Manually creating input weights for now
         self.inp_weights = nn.Parameter(torch.empty(size=(self.region_dict["striatum"].num_units, inp_dim)))
-        nn.init.uniform_(self.inp_weights, 0, 0.15)
+        nn.init.uniform_(self.inp_weights, 0, 1e-2)
 
     def gen_w_rec(self):
         """
@@ -284,7 +297,6 @@ class mRNN(nn.Module):
         region_sign_matrix_columns = []
 
         for cur_region in self.region_dict:
-            self.__get_full_connectivity(self.region_dict[cur_region])
 
             # Collect connections, masks, and sign matrices for current region
             connections_from_region = []
@@ -303,13 +315,13 @@ class mRNN(nn.Module):
             region_sign_matrix_columns.append(torch.cat(sign_matrix_from_region, dim=0))
         
         # Create final matrices
-        W_rec = nn.Parameter(torch.cat(region_connection_columns, dim=1))
-        W_rec_mask = nn.Parameter(torch.cat(region_weight_mask_columns, dim=1), requires_grad=False)
-        W_rec_sign = nn.Parameter(torch.cat(region_sign_matrix_columns, dim=1), requires_grad=False)
+        W_rec = torch.cat(region_connection_columns, dim=1)
+        W_rec_mask = torch.cat(region_weight_mask_columns, dim=1)
+        W_rec_sign = torch.cat(region_sign_matrix_columns, dim=1)
 
         return W_rec, W_rec_mask, W_rec_sign
 
-    def apply_dales_law(self):
+    def apply_dales_law(self, W_rec, W_rec_mask, W_rec_sign_matrix):
         """
         Applies Dale's Law constraints to the recurrent weight matrix.
         Dale's Law states that a neuron can be either excitatory or inhibitory, but not both.
@@ -317,7 +329,7 @@ class mRNN(nn.Module):
         Returns:
             torch.Tensor: Constrained weight matrix
         """
-        return (self.W_rec_mask * F.hardtanh(self.W_rec, 0, 1)) * self.W_rec_sign_matrix
+        return (W_rec_mask * F.hardtanh(W_rec, 0, 1)) * W_rec_sign_matrix
 
     def forward(self, inp, cue_inp, hn, xn, inhib_stim, noise=True):
         """
@@ -345,7 +357,8 @@ class mRNN(nn.Module):
         new_xs = []
 
         # Apply Dale's Law if constrained
-        W_rec = self.apply_dales_law() if self.constrained else self.W_rec
+        W_rec, W_rec_mask, W_rec_sign_matrix = self.gen_w_rec()
+        W_rec = self.apply_dales_law(W_rec, W_rec_mask, W_rec_sign_matrix) if self.constrained else self.W_rec
         inp_weights = F.hardtanh(self.inp_weights, 0, 1)
 
         #plt.imshow(W_rec.detach().cpu().numpy())
@@ -469,8 +482,8 @@ class mRNN(nn.Module):
         """
         for connection in connections:
             self.region_dict[connection["src_region"]].add_connection(
-                proj_region_name=connection["dst_region"],
-                proj_region=self.region_dict[connection["dst_region"]],
+                dst_region_name=connection["dst_region"],
+                dst_region=self.region_dict[connection["dst_region"]],
                 src_region_cell_type=connection["src_region_cell_type"],
                 dst_region_cell_type=connection["dst_region_cell_type"],
                 sign=connection["sign"],
@@ -512,8 +525,8 @@ class mRNN(nn.Module):
         for other_region in self.region_dict:
             if not region.has_connection_to(other_region):
                 region.add_connection(
-                    other_region,
-                    self.region_dict[other_region],
+                    dst_region_name=other_region,
+                    dst_region=self.region_dict[other_region],
                     src_region_cell_type=None,
                     dst_region_cell_type=None,
                     sign=None,

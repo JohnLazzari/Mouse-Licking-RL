@@ -24,7 +24,7 @@ plt.rcParams['figure.figsize'] = [16, 8]
 plt.rcParams['axes.linewidth'] = 4 # set the value globally
 plt.rc('font', **font)
 
-MODEL_NAMES = ["22_11_2024_17_51_17"]
+MODEL_NAMES = ["01_12_2024_15_45_37"]
 SPECIFICATIONS_PATH = "checkpoints/model_specifications/"
 CHECK_PATH = "checkpoints/"
 SAVE_NAME_PATH = "results/psths/"

@@ -14,7 +14,7 @@ def loss(
     neural_act, 
 ):
 
-    return criterion(out[:, 100:, :], neural_act[:, 100:, :])
+    return criterion(out[:, 50:, :], neural_act[:, 50:, :])
 
     
 def simple_dynamics_d1d2(act, rnn, hid_dim):

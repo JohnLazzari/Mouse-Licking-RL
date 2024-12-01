@@ -57,7 +57,7 @@ def config_parser():
 
     parser.add_argument('--save_path', 
                         type=str, 
-                        default="checkpoints/d1d2", 
+                        default="checkpoints/", 
                         help='path to save network')
 
     parser.add_argument('--model_specifications_path', 
