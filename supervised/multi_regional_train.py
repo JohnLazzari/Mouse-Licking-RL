@@ -129,7 +129,6 @@ def main():
 
         cur_loss += loss_.item()
 
-        torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
         if epoch % 10 == 0 and epoch > 0:
 
             val_loss = validation(
@@ -142,7 +141,7 @@ def main():
             )
 
             if val_loss < best_val_loss:
-                #torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
+                torch.save(rnn.state_dict(), args.save_path + dt_string + ".pth")
                 best_val_loss = val_loss
 
             mean_loss = cur_loss / 10

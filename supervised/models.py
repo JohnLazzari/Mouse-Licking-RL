@@ -365,15 +365,15 @@ class mRNN(nn.Module):
         #plt.colorbar()
         #plt.show()
 
-        # Calculate noise terms
-        if noise:
-            perturb_hid = np.sqrt(2 * self.t_const * self.sigma_recur**2) * np.random.normal(0, 1)
-            perturb_inp = np.sqrt(2 * self.t_const * self.sigma_input**2) * np.random.normal(0, 1)
-        else:
-            perturb_hid = perturb_inp = 0
-
         # Process sequence
         for t in range(size):
+
+            # Calculate noise terms
+            if noise:
+                perturb_hid = np.sqrt(2 * self.t_const * self.sigma_recur**2) * np.random.normal(0, 1)
+                perturb_inp = np.sqrt(2 * self.t_const * self.sigma_input**2) * np.random.normal(0, 1)
+            else:
+                perturb_hid = perturb_inp = 0
 
             # Prepare ITI input
             iti_act = (inp_weights @ (inp[:, t, :] + perturb_inp).T).T

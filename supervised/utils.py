@@ -411,7 +411,6 @@ def gather_train_val_test_split(data, peak_times, iti_inp, cue_inp, loss_mask):
     # Condition 5 is used for testing
     data_dict = {"training": {}, "validation": {}, "test": {}, "all": {}}
     
-    '''
     data_dict["training"]["y_target"] = torch.stack([data[0], data[1], data[3]])
     data_dict["training"]["peak_times"] = [peak_times[0], peak_times[1], peak_times[3]]
     data_dict["training"]["iti_inp"] = torch.stack([iti_inp[0], iti_inp[1], iti_inp[3]])
@@ -423,25 +422,6 @@ def gather_train_val_test_split(data, peak_times, iti_inp, cue_inp, loss_mask):
     data_dict["validation"]["iti_inp"] = torch.stack([iti_inp[2], iti_inp[4]])
     data_dict["validation"]["cue_inp"] = torch.stack([cue_inp[2], cue_inp[4]])
     data_dict["validation"]["loss_mask"] = torch.stack([loss_mask[2], loss_mask[4]])
-
-    data_dict["test"]["y_target"] = data[4].unsqueeze(0)
-    data_dict["test"]["peak_times"] = peak_times[4]
-    data_dict["test"]["iti_inp"] = iti_inp[4].unsqueeze(0)
-    data_dict["test"]["cue_inp"] = cue_inp[4].unsqueeze(0)
-    data_dict["test"]["loss_mask"] = loss_mask[4].unsqueeze(0)
-    '''
-
-    data_dict["training"]["y_target"] = torch.stack([data[1], data[2], data[3], data[4]])
-    data_dict["training"]["peak_times"] = [peak_times[1], peak_times[2], peak_times[3], peak_times[4]]
-    data_dict["training"]["iti_inp"] = torch.stack([iti_inp[1], iti_inp[2], iti_inp[3], iti_inp[4]])
-    data_dict["training"]["cue_inp"] = torch.stack([cue_inp[1], cue_inp[2], cue_inp[3], cue_inp[4]])
-    data_dict["training"]["loss_mask"] = torch.stack([loss_mask[1], loss_mask[2], loss_mask[3], loss_mask[4]])
-
-    data_dict["validation"]["y_target"] = torch.stack([data[1], data[2], data[3], data[4]])
-    data_dict["validation"]["peak_times"] = [peak_times[1], peak_times[2], peak_times[3], peak_times[4]]
-    data_dict["validation"]["iti_inp"] = torch.stack([iti_inp[1], iti_inp[2], iti_inp[3], iti_inp[4]])
-    data_dict["validation"]["cue_inp"] = torch.stack([cue_inp[1], cue_inp[2], cue_inp[3], cue_inp[4]])
-    data_dict["validation"]["loss_mask"] = torch.stack([loss_mask[1], loss_mask[2], loss_mask[3], loss_mask[4]])
 
     data_dict["test"]["y_target"] = data[4].unsqueeze(0)
     data_dict["test"]["peak_times"] = peak_times[4]
